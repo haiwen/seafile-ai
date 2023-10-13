@@ -1,0 +1,12 @@
+*.pyc
+*~
+*#
+*.pid
+*.db
+
+.vscode
+.idea
+.DS_Store
+__pycache__
+*log
+local_settings.py
