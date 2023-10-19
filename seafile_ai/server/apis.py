@@ -239,3 +239,29 @@ def query_task_status():
         return {'error_msg': 'Task not found'}, 404
 
     return {'is_finished': task.is_finished()}
+
+
+@flask_app.route('/api/v1/library-index-state/', methods=['GET'])
+def query_library_index_state():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    associate_id = request.args.get('associate_id')
+    if not associate_id:
+        return {'error_msg': 'associate_id invalid'}, 400
+
+    db_session = Session()
+
+    try:
+        index = flask_app.app.index_manager.get_library_sdoc_index_by_associate_id(associate_id, db_session)
+    except Exception as e:
+        logger.error(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    if not index:
+        return {'state': 'uncreated', 'task_id': ''}
+
+    task = index_task_manager.get_pending_or_running_task(index.associate_id)
+
+    return task and {'state': 'running', 'task_id': task.id} or {'state': 'finished', 'task_id': ''}
