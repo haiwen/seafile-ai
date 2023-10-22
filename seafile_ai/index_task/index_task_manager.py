@@ -104,7 +104,8 @@ class IndexTaskManager:
             return task_id
 
     def search_similar_children_in_library(self, query, associate_id, sdoc_files_info):
-        return self.app.index_manager.search_children_in_library(query, associate_id, sdoc_files_info,
+        with self.check_task_lock:
+            return self.app.index_manager.search_children_in_library(query, associate_id, sdoc_files_info,
                                                                       self.app.retrieval_model, self.app.rerank_model,
                                                                     )
 
