@@ -211,7 +211,15 @@ def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_m
     filtered_library_df['similarity'] = scores
     all_filtered_df = filtered_library_df[filtered_library_df.similarity > config.THRESHOLD]
 
-    return all_filtered_df.to_dict(orient='records')
+    searched_docs = []
+    for group in all_filtered_df.groupby('path'):
+        doc_item = group[1]
+        grouped_doc = doc_item.groupby(by='path', as_index=False).max()
+        increased_score = doc_item.similarity.sum()
+        grouped_doc['similarity'] = increased_score
+        searched_docs.append(grouped_doc.to_dict(orient='records')[0])
+
+    return searched_docs
 
 
 def update_library_sdoc_embedding_to_faiss(context, retrieval_model):
