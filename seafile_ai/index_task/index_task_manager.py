@@ -106,7 +106,7 @@ class IndexTaskManager:
     def search_similar_children_in_library(self, query, associate_id, sdoc_files_info):
         with self.check_task_lock:
             return self.app.index_manager.search_children_in_library(query, associate_id, sdoc_files_info,
-                                                                      self.app.retrieval_model, self.app.rerank_model,
+                                                                      self.app.retrieval_model,
                                                                     )
 
     def add_update_a_library_sdoc_index_task(self, context):

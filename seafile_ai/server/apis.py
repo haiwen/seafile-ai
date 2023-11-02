@@ -135,7 +135,7 @@ def similarity_search_in_library():
         return {'error_msg': 'Internet server error.'}, 500
 
 
-    children_list = sorted(children_similarity, key=lambda row: row['similarity'], reverse=True)[:count]
+    children_list = sorted(children_similarity, key=lambda row: row['distance'], reverse=False)[:count]
 
     return {'children_list': children_list}, 200
 

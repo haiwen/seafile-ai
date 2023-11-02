@@ -151,7 +151,7 @@ def save_library_sdoc_embedding_to_faiss(context, retrieval_model):
     logger.info('library: %s, save library sdoc embedding to faiss success', associate_id)
 
 
-def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_model, rerank_model, faiss_cache):
+def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_model, faiss_cache):
     embedding_dir = os.path.join(config.INDEX_STORAGE_PATH, LIBRARY_SDOC_INDEX)
     library_info_path = os.path.join(embedding_dir, associate_id + '.json')
     faiss_index_path = os.path.join(embedding_dir, associate_id + '.index')
@@ -161,8 +161,8 @@ def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_m
     if retrieval_model.metric == Metric.COS:
         faiss.normalize_L2(query_embedding)
 
-    similarities, nearest_vecs = faiss_index.search(query_embedding, config.RETRIEVAL_NUM)
-    retrieval_df = pd.DataFrame({'vector_id': nearest_vecs[0]})
+    distances, nearest_vecs = faiss_index.search(query_embedding, config.RETRIEVAL_NUM)
+    retrieval_df = pd.DataFrame({'vector_id': nearest_vecs[0], 'distance': distances[0]})
     filtered_library_df = pd.DataFrame(columns=['path', 'children_id', 'sentence'])
 
     with open(library_info_path, 'r') as fp:
@@ -174,6 +174,7 @@ def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_m
         file_df = pd.DataFrame(children_list)
         file_retrieval_df = retrieval_df.merge(file_df, on=['vector_id'], how='left').\
             query('vector_id!=-1 and children_id.notna()')
+        file_retrieval_df = file_retrieval_df[file_retrieval_df.distance < config.THRESHOLD]
 
         # file empty or old file has not exist
         if file_retrieval_df.empty or not sdoc_info:
@@ -186,38 +187,31 @@ def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_m
             continue
 
         file_content = json.loads(file_content.decode())
-        file_retrieved_children_id_set = \
-            {children.get('children_id') for children in file_retrieval_df.to_dict(orient='records')}
 
+        children_to_retrieval_info = {children.get('children_id'): children for children in file_retrieval_df.to_dict(orient='records')}
         sentence_info_list = []
         for children in file_content.get('children'):
             children_id = children.get('id')
-            if children_id not in file_retrieved_children_id_set or children.get('type') == 'code_block':
+            if not children_to_retrieval_info.get(children_id) or children.get('type') == 'code_block':
                 continue
 
             combined_text_list = parse_children_text(children, [])
             if not combined_text_list:
                 continue
-
+            distance = children_to_retrieval_info.get(children_id, {}).get('distance')
             sentence = '。'.join(combined_text_list)
-            sentence_info = {'path': old_path, 'children_id': children_id, 'sentence': sentence}
+            sentence_info = {'path': old_path, 'children_id': children_id, 'sentence': sentence, 'distance': distance}
             sentence_info_list.append(sentence_info)
 
         file_sentence_df = pd.DataFrame(sentence_info_list)
         filtered_library_df = pd.concat([filtered_library_df, file_sentence_df], axis=0, ignore_index=True)
 
-    sentences = filtered_library_df['sentence'].to_list()
-    scores = rerank_model.rerank(query.strip(), sentences)
-    filtered_library_df['similarity'] = scores
-    all_filtered_df = filtered_library_df[filtered_library_df.similarity > config.THRESHOLD]
-
     searched_docs = []
-    for group in all_filtered_df.groupby('path'):
+    for group in filtered_library_df.groupby('path'):
         doc_item = group[1]
-        grouped_doc = doc_item.groupby(by='path', as_index=False).max()
-        increased_score = doc_item.similarity.sum()
-        grouped_doc['similarity'] = increased_score
-        searched_docs.append(grouped_doc.to_dict(orient='records')[0])
+        max_group = doc_item.groupby(by='path')['distance'].min()
+        max_group_df = doc_item.merge(max_group.reset_index(), on=['path', 'distance'], how='inner')
+        searched_docs.append(max_group_df.to_dict(orient='records')[0])
 
     return searched_docs
 
