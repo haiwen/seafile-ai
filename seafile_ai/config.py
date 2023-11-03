@@ -48,13 +48,13 @@ RETRIEVAL_SOURCE = 'alibaba'
 RETRIEVAL_MODEL_ID = 'damo/nlp_corom_sentence-embedding_chinese-base'
 RETRIEVAL_METRIC = 'L2'
 DIMENSION = 768
-RETRIEVAL_NUM = 50
+RETRIEVAL_NUM = 10
 
 ## rerank model settings
 RERANK_SOURCE = 'alibaba'
 RERANK_MODEL_ID = 'damo/nlp_rom_passage-ranking_chinese-base'
 
-THRESHOLD = 0.25
+THRESHOLD = 100
 
 CONF_DIR = '/opt/seafile/conf/'
 

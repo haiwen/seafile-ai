@@ -41,9 +41,9 @@ class IndexManager(object):
 
         db_session.commit()
 
-    def search_children_in_library(self, query, associate_id, sdoc_files_info, retrieval_model, rerank_model):
+    def search_children_in_library(self, query, associate_id, sdoc_files_info, retrieval_model):
         from seafile_ai.index_store.utils import search_children_in_library
-        return search_children_in_library(query, associate_id, sdoc_files_info, retrieval_model, rerank_model, self.faiss_cache)
+        return search_children_in_library(query, associate_id, sdoc_files_info, retrieval_model, self.faiss_cache)
 
     def update_library_sdoc_index_without_session(self, context, retrieval_model):
         db_session = init_db_session_class(config)()
