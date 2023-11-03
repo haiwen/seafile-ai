@@ -163,7 +163,8 @@ def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_m
 
     distances, nearest_vecs = faiss_index.search(query_embedding, config.RETRIEVAL_NUM)
     retrieval_df = pd.DataFrame({'vector_id': nearest_vecs[0], 'distance': distances[0]})
-    filtered_library_df = pd.DataFrame(columns=['path', 'children_id', 'sentence'])
+    retrieval_df = retrieval_df[retrieval_df.distance < config.THRESHOLD]
+    filtered_library_df = pd.DataFrame(columns=['path', 'children_id', 'distance'])
 
     with open(library_info_path, 'r') as fp:
         library_json_info = json.load(fp)
@@ -173,38 +174,13 @@ def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_m
         sdoc_info = sdoc_files_info.get(old_path)
         file_df = pd.DataFrame(children_list)
         file_retrieval_df = retrieval_df.merge(file_df, on=['vector_id'], how='left').\
-            query('vector_id!=-1 and children_id.notna()')
-        file_retrieval_df = file_retrieval_df[file_retrieval_df.distance < config.THRESHOLD]
+            query('vector_id!=-1 and children_id.notna()')[['children_id', 'distance']]
 
         # file empty or old file has not exist
         if file_retrieval_df.empty or not sdoc_info:
             continue
-
         file_retrieval_df['path'] = old_path
-        download_token = sdoc_info.get('download_token')
-        file_content = get_file_by_token(old_path, download_token)
-        if not file_content:
-            continue
-
-        file_content = json.loads(file_content.decode())
-
-        children_to_retrieval_info = {children.get('children_id'): children for children in file_retrieval_df.to_dict(orient='records')}
-        sentence_info_list = []
-        for children in file_content.get('children'):
-            children_id = children.get('id')
-            if not children_to_retrieval_info.get(children_id) or children.get('type') == 'code_block':
-                continue
-
-            combined_text_list = parse_children_text(children, [])
-            if not combined_text_list:
-                continue
-            distance = children_to_retrieval_info.get(children_id, {}).get('distance')
-            sentence = '。'.join(combined_text_list)
-            sentence_info = {'path': old_path, 'children_id': children_id, 'sentence': sentence, 'distance': distance}
-            sentence_info_list.append(sentence_info)
-
-        file_sentence_df = pd.DataFrame(sentence_info_list)
-        filtered_library_df = pd.concat([filtered_library_df, file_sentence_df], axis=0, ignore_index=True)
+        filtered_library_df = pd.concat([filtered_library_df, file_retrieval_df], axis=0, ignore_index=True)
 
     searched_docs = []
     for group in filtered_library_df.groupby('path'):
