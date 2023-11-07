@@ -58,6 +58,9 @@ THRESHOLD = 100
 
 CONF_DIR = '/opt/seafile/conf/'
 
+#openai
+OPENAI_PROXY_URL = ''
+
 try:
     if os.path.exists('local_settings.py'):
         from local_settings import *
