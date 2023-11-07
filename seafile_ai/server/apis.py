@@ -196,7 +196,6 @@ def question_answering_search_in_library():
     str(content_md), str(query)
     )
     res = flask_app.app.openai_api.chat_completions(prompt, 0)
-    print(res)
     return { 'answering_result': res, 'hit_sdoc': [{'path': first_children_path}] }, 200
 
 
