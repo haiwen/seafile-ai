@@ -79,7 +79,7 @@ def add_index(index, children_id_list, retrieval_model, sentence_list, start_vec
 def get_file_children_info(file_content):
     children_id_list = []
     sentence_list = []
-    for children in file_content.get('children'):
+    for children in file_content.get('children', []):
         if children.get('type') == 'code_block':
             continue
 
@@ -128,6 +128,9 @@ def save_library_sdoc_embedding_to_faiss(context, retrieval_model):
         path = sdoc_info.get('path')
         download_token = sdoc_info.get('download_token')
         mtime = sdoc_info.get('mtime')
+        size = sdoc_info.get('size')
+        if not size:
+            continue
 
         file_content = get_file_by_token(path, download_token)
         if not file_content:
@@ -239,29 +242,27 @@ def update_library_sdoc_embedding_to_faiss(context, retrieval_model):
         sdoc_info = new_file_info.get(path)
         download_token = sdoc_info.get('download_token')
         new_mtime = sdoc_info.get('mtime')
+        size = sdoc_info.get('size')
         # path may be not in library_info
         old_mtime = library_info.get(path, {}).get('mtime')
-
         if new_mtime == old_mtime:
+            continue
+
+        # delete old index
+        children_list = library_info.get(path, {}).get('children_list')
+        if children_list:
+            delete_index(index, children_list, library_info, path)
+
+        if not size:
             continue
 
         file_content = get_file_by_token(path, download_token)
         if not file_content:
-            # old sdoc has content, new sdoc has no content, delete this sdoc index
-            children_list = library_info.get(path, {}).get('children_list')
-            if children_list:
-                delete_index(index, children_list, library_info, path)
-                is_updated = True
             continue
 
         file_content = json.loads(file_content.decode())
         children_id_list, sentence_list = get_file_children_info(file_content)
-
         if not sentence_list:
-            children_list = library_info.get(path, {}).get('children_list')
-            if children_list:
-                delete_index(index, children_list, library_info, path)
-                is_updated = True
             continue
 
         added_count = add_index(index, children_id_list, retrieval_model,
