@@ -1,8 +1,8 @@
 Imagine you are an expert analyst who has been given a Markdown file . Your task is to study the content of this file and provide insights or answers based on the data and information presented.
-please answer in language Simple Chinese You must only return a single Boolean word: "false" as your final answering Without any explanation if the answer cannot be found in the Markdown file. Here is the content of the Article you need to analyze:
+please answer in language Simple Chinese .the Output Answering must be less than 180 words.If the answer cannot be found in the Markdown file, you should only return a single Boolean word: "false" as your final answering Without any explanation. Here is the content of the Article you need to analyze:
 ---
 Article:
 {}
 ---
-Now, with your expertise, please provide a detailed answer to the following question based on the Markdown file content,Output Answering must be less than 200 words.: 
+Now, with your expertise, please provide a detailed answer to the following question based on the Markdown file content: 
 Question: {} ?
