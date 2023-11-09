@@ -8,7 +8,7 @@ import numpy as np
 from seafile_ai import config
 from seafile_ai.models.constant import METRIC_TO_FAISS, Metric
 from seafile_ai.index_store.faiss_operator import faiss_operator as faiss
-from seafile_ai.utils.constant import LIBRARY_SDOC_INDEX
+from seafile_ai.utils.constant import LIBRARY_SDOC_INDEX, VIRTUAL_PATH_CHILDREN_ID
 from seafile_ai.utils import get_file_by_token
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ def add_index(index, children_id_list, retrieval_model, sentence_list, start_vec
 def get_file_children_info(file_content):
     children_id_list = []
     sentence_list = []
-    for children in file_content.get('children'):
+    for children in file_content.get('children', []):
         if children.get('type') == 'code_block':
             continue
 
@@ -128,15 +128,20 @@ def save_library_sdoc_embedding_to_faiss(context, retrieval_model):
         path = sdoc_info.get('path')
         download_token = sdoc_info.get('download_token')
         mtime = sdoc_info.get('mtime')
+        size = sdoc_info.get('size')
 
-        file_content = get_file_by_token(path, download_token)
-        if not file_content:
-            continue
+        sentence_list = [path.strip('/').rstrip('.sdoc')]
+        children_id_list = [VIRTUAL_PATH_CHILDREN_ID]
 
-        file_content = json.loads(file_content.decode())
-        children_id_list, sentence_list = get_file_children_info(file_content)
-        if not sentence_list:
-            continue
+        file_content = b''
+        if size:
+            file_content = get_file_by_token(path, download_token)
+
+        if file_content:
+            file_content = json.loads(file_content.decode())
+            children_ids, sentences = get_file_children_info(file_content)
+            sentence_list.extend(sentences)
+            children_id_list.extend(children_ids)
 
         added_num = add_index(index, children_id_list, retrieval_model,
                               sentence_list, start_vector_id, mtime, library_info, path)
@@ -239,30 +244,28 @@ def update_library_sdoc_embedding_to_faiss(context, retrieval_model):
         sdoc_info = new_file_info.get(path)
         download_token = sdoc_info.get('download_token')
         new_mtime = sdoc_info.get('mtime')
+        size = sdoc_info.get('size')
         # path may be not in library_info
         old_mtime = library_info.get(path, {}).get('mtime')
-
         if new_mtime == old_mtime:
             continue
 
-        file_content = get_file_by_token(path, download_token)
-        if not file_content:
-            # old sdoc has content, new sdoc has no content, delete this sdoc index
-            children_list = library_info.get(path, {}).get('children_list')
-            if children_list:
-                delete_index(index, children_list, library_info, path)
-                is_updated = True
-            continue
+        # delete old index
+        children_list = library_info.get(path, {}).get('children_list')
+        if children_list:
+            delete_index(index, children_list, library_info, path)
 
-        file_content = json.loads(file_content.decode())
-        children_id_list, sentence_list = get_file_children_info(file_content)
+        file_content = b''
+        if size:
+            file_content = get_file_by_token(path, download_token)
 
-        if not sentence_list:
-            children_list = library_info.get(path, {}).get('children_list')
-            if children_list:
-                delete_index(index, children_list, library_info, path)
-                is_updated = True
-            continue
+        sentence_list = [path.strip('/').rstrip('.sdoc')]
+        children_id_list = [VIRTUAL_PATH_CHILDREN_ID]
+        if file_content:
+            file_content = json.loads(file_content.decode())
+            children_ids, sentences = get_file_children_info(file_content)
+            sentence_list.extend(sentences)
+            children_id_list.extend(children_ids)
 
         added_count = add_index(index, children_id_list, retrieval_model,
                               sentence_list, start_vector_id, new_mtime, library_info, path)
