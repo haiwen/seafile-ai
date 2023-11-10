@@ -19,3 +19,4 @@ faiss-cpu
 modelscope
 whoosh
 loguru
+html2text

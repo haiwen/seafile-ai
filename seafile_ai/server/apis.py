@@ -191,7 +191,7 @@ def question_answering_search_in_library():
     children_list = sorted(children_similarity, key=lambda row: row['distance'], reverse=False)[:count]
     if len(children_list) > 0:
         first_children_path = children_list[0].get('path')
-        download_token = (sdoc_files_info.get(first_children_path)).get('download_token')
+        download_token = sdoc_files_info.get(first_children_path).get('download_token')
         content_sdoc = get_file_by_token(first_children_path, download_token)
         try:
             content_md = sdoc2md(json.loads(content_sdoc.decode()))
@@ -203,7 +203,7 @@ def question_answering_search_in_library():
             first_children_path, res = '', 'false'
     else:
         first_children_path, res = '', 'false'
-    return { 'answering_result': res, 'hit_sdoc': [{'path': first_children_path}] }, 200
+    return { 'answering_result': res, 'hit_files': [first_children_path] }, 200
 
 
 @flask_app.route('/api/v1/library-sdoc-index/', methods=['PUT', 'DELETE'])
