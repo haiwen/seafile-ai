@@ -189,14 +189,18 @@ def question_answering_search_in_library():
         return {'error_msg': 'Internet server error.'}, 500
 
     children_list = sorted(children_similarity, key=lambda row: row['distance'], reverse=False)[:count]
-    if children_list[0]:
+    if len(children_list) > 0:
         first_children_path = children_list[0].get('path')
-        content_sdoc = get_file_by_token(first_children_path, (sdoc_files_info.get(first_children_path)).get('download_token'))
-        content_md = sdoc2md(json.loads(content_sdoc.decode()))
-        prompt = open("static/prompts/question_answering_search.txt").read().format(
-        str(content_md), str(query)
-        )
-        res = flask_app.app.openai_api.chat_completions(prompt, 0)
+        download_token = (sdoc_files_info.get(first_children_path)).get('download_token')
+        content_sdoc = get_file_by_token(first_children_path, download_token)
+        try:
+            content_md = sdoc2md(json.loads(content_sdoc.decode()))
+            prompt = open("static/prompts/question_answering_search.txt").read().format(
+            str(content_md), str(query)
+            )
+            res = flask_app.app.openai_api.chat_completions(prompt, 0)
+        except json.JSONDecodeError:
+            first_children_path, res = '', 'false'
     else:
         first_children_path, res = '', 'false'
     return { 'answering_result': res, 'hit_sdoc': [{'path': first_children_path}] }, 200
