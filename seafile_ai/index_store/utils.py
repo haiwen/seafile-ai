@@ -2,16 +2,18 @@
 import json
 import logging
 import os
-import pandas as pd
 import numpy as np
+from copy import deepcopy
 
 from seafile_ai import config
-from seafile_ai.models.constant import METRIC_TO_FAISS, Metric
-from seafile_ai.index_store.faiss_operator import faiss_operator as faiss
-from seafile_ai.utils.constant import LIBRARY_SDOC_INDEX, VIRTUAL_PATH_CHILDREN_ID
 from seafile_ai.utils import get_file_by_token
 
 logger = logging.getLogger(__name__)
+
+
+VIRTUAL_PATH_CHILDREN_ID = 'file_path'
+ZINC_BULK_OPETATE_LIMIT = 2000
+ZINC_QUERY_PATH_DOC_STEP = 20
 
 
 def retrieval_encode(retrieval_model, string_list, per_limit=1000):
@@ -23,63 +25,10 @@ def retrieval_encode(retrieval_model, string_list, per_limit=1000):
     return embeddings
 
 
-def read_faiss_index(faiss_cache, index_path):
-    index = faiss_cache.get(index_path)
-    if index:
-        return index
-    index = faiss.read_index(index_path)
-    faiss_cache.set(index_path, index)
-    return index
-
-
-def get_max_vector_id(library_info):
-    max_vector_id = 0
-    for sdoc_info in library_info.values():
-        children_list = sdoc_info.get('children_list')
-        sdoc_df = pd.DataFrame(children_list)
-        max_id = sdoc_df['vector_id'].max()
-        if max_id > max_vector_id:
-            max_vector_id = max_id
-    return max_vector_id
-
-
-def delete_index(index, children_list, library_info, path):
-    need_deleted_df = pd.DataFrame(children_list)
-    index.remove_ids(need_deleted_df.vector_id)
-    library_info.pop(path)
-
-
-def add_index(index, children_id_list, retrieval_model, sentence_list, start_vector_id, mtime, library_info, path):
-    """
-     add sentences to index
-     return added number
-    """
-
-    df = pd.DataFrame(children_id_list, columns=['children_id'])
-    embeddings = retrieval_encode(retrieval_model, sentence_list)
-
-    metric = retrieval_model.metric
-    if metric == Metric.COS:
-        faiss.normalize_L2(embeddings)
-
-    embedding_n, embedding_d = embeddings.shape
-    vector_ids = np.arange(start_vector_id, embedding_n + start_vector_id)
-    index.add_with_ids(embeddings, vector_ids)
-    df['vector_id'] = vector_ids
-
-    indexed_children_list = df.to_dict(orient='records')
-    indexed_file_info = {}
-    indexed_file_info['children_list'] = indexed_children_list
-    indexed_file_info['mtime'] = mtime
-    library_info[path] = indexed_file_info
-
-    return len(df)
-
-
-def get_file_children_info(file_content):
-    children_id_list = []
-    sentence_list = []
-    for children in file_content.get('children', []):
+def parse_sdoc_to_add_params(file_content, retrieval_model, index_name, path):
+    document_add_params = []
+    file = json.loads(file_content.decode())
+    for children in file.get('children', []):
         if children.get('type') == 'code_block':
             continue
 
@@ -89,11 +38,11 @@ def get_file_children_info(file_content):
         if not combined_text_list:
             continue
 
-        children_id_list.append(children_id)
         sentence = '。'.join(combined_text_list)
-        sentence_list.append(sentence)
+        add_params = get_document_add_params(retrieval_model, sentence, index_name, path, children_id)
+        document_add_params.extend(add_params)
 
-    return children_id_list, sentence_list
+    return document_add_params
 
 
 def parse_children_text(children, text_list=[]):
@@ -109,177 +58,220 @@ def parse_children_text(children, text_list=[]):
     return text_list
 
 
-def save_library_sdoc_embedding_to_faiss(context, retrieval_model):
+def save_library_sdoc_embedding_to_zinc(context, retrieval_model, zinc_api, is_mapping_exist=False):
     associate_id = context.get('associate_id')
     sdoc_info_list = context.get('sdoc_info_list')
 
-    embedding_dir = os.path.join(config.INDEX_STORAGE_PATH, LIBRARY_SDOC_INDEX)
-    library_sdoc_index_path = os.path.join(embedding_dir, associate_id + '.index')
-    os.makedirs(embedding_dir, exist_ok=True)
-
-    metric = retrieval_model.metric
     dimension = retrieval_model.dimension
-    index = faiss.index_factory(dimension, config.FAISS_INDEX_TYPE, METRIC_TO_FAISS.get(metric))
+    index_name = associate_id
+
+    if not is_mapping_exist:
+        mapping = {
+            "properties": {
+                "vec": {
+                    "type": "vector",
+                    "dims": dimension,
+                    "vec_index_type": "flat",
+                    "m": 1
+                },
+                "path": {
+                    "type": "keyword"
+                },
+                "children_id": {
+                    "type": "keyword"
+                }
+            }
+        }
+        zinc_api.create_mapping(index_name, mapping)
 
     library_info = {}
-    start_vector_id = 0
-
+    bulk_error_library_info = {}
+    bulk_add_params = []
     for sdoc_info in sdoc_info_list:
         path = sdoc_info.get('path')
         download_token = sdoc_info.get('download_token')
         mtime = sdoc_info.get('mtime')
         size = sdoc_info.get('size')
+        library_info[path] = mtime
 
-        sentence_list = [path.strip('/').rstrip('.sdoc')]
-        children_id_list = [VIRTUAL_PATH_CHILDREN_ID]
+        # add path to index
+        path_string = path.strip('/').rstrip('.sdoc')
+        add_params = get_document_add_params(retrieval_model, path_string, index_name, path, VIRTUAL_PATH_CHILDREN_ID)
+        bulk_add_params.extend(add_params)
 
         file_content = b''
         if size:
             file_content = get_file_by_token(path, download_token)
 
         if file_content:
-            file_content = json.loads(file_content.decode())
-            children_ids, sentences = get_file_children_info(file_content)
-            sentence_list.extend(sentences)
-            children_id_list.extend(children_ids)
+            add_params = parse_sdoc_to_add_params(file_content, retrieval_model, index_name, path)
+            bulk_add_params.extend(add_params)
 
-        added_num = add_index(index, children_id_list, retrieval_model,
-                              sentence_list, start_vector_id, mtime, library_info, path)
+        # bulk add every 2000 params
+        if len(bulk_add_params) >= ZINC_BULK_OPETATE_LIMIT:
+            zinc_bulk_operate(zinc_api, bulk_error_library_info, bulk_add_params, associate_id)
+            bulk_error_library_info = deepcopy(library_info)
+            bulk_add_params = []
 
-        start_vector_id += added_num
+    if bulk_add_params:
+        zinc_bulk_operate(zinc_api, bulk_error_library_info, bulk_add_params, associate_id)
 
-    faiss.write_index(index, library_sdoc_index_path)
     # save library info to json file
-    with open(os.path.join(embedding_dir, associate_id + '.json'), 'w') as f:
+    with open(os.path.join(config.LIBRARY_FILE_INFO_STORAGE_PATH, associate_id + '.json'), 'w') as f:
         f.write(json.dumps(library_info))
 
-    logger.info('library: %s, save library sdoc embedding to faiss success', associate_id)
+    logger.info('library: %s, save library sdoc info to ZincSearch success', associate_id)
 
 
-def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_model, faiss_cache):
-    embedding_dir = os.path.join(config.INDEX_STORAGE_PATH, LIBRARY_SDOC_INDEX)
-    library_info_path = os.path.join(embedding_dir, associate_id + '.json')
-    faiss_index_path = os.path.join(embedding_dir, associate_id + '.index')
+def search_children_in_library(query, associate_id, sdoc_files_info, retrieval_model, zinc_api):
+    query_embedding = retrieval_model.encode([query])
 
-    faiss_index = read_faiss_index(faiss_cache, faiss_index_path)
-    query_embedding = retrieval_model.encode([query.strip()]).reshape(1, -1)
-    if retrieval_model.metric == Metric.COS:
-        faiss.normalize_L2(query_embedding)
+    data = {
+        "query_field": "vec",
+        "k": config.RETRIEVAL_NUM,
+        "return_fields": ["path", "children_id"],
+        "vector": query_embedding[0].tolist()
+    }
 
-    distances, nearest_vecs = faiss_index.search(query_embedding, config.RETRIEVAL_NUM)
-    retrieval_df = pd.DataFrame({'vector_id': nearest_vecs[0], 'distance': distances[0]})
-    retrieval_df = retrieval_df[retrieval_df.distance < config.THRESHOLD]
-    filtered_library_df = pd.DataFrame(columns=['path', 'children_id', 'distance'])
+    result = zinc_api.vector_search(data, associate_id)
+    hits = result['hits']['hits']
+    searched_result = {}
+    for hit in hits:
+        score = hit['_score']
+        children_id = hit['fields']['children_id'][0]
+        path = hit['fields']['path'][0]
 
-    with open(library_info_path, 'r') as fp:
-        library_json_info = json.load(fp)
-
-    for old_path, file_info in library_json_info.items():
-        children_list = file_info.get('children_list')
-        sdoc_info = sdoc_files_info.get(old_path)
-        file_df = pd.DataFrame(children_list)
-        file_retrieval_df = retrieval_df.merge(file_df, on=['vector_id'], how='left').\
-            query('vector_id!=-1 and children_id.notna()')[['children_id', 'distance']]
-
-        # file empty or old file has not exist
-        if file_retrieval_df.empty or not sdoc_info:
+        if score < config.THRESHOLD or not sdoc_files_info.get(path):
             continue
-        file_retrieval_df['path'] = old_path
-        filtered_library_df = pd.concat([filtered_library_df, file_retrieval_df], axis=0, ignore_index=True)
 
-    searched_docs = []
-    for group in filtered_library_df.groupby('path'):
-        doc_item = group[1]
-        max_group = doc_item.groupby(by='path')['distance'].min()
-        max_group_df = doc_item.merge(max_group.reset_index(), on=['path', 'distance'], how='inner')
-        searched_docs.append(max_group_df.to_dict(orient='records')[0])
+        if searched_result.get(path):
+            pre_score = searched_result[path]['max_score']
+            searched_result[path]['score'] = score + pre_score
+            if score > pre_score:
+                searched_result[path]['children_id'] = children_id
+            continue
+        searched_result[path] = {'path': path, 'children_id': children_id, 'score': score, 'max_score': score}
 
-    return searched_docs
+    return list(searched_result.values())
 
 
-def update_library_sdoc_embedding_to_faiss(context, retrieval_model):
-    is_updated = False
-
+def update_library_sdoc_embedding_to_zinc(context, retrieval_model, zinc_api):
     associate_id = context.get('associate_id')
     last_modify = context.get('last_modify')
     sdoc_info_list = context.get('sdoc_info_list')
+    library_sdoc_info_path = os.path.join(config.LIBRARY_FILE_INFO_STORAGE_PATH, associate_id + '.json')
 
-    embedding_dir = os.path.join(config.INDEX_STORAGE_PATH, LIBRARY_SDOC_INDEX)
-    library_sdoc_info_path = os.path.join(embedding_dir, associate_id + '.json')
-    library_sdoc_index_path = os.path.join(embedding_dir, associate_id + '.index')
-
-    if not os.path.exists(library_sdoc_info_path) or not os.path.exists(library_sdoc_index_path):
+    index_name = associate_id
+    if not os.path.exists(library_sdoc_info_path):
+        res =  zinc_api.check_index_mapping(index_name)
         context = {
             'associate_id': associate_id,
             'last_modify': last_modify,
             'sdoc_info_list': sdoc_info_list
         }
-        save_library_sdoc_embedding_to_faiss(context, retrieval_model)
-        logger.info('library: %s, update embedding to faiss success', associate_id)
-        return True
-
-    index = faiss.read_index(library_sdoc_index_path)
+        save_library_sdoc_embedding_to_zinc(context, retrieval_model, zinc_api, res.get('is_exist'))
+        logger.info('library: %s, update embedding to ZincSearch success', associate_id)
+        return
 
     with open(library_sdoc_info_path, 'r') as fp:
-        library_info = json.load(fp)
+        old_library_info = json.load(fp)
 
-    old_path_set = set()
-    for path in library_info:
-        old_path_set.add(path)
-
-    new_path_set = set([sdoc.get('path') for sdoc in sdoc_info_list])
+    old_path_set = {path for path in old_library_info}
+    new_path_set = {sdoc.get('path') for sdoc in sdoc_info_list}
     new_file_info = {sdoc.get('path'): sdoc for sdoc in sdoc_info_list}
+    need_del_file_set = old_path_set - new_path_set
 
-    need_del_files = old_path_set - new_path_set
-    if need_del_files:
-        is_updated = True
-
-    for path in need_del_files:
-        children_list = library_info.get(path).get('children_list')
-        delete_index(index, children_list, library_info, path)
-
-    max_vector_id = get_max_vector_id(library_info)
-    start_vector_id = max_vector_id + 1
+    need_del_doc_file_list = list(need_del_file_set)
+    bulk_update_params = []
+    bulk_error_library_info = deepcopy(old_library_info)
     for path in new_path_set:
         sdoc_info = new_file_info.get(path)
         download_token = sdoc_info.get('download_token')
         new_mtime = sdoc_info.get('mtime')
         size = sdoc_info.get('size')
+
         # path may be not in library_info
-        old_mtime = library_info.get(path, {}).get('mtime')
+        old_mtime = old_library_info.get(path)
+        old_library_info[path] = new_mtime
         if new_mtime == old_mtime:
             continue
 
-        # delete old index
-        children_list = library_info.get(path, {}).get('children_list')
-        if children_list:
-            delete_index(index, children_list, library_info, path)
+        if old_mtime:
+            need_del_doc_file_list.append(path)
 
         file_content = b''
         if size:
             file_content = get_file_by_token(path, download_token)
 
-        sentence_list = [path.strip('/').rstrip('.sdoc')]
-        children_id_list = [VIRTUAL_PATH_CHILDREN_ID]
+        # add path to index
+        path_string = path.strip('/').rstrip('.sdoc')
+        document_add_params = get_document_add_params(retrieval_model, path_string, index_name, path, VIRTUAL_PATH_CHILDREN_ID)
+        bulk_update_params.extend(document_add_params)
+
         if file_content:
-            file_content = json.loads(file_content.decode())
-            children_ids, sentences = get_file_children_info(file_content)
-            sentence_list.extend(sentences)
-            children_id_list.extend(children_ids)
+            add_params = parse_sdoc_to_add_params(file_content, retrieval_model, index_name, path)
+            bulk_update_params.extend(add_params)
+            if len(bulk_update_params) >= ZINC_BULK_OPETATE_LIMIT:
+                zinc_bulk_operate(zinc_api, bulk_error_library_info, bulk_update_params, associate_id)
+                bulk_error_library_info = deepcopy(old_library_info)
+                bulk_update_params = []
 
-        added_count = add_index(index, children_id_list, retrieval_model,
-                              sentence_list, start_vector_id, new_mtime, library_info, path)
+    step = ZINC_QUERY_PATH_DOC_STEP
+    for pos in range(0, len(need_del_doc_file_list), step):
+        paths = need_del_doc_file_list[pos: pos + step]
+        delete_params = get_doc_delete_params_by_paths(zinc_api, paths, index_name)
+        bulk_update_params.extend(delete_params)
+        for path in paths:
+            # pop that sdoc file has been deleted
+            if path in need_del_file_set:
+                old_library_info.pop(path)
+        if len(bulk_update_params) >= ZINC_BULK_OPETATE_LIMIT:
+            zinc_bulk_operate(zinc_api, bulk_error_library_info, bulk_update_params, associate_id)
+            bulk_error_library_info = deepcopy(old_library_info)
+            bulk_update_params = []
 
-        start_vector_id += added_count
-        is_updated = True
+    if bulk_update_params:
+        zinc_bulk_operate(zinc_api, bulk_error_library_info, bulk_update_params, associate_id)
+    with open(os.path.join(config.LIBRARY_FILE_INFO_STORAGE_PATH, associate_id + '.json'), 'w') as f:
+        f.write(json.dumps(old_library_info))
 
-    if not is_updated:
-        return False
+    logger.info('library: %s, update sdoc embedding to ZincSearch success', associate_id)
 
-    faiss.write_index(index, library_sdoc_index_path)
-    # save library info to json file
-    with open(os.path.join(embedding_dir, associate_id + '.json'), 'w') as f:
-        f.write(json.dumps(library_info))
 
-    logger.info('library: %s, update library sdoc embedding to faiss success', associate_id)
-    return True
+def get_doc_delete_params_by_paths(zinc_api, path_list, index_name):
+    data = {
+        "query": {
+            "terms": {
+                "path": path_list
+            }
+        },
+        "_source": False
+    }
+    doc_item = zinc_api.normal_search(index_name, data)
+
+    delete_params = []
+    for hit in doc_item['hits']['hits']:
+        _id = hit['_id']
+        delete_params.append({'delete': {'_id': _id, '_index': index_name}})
+
+    return delete_params
+
+
+def get_document_add_params(retrieval_model, sentence, index_name, path, children_id):
+    add_params = []
+    embeddings = retrieval_encode(retrieval_model, [sentence])
+    index_info = {"index": {"_index": index_name}}
+    vector_info = {"path": path, "children_id": children_id, "vec": embeddings[0].tolist()}
+    add_params.append(index_info)
+    add_params.append(vector_info)
+    return add_params
+
+
+def zinc_bulk_operate(zinc_api, bulk_error_library_info, bulk_params, associate_id):
+    try:
+        zinc_api.bulk(bulk_params)
+    except Exception as e:
+        if bulk_error_library_info:
+            with open(os.path.join(config.LIBRARY_FILE_INFO_STORAGE_PATH, associate_id + '.json'), 'w') as f:
+                f.write(json.dumps(bulk_error_library_info))
+        raise Exception(e)

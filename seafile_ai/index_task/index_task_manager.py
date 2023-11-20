@@ -96,7 +96,7 @@ class IndexTaskManager:
                 return task.id
 
             task_id = str(uuid.uuid4())
-            task = IndexTask(task_id, readable_id, self.app.index_manager.create_library_sdoc_index_without_session, (context, self.app.retrieval_model))
+            task = IndexTask(task_id, readable_id, self.app.index_manager.create_library_sdoc_index_without_session, (context, self.app.retrieval_model, self.app.zinc_api))
             self.tasks_map[task_id] = task
             self.readable_id2task_map[task.readable_id] = task
             self.tasks_queue.put(task)
@@ -104,9 +104,13 @@ class IndexTaskManager:
             return task_id
 
     def search_similar_children_in_library(self, query, associate_id, sdoc_files_info):
-        return self.app.index_manager.search_children_in_library(query, associate_id, sdoc_files_info,
-                                                                      self.app.retrieval_model,
-                                                                    )
+        return self.app.index_manager.\
+            search_children_in_library(query,
+                                       associate_id,
+                                       sdoc_files_info,
+                                       self.app.retrieval_model,
+                                       self.app.zinc_api
+                                       )
 
     def add_update_a_library_sdoc_index_task(self, context):
         readable_id = context.get('associate_id')
@@ -117,7 +121,7 @@ class IndexTaskManager:
 
             task_id = str(uuid.uuid4())
             task = IndexTask(task_id, readable_id, self.app.index_manager.update_library_sdoc_index_without_session,
-                             (context, self.app.retrieval_model))
+                             (context, self.app.retrieval_model, self.app.zinc_api))
             self.tasks_map[task_id] = task
             self.readable_id2task_map[task.readable_id] = task
             self.tasks_queue.put(task)
