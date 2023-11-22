@@ -1,6 +1,10 @@
 import requests
+import logging
 
 from seafile_ai.utils.seafile_api import parse_response
+
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIAPI:
@@ -21,5 +25,10 @@ class OpenAIAPI:
         }
         response = requests.post(self.openai_url, json=json_data, timeout=self.timeout)
         data = parse_response(response)
-        result = data['choices'][0]['message']['content']
+        try:
+            result = data['choices'][0]['message']['content']
+        except KeyError as e:
+            logger.exception(e)
+            result = None
+
         return result
