@@ -3,6 +3,7 @@ from seafile_ai.index_store.index_manager import IndexManager
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
 from seafile_ai.models.pretrained_model_manager import PretrainedModelManager
 from seafile_ai.utils.seafile_api import SeafileAPI
+from seafile_ai.utils.openai_api import OpenAIAPI
 from seafile_ai.utils.zincsearch_api import ZincSearchAPI
 
 
@@ -16,6 +17,8 @@ class SeafileAIApp(object):
 
         index_task_manager.init(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
+
+        self.openai_api = OpenAIAPI(config.OPENAI_PROXY_URL)
 
     def serve_forever(self):
         index_task_manager.start()

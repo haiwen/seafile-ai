@@ -9,6 +9,8 @@ from sqlalchemy.orm import scoped_session
 from seafile_ai import config
 from seafile_ai.db import init_db_session_class
 from seafile_ai.index_task.index_task_manager import index_task_manager
+from seafile_ai.utils import get_file_by_token
+from seafile_ai.utils.sdoc2md import sdoc2md
 
 logger = logging.getLogger(__name__)
 flask_app = Flask(__name__)
@@ -135,6 +137,70 @@ def similarity_search_in_library():
     children_list = sorted(children_similarity, key=lambda row: row['score'], reverse=True)[:count]
 
     return {'children_list': children_list}, 200
+
+
+@flask_app.route('/api/v1/question-answering-search-in-library/', methods=['POST'])
+def question_answering_search_in_library():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    query = data.get('query')
+    associate_id = data.get('associate_id')
+    sdoc_files_info = data.get('sdoc_files_info')
+
+    if not query:
+        return {'error_msg': 'query invalid.'}, 400
+
+    if not associate_id:
+        return {'error_msg': 'associate_id invalid.'}, 400
+
+    if not sdoc_files_info:
+        return {'error_msg': 'sdoc_files_info invalid.'}, 400
+
+    try:
+        count = int(data.get('count'))
+    except:
+        count = 10
+
+    db_session = Session()
+
+    try:
+        index = flask_app.app.index_manager.get_library_sdoc_index_by_associate_id(associate_id, db_session)
+    except Exception as e:
+        logger.error(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    if not index:
+        return {'error_msg': 'Library index not found.'}, 400
+    try:
+        children_similarity = index_task_manager.search_similar_children_in_library(query, associate_id, sdoc_files_info)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    children_list = sorted(children_similarity, key=lambda row: row['distance'], reverse=False)[:count]
+    if len(children_list) > 0:
+        first_children_path = children_list[0].get('path')
+        download_token = sdoc_files_info.get(first_children_path).get('download_token')
+        content_sdoc = get_file_by_token(first_children_path, download_token)
+        try:
+            content_md = sdoc2md(json.loads(content_sdoc.decode()))
+            prompt = open("static/prompts/question_answering_search.txt").read().format(
+            str(content_md), str(query)
+            )
+            res = flask_app.app.openai_api.chat_completions(prompt, 0)
+        except json.JSONDecodeError:
+            first_children_path, res = '', 'false'
+    else:
+        first_children_path, res = '', 'false'
+    return { 'answering_result': res, 'hit_files': [first_children_path] }, 200
 
 
 @flask_app.route('/api/v1/library-sdoc-index/', methods=['PUT', 'DELETE'])

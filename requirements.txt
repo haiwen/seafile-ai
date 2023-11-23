@@ -17,4 +17,5 @@ pymysql
 PyJWT
 modelscope
 loguru
+html2text
 ndjson
