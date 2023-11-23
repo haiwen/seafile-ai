@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import jwt
-import shutil
 
 from flask import request, Flask
 from sqlalchemy.orm import scoped_session
@@ -10,7 +9,6 @@ from sqlalchemy.orm import scoped_session
 from seafile_ai import config
 from seafile_ai.db import init_db_session_class
 from seafile_ai.index_task.index_task_manager import index_task_manager
-from seafile_ai.utils.constant import LIBRARY_SDOC_INDEX
 from seafile_ai.utils import get_file_by_token
 from seafile_ai.utils.sdoc2md import sdoc2md
 
@@ -101,7 +99,7 @@ def similarity_search_in_library():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    query = data.get('query')
+    query = data.get('query').strip()
     associate_id = data.get('associate_id')
     sdoc_files_info = data.get('sdoc_files_info')
 
@@ -136,8 +134,7 @@ def similarity_search_in_library():
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-
-    children_list = sorted(children_similarity, key=lambda row: row['distance'], reverse=False)[:count]
+    children_list = sorted(children_similarity, key=lambda row: row['score'], reverse=True)[:count]
 
     return {'children_list': children_list}, 200
 
@@ -233,9 +230,7 @@ def library_sdoc_index():
 
     if index:
         associate_id = index.associate_id
-        embedding_dir = os.path.join(config.INDEX_STORAGE_PATH, LIBRARY_SDOC_INDEX)
-        library_sdoc_index_path = os.path.join(embedding_dir, associate_id + '.index')
-        library_sdoc_info_path = os.path.join(embedding_dir, associate_id + '.json')
+        library_sdoc_info_path = os.path.join(config.LIBRARY_FILE_INFO_STORAGE_PATH, associate_id + '.json')
         task = index_task_manager.get_pending_or_running_task(associate_id)
 
     if request.method == 'DELETE':
@@ -247,8 +242,6 @@ def library_sdoc_index():
 
         try:
             flask_app.app.index_manager.delete_library_sdoc_index_by_associate_id(associate_id, db_session)
-            if os.path.exists(library_sdoc_index_path):
-                os.remove(library_sdoc_index_path)
             if os.path.exists(library_sdoc_info_path):
                 os.remove(library_sdoc_info_path)
         except Exception as e:

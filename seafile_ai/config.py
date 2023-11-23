@@ -29,12 +29,6 @@ LOG_FILE = None
 LOG_LEVEL = 'info'
 ENABLE_SYS_LOG = False
 
-# index path
-INDEX_STORAGE_PATH = ''
-
-# faiss index type default IDMap2,Flat
-FAISS_INDEX_TYPE = 'IDMap2,Flat'
-
 # sections
 ## indexManager worker count
 INDEX_MANAGER_WORKERS = 2
@@ -49,12 +43,20 @@ RETRIEVAL_MODEL_ID = 'damo/nlp_corom_sentence-embedding_chinese-base'
 RETRIEVAL_METRIC = 'L2'
 DIMENSION = 768
 RETRIEVAL_NUM = 10
+RETRIEVAL_MODEL_PATH = None
 
 ## rerank model settings
 RERANK_SOURCE = 'alibaba'
 RERANK_MODEL_ID = 'damo/nlp_rom_passage-ranking_chinese-base'
+RERANK_MODEL_PATH = None
 
-THRESHOLD = 100
+THRESHOLD = 0.01
+
+## zincsearch
+ZINC_SEARCH_SERVER = 'http://127.0.0.1:4080'
+ZINC_SEARCH_TOKEN = ''
+
+LIBRARY_FILE_INFO_STORAGE_PATH = ''
 
 CONF_DIR = '/opt/seafile/conf/'
 

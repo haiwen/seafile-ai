@@ -15,8 +15,7 @@ flask-sqlalchemy
 apscheduler
 pymysql
 PyJWT
-faiss-cpu
 modelscope
-whoosh
 loguru
 html2text
+ndjson

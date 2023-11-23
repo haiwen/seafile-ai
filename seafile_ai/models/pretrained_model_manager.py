@@ -22,12 +22,12 @@ class BaseModel(ABC):
 
 
 class RetrievalBaseModel(BaseModel):
-    def __init__(self, model_id, cache_dir, metric, dimension):
+    def __init__(self, model_id, cache_dir, metric, dimension, model_path):
         self.model_id = model_id
         self.cache_dir = cache_dir
         self.metric = metric
         self.dimension = dimension
-        self.local_model_path = None
+        self.local_model_path = model_path
 
     @abstractmethod
     def encode(self, sentences):
@@ -35,10 +35,10 @@ class RetrievalBaseModel(BaseModel):
 
 
 class RerankBaseModel(BaseModel):
-    def __init__(self, model_id, cache_dir):
+    def __init__(self, model_id, cache_dir, model_path):
         self.model_id = model_id
         self.cache_dir = cache_dir
-        self.local_model_path = None
+        self.local_model_path = model_path
 
     @abstractmethod
     def rerank(self, query, compare_sentences):
@@ -46,8 +46,8 @@ class RerankBaseModel(BaseModel):
 
 
 class HuggingFaceRetrievalModel(RetrievalBaseModel):
-    def __init__(self, model_id, cache_dir, metric=None, dimension=768):
-        super().__init__(model_id, cache_dir, metric, dimension)
+    def __init__(self, model_id, cache_dir, metric=None, dimension=768, model_path=None):
+        super().__init__(model_id, cache_dir, metric, dimension, model_path)
         self._init()
 
     def _init(self):
@@ -87,8 +87,8 @@ def alibaba_model_download(cache_dir, model_id):
 
 
 class AlibabaRetrievalModel(RetrievalBaseModel):
-    def __init__(self, model_id, cache_dir, metric=None, dimension=768):
-        super().__init__(model_id, cache_dir, metric, dimension)
+    def __init__(self, model_id, cache_dir, metric=None, dimension=768, model_path=None):
+        super().__init__(model_id, cache_dir, metric, dimension, model_path)
         self.pipeline = None
         self._init()
 
@@ -110,8 +110,8 @@ class AlibabaRetrievalModel(RetrievalBaseModel):
 
 
 class AlibabaRerankModel(RerankBaseModel):
-    def __init__(self, model_id, cache_dir):
-        super().__init__(model_id, cache_dir)
+    def __init__(self, model_id, cache_dir, model_path):
+        super().__init__(model_id, cache_dir, model_path)
         self.pipeline = None
         self._init()
 
@@ -143,13 +143,15 @@ class PretrainedModelManager(object):
         cache_dir = config.MODEL_CACHE_DIR
         metric = config.RETRIEVAL_METRIC
         dimension = config.DIMENSION
+        model_path = config.RETRIEVAL_MODEL_PATH
 
-        return cls.retrieval_model[source](model_id, cache_dir, metric, dimension)
+        return cls.retrieval_model[source](model_id, cache_dir, metric, dimension, model_path)
 
     @classmethod
     def create_rerank_model(cls, config):
         source = config.RERANK_SOURCE
         model_id = config.RERANK_MODEL_ID
         cache_dir = config.MODEL_CACHE_DIR
+        model_path = config.RERANK_MODEL_PATH
 
-        return cls.rerank_model[source](model_id, cache_dir)
+        return cls.rerank_model[source](model_id, cache_dir, model_path)
