@@ -185,7 +185,7 @@ def question_answering_search_in_library():
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    children_list = sorted(children_similarity, key=lambda row: row['distance'], reverse=False)[:count]
+    children_list = sorted(children_similarity, key=lambda row: row['score'], reverse=False)[:count]
     if len(children_list) > 0:
         first_children_path = children_list[0].get('path')
         download_token = sdoc_files_info.get(first_children_path).get('download_token')
