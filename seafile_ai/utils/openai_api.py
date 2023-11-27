@@ -28,7 +28,7 @@ class OpenAIAPI:
         try:
             result = data['choices'][0]['message']['content']
         except KeyError as e:
-            logger.exception(f"Exception occurred: {e}. Data: {data}")
+            logger.exception(f"parse data: {data}, error {e}")
             result = None
 
 
