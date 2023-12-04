@@ -1,18 +1,18 @@
 import logging
 import queue
 import uuid
+import pytz
 from datetime import datetime, timedelta
 from threading import Thread, Lock
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.gevent import GeventScheduler
-from sqlalchemy.sql import text
 
 from seafile_ai import config
-from seafile_ai.db import init_db_session_class
+from seafile_ai.index_store.repo_status_index import RepoStatus
+from seafile_ai.repo_data import repo_data
 
 logger = logging.getLogger(__name__)
-Session = init_db_session_class(config)
 
 
 class IndexTask:
@@ -89,39 +89,37 @@ class IndexTaskManager:
         return task
 
     def add_library_sdoc_index_task(self, context):
-        readable_id = context.get('associate_id')
+        readable_id = context.get('repo_id')
         with self.check_task_lock:
             task = self.get_pending_or_running_task(readable_id)
             if task:
                 return task.id
 
             task_id = str(uuid.uuid4())
-            task = IndexTask(task_id, readable_id, self.app.index_manager.create_library_sdoc_index_without_session, (context, self.app.retrieval_model, self.app.zinc_api))
+            task = IndexTask(task_id, readable_id, self.app.index_manager.create_library_sdoc_index,
+                             (context, self.app.retrieval_model, self.app.repo_file_index, self.app.repo_status_index)
+                             )
             self.tasks_map[task_id] = task
             self.readable_id2task_map[task.readable_id] = task
             self.tasks_queue.put(task)
 
             return task_id
 
-    def search_similar_children_in_library(self, query, associate_id, sdoc_files_info):
+    def search_similar_children_in_library(self, query, associate_id):
         return self.app.index_manager.\
-            search_children_in_library(query,
-                                       associate_id,
-                                       sdoc_files_info,
-                                       self.app.retrieval_model,
-                                       self.app.zinc_api
-                                       )
+            search_children_in_library(query, associate_id, self.app.retrieval_model, self.app.repo_file_index)
 
     def add_update_a_library_sdoc_index_task(self, context):
-        readable_id = context.get('associate_id')
+        readable_id = context.get('repo_id')
         with self.check_task_lock:
             task = self.get_pending_or_running_task(readable_id)
             if task:
                 return task.id
 
             task_id = str(uuid.uuid4())
-            task = IndexTask(task_id, readable_id, self.app.index_manager.update_library_sdoc_index_without_session,
-                             (context, self.app.retrieval_model, self.app.zinc_api))
+            task = IndexTask(task_id, readable_id, self.app.index_manager.update_library_sdoc_index,
+                             (context, self.app.retrieval_model, self.app.repo_file_index, self.app.repo_status_index)
+                             )
             self.tasks_map[task_id] = task
             self.readable_id2task_map[task.readable_id] = task
             self.tasks_queue.put(task)
@@ -129,38 +127,45 @@ class IndexTaskManager:
             return task_id
 
     @staticmethod
-    def list_pending_library_indexes(db_session):
-        sql = """
-                SELECT `associate_id`, `last_modify`
-                FROM library_sdoc_index WHERE `updated`<:per_day_check_time
-                """
-
+    def list_pending_repo_indexes(repo_status_index):
         per_day_check_time = datetime.now() - timedelta(hours=23)
-        library_sdoc_indexes = db_session.execute(text(sql), {
-            'per_day_check_time': per_day_check_time,
-        })
-        return library_sdoc_indexes
+        utc_zone = pytz.timezone('UTC')
+        per_day_check_time = per_day_check_time.astimezone(utc_zone)
+        per_day_check_time = per_day_check_time.strftime("%Y-%m-%dT%H:%M:%S.8%fZ")
 
-    def update_library_sdoc_indexes(self, db_session):
-        library_sdoc_indexes = self.list_pending_library_indexes(db_session)
-        seafile_api = self.app.seafile_api
+        repo_indexes = repo_status_index.get_repo_status_by_time(per_day_check_time)
 
-        for library_index in library_sdoc_indexes:
-            associate_id = library_index[0]
-            old_last_modify = library_index[1]
+        return repo_indexes
 
-            library_files = seafile_api.get_library_files(associate_id)
-            new_last_modify = library_files.get('last_modify')
+    def update_library_sdoc_indexes(self):
+        repo_status_index = self.app.repo_status_index
+        repo_file_index = self.app.repo_file_index
+        repo_indexes = self.list_pending_repo_indexes(repo_status_index)
 
-            if old_last_modify == new_last_modify:
+        repo_id_list = [repo_index.get('repo_id') for repo_index in repo_indexes]
+        repo_to_commit = repo_data.get_all_repos_head_commits(repo_id_list)
+
+        for repo_index in repo_indexes:
+            repo_id = repo_index.get('repo_id')
+            old_commit_id = repo_index.get('commit_id')
+            updatingto = repo_index.get('updatingto')
+
+            repo_status = RepoStatus(repo_id, old_commit_id, updatingto)
+
+            new_commit_id = repo_to_commit.get(repo_id)
+
+            if not new_commit_id:
+                # if not new_commit_id delete repo index
+                repo_file_index.delete_index_by_index_name(repo_id)
+                repo_status_index.delete_repo_status_by_id(repo_id)
+
+            if old_commit_id == new_commit_id:
                 continue
 
-            sdoc_info_list = library_files.get('sdoc_info_list')
-
             context = {
-                'associate_id': associate_id,
-                'last_modify': new_last_modify,
-                'sdoc_info_list': sdoc_info_list
+                "repo_id": repo_id,
+                "repo_status": repo_status,
+                "commit_id": new_commit_id,
             }
 
             self.add_update_a_library_sdoc_index_task(context)
@@ -171,13 +176,11 @@ class IndexTaskManager:
             update library sdoc indexes periodly
             query tasks and add them to queue by calling self.add_update_a_library_sdoc_index_task
         """
-        db_session = Session()
+
         try:
-            self.update_library_sdoc_indexes(db_session)
+            self.update_library_sdoc_indexes()
         except Exception as e:
             logger.exception('periodical update library sdoc indexes error: %s', e)
-        finally:
-            db_session.close()
 
     def query_task(self, task_id):
         return self.tasks_map.get(task_id)
@@ -203,7 +206,7 @@ class IndexTaskManager:
                 logger.info('Run task success: %s cost %ds \n' % (task_info, task.get_cost_time()))
             except Exception as e:
                 task.set_error(e)
-                logger.error('Failed to handle task %s, error: %s \n' % (task.id, e))
+                logger.exception('Failed to handle task %s, error: %s \n' % (task.id, e))
             finally:
                 with self.check_task_lock:
                     self.readable_id2task_map.pop(task.readable_id, None)
