@@ -1,20 +1,18 @@
 import json
 import logging
-import os
 import jwt
 
 from flask import request, Flask
-from sqlalchemy.orm import scoped_session
 
 from seafile_ai import config
-from seafile_ai.db import init_db_session_class
 from seafile_ai.index_task.index_task_manager import index_task_manager
 from seafile_ai.utils import get_file_by_token
 from seafile_ai.utils.sdoc2md import sdoc2md
+from seafile_ai.repo_data import repo_data
+
 
 logger = logging.getLogger(__name__)
 flask_app = Flask(__name__)
-Session = scoped_session(init_db_session_class(config))
 
 
 def check_auth_token(req):
@@ -35,11 +33,6 @@ def check_auth_token(req):
     return True
 
 
-@flask_app.teardown_request
-def shutdown_session(error=None):
-    Session.remove()
-
-
 @flask_app.route('/api/v1/library-sdoc-indexes/', methods=['POST'])
 def library_sdoc_indexes():
     is_valid = check_auth_token(request)
@@ -52,34 +45,28 @@ def library_sdoc_indexes():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    associate_id = data.get('repo_id')
-    last_modify = data.get('last_modify')
-    sdoc_info_list = data.get('sdoc_info_list')
+    repo_id = data.get('repo_id')
 
-    if not associate_id:
-        return {'error_msg': 'associate_id invalid.'}, 400
-
-    db_session = Session()
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
 
     try:
-        index = flask_app.app.index_manager.get_library_sdoc_index_by_associate_id(associate_id, db_session)
+        is_exist = flask_app.app.repo_file_index.check_index(repo_id)
     except Exception as e:
-        logger.error(e)
+        logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    if index:
+    if is_exist:
         return {'error_msg': 'Index has exists.'}, 400
 
-    task = index_task_manager.get_pending_or_running_task(associate_id)
+    task = index_task_manager.get_pending_or_running_task(repo_id)
 
     if task:
         return {'task_id': task.id}, 200
 
-    flask_app.app.index_manager.create_library_sdoc_index_db(associate_id, last_modify, db_session)
-
     context = {
-        'associate_id': associate_id,
-        'sdoc_info_list': sdoc_info_list
+        'repo_id': repo_id,
+        'commit_id': repo_data.get_repo_head_commit(repo_id),
     }
 
     task_id = index_task_manager.add_library_sdoc_index_task(context)
@@ -100,36 +87,30 @@ def similarity_search_in_library():
         return {'error_msg': 'Bad request.'}, 400
 
     query = data.get('query').strip()
-    associate_id = data.get('associate_id')
-    sdoc_files_info = data.get('sdoc_files_info')
+    repo_id = data.get('repo_id')
 
     if not query:
         return {'error_msg': 'query invalid.'}, 400
 
-    if not associate_id:
-        return {'error_msg': 'associate_id invalid.'}, 400
-
-    if not sdoc_files_info:
-        return {'error_msg': 'sdoc_files_info invalid.'}, 400
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
 
     try:
         count = int(data.get('count'))
     except:
         count = 10
 
-    db_session = Session()
-
     try:
-        index = flask_app.app.index_manager.get_library_sdoc_index_by_associate_id(associate_id, db_session)
+        is_exist = flask_app.app.repo_file_index.check_index(repo_id)
     except Exception as e:
         logger.error(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    if not index:
+    if not is_exist:
         return {'error_msg': 'Library index not found.'}, 400
 
     try:
-        children_similarity = index_task_manager.search_similar_children_in_library(query, associate_id, sdoc_files_info)
+        children_similarity = index_task_manager.search_similar_children_in_library(query, repo_id)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
@@ -152,35 +133,30 @@ def question_answering_search_in_library():
         return {'error_msg': 'Bad request.'}, 400
 
     query = data.get('query')
-    associate_id = data.get('associate_id')
-    sdoc_files_info = data.get('sdoc_files_info')
+    repo_id = data.get('repo_id')
 
     if not query:
         return {'error_msg': 'query invalid.'}, 400
 
-    if not associate_id:
-        return {'error_msg': 'associate_id invalid.'}, 400
-
-    if not sdoc_files_info:
-        return {'error_msg': 'sdoc_files_info invalid.'}, 400
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
 
     try:
         count = int(data.get('count'))
     except:
         count = 10
 
-    db_session = Session()
-
     try:
-        index = flask_app.app.index_manager.get_library_sdoc_index_by_associate_id(associate_id, db_session)
+        is_exist = flask_app.app.repo_file_index.check_index(repo_id)
     except Exception as e:
         logger.error(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    if not index:
+    if not is_exist:
         return {'error_msg': 'Library index not found.'}, 400
+
     try:
-        children_similarity = index_task_manager.search_similar_children_in_library(query, associate_id, sdoc_files_info)
+        children_similarity = index_task_manager.search_similar_children_in_library(query, repo_id)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
@@ -188,7 +164,8 @@ def question_answering_search_in_library():
     children_list = sorted(children_similarity, key=lambda row: row['score'], reverse=False)[:count]
     if len(children_list) > 0:
         first_children_path = children_list[0].get('path')
-        download_token = sdoc_files_info.get(first_children_path).get('download_token')
+        res = flask_app.app.seafile_api.get_file_download_token(repo_id, first_children_path)
+        download_token = res.get('download_token')
         content_sdoc = get_file_by_token(first_children_path, download_token)
         try:
             content_md = sdoc2md(json.loads(content_sdoc.decode()))
@@ -215,69 +192,57 @@ def library_sdoc_index():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    associate_id = data.get('associate_id')
+    repo_id = data.get('repo_id')
 
-    if not associate_id:
-        return {'error_msg': 'associate_id invalid'}, 400
-
-    db_session = Session()
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid'}, 400
 
     try:
-        index = flask_app.app.index_manager.get_library_sdoc_index_by_associate_id(associate_id, db_session)
+        repo_status = flask_app.app.repo_status_index.get_repo_status_by_id(repo_id)
     except Exception as e:
-        logger.error(e)
+        logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    if index:
-        associate_id = index.associate_id
-        library_sdoc_info_path = os.path.join(config.LIBRARY_FILE_INFO_STORAGE_PATH, associate_id + '.json')
-        task = index_task_manager.get_pending_or_running_task(associate_id)
-
     if request.method == 'DELETE':
-        if not index:
+        if not repo_status:
             return {'success': True}, 200
+
+        task = index_task_manager.get_pending_or_running_task(repo_id)
 
         if task:
             return {'error_msg': 'library sdoc index is running'}, 400
 
         try:
-            flask_app.app.index_manager.delete_library_sdoc_index_by_associate_id(associate_id, db_session)
-            if os.path.exists(library_sdoc_info_path):
-                os.remove(library_sdoc_info_path)
+            flask_app.app.index_manager.delete_library_sdoc_index_by_repo_id(repo_id, flask_app.app.repo_file_index, flask_app.app.repo_status_index)
         except Exception as e:
-            logger.error(e)
+            logger.exception(e)
             return {'error_msg': 'Internet server error.'}, 500
 
         return {'success': True}, 200
 
     elif request.method == 'PUT':
-        sdoc_info_list = data.get('sdoc_info_list')
-        last_modify = data.get('last_modify')
+        commit_id = repo_data.get_repo_head_commit(repo_id)
 
-        if not sdoc_info_list:
-            return {'error_msg': 'sdoc_info_list invalid'}, 400
+        if not repo_status:
+            return {'error_msg': 'repo index not found.'}, 404
 
-        if not last_modify:
-            return {'error_msg': 'last_modify invalid'}, 400
+        if commit_id == repo_status.from_commit:
+            return {'error_msg': 'repo index is latest.'}, 400
 
-        if not index:
-            return {'error_msg': 'Library sdoc index not found.'}, 404
-
-        if last_modify == index.last_modify:
-            return {'error_msg': 'Library sdoc index is latest.'}, 400
+        task = index_task_manager.get_pending_or_running_task(repo_id)
 
         if task:
             return {'task_id': task.id}, 200
 
         context = {
-            'associate_id': associate_id,
-            'last_modify': last_modify,
-            'sdoc_info_list': sdoc_info_list
+            'repo_id': repo_id,
+            'repo_status': repo_status,
+            'commit_id': commit_id,
         }
         try:
             task_id = index_task_manager.add_update_a_library_sdoc_index_task(context)
         except Exception as e:
-            logger.error(e)
+            logger.exception(e)
             return {'error_msg': 'Internet server error.'}, 500
 
         return {'task_id': task_id}, 200
@@ -306,21 +271,19 @@ def query_library_index_state():
     if not is_valid:
         return {'error_msg': 'Permission denied'}, 403
 
-    associate_id = request.args.get('associate_id')
-    if not associate_id:
-        return {'error_msg': 'associate_id invalid'}, 400
-
-    db_session = Session()
+    repo_id = request.args.get('repo_id')
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid'}, 400
 
     try:
-        index = flask_app.app.index_manager.get_library_sdoc_index_by_associate_id(associate_id, db_session)
+        is_exist = flask_app.app.repo_status_index.check_repo_status(repo_id)
     except Exception as e:
-        logger.error(e)
+        logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    if not index:
+    if not is_exist:
         return {'state': 'uncreated', 'task_id': ''}
 
-    task = index_task_manager.get_pending_or_running_task(index.associate_id)
+    task = index_task_manager.get_pending_or_running_task(repo_id)
 
     return task and {'state': 'running', 'task_id': task.id} or {'state': 'finished', 'task_id': ''}

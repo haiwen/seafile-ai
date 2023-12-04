@@ -2,8 +2,6 @@ import os
 import sys
 import logging
 
-from urllib.parse import quote_plus
-
 logger = logging.getLogger(__name__)
 
 basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
@@ -15,14 +13,6 @@ APP_NAME = 'seafile-ai'
 
 SECRET_KEY = ''
 SEAFILE_SERVER = ''
-
-# database
-MYSQL_HOST = ''
-MYSQL_USER = ''
-MYSQL_PASSWORD = ''
-MYSQL_PORT = 3306
-MYSQL_DB = 'seafile_ai'
-MYSQL_UNIX_SOCKET = ''
 
 # log
 LOG_FILE = None
@@ -52,11 +42,19 @@ RERANK_MODEL_PATH = None
 
 THRESHOLD = 0.01
 
-## zincsearch
-ZINC_SEARCH_SERVER = 'http://127.0.0.1:4080'
-ZINC_SEARCH_TOKEN = ''
+## seasearch
+SEASEARCH_SERVER = 'http://127.0.0.1:4080'
+SEASEARCH_TOKEN = ''
+VECTOR_M = 1
 
-LIBRARY_FILE_INFO_STORAGE_PATH = ''
+# seafile config database
+MYSQL_HOST = ''
+MYSQL_USER = ''
+MYSQL_PASSWORD = ''
+MYSQL_PORT = 3306
+MYSQL_DB = 'seafile'
+MYSQL_UNIX_SOCKET = ''
+
 
 CONF_DIR = '/opt/seafile/conf/'
 
@@ -76,10 +74,5 @@ try:
 except ImportError as e:
     pass
 
-SQLALCHEMY_DATABASE_URI = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
-            (MYSQL_USER, quote_plus(MYSQL_PASSWORD), MYSQL_HOST, MYSQL_PORT, MYSQL_DB)
-
-if MYSQL_UNIX_SOCKET:
-    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI + '&unix_socket=' + MYSQL_UNIX_SOCKET
 
 os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
