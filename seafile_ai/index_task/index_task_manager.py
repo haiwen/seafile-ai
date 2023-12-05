@@ -143,7 +143,7 @@ class IndexTaskManager:
         repo_indexes = self.list_pending_repo_indexes(repo_status_index)
 
         repo_id_list = [repo_index.get('repo_id') for repo_index in repo_indexes]
-        repo_to_commit = repo_data.get_all_repos_head_commits(repo_id_list)
+        repo_to_commit = repo_data.get_repos_head_commits(repo_id_list)
 
         for repo_index in repo_indexes:
             repo_id = repo_index.get('repo_id')
