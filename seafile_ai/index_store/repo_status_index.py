@@ -1,3 +1,5 @@
+from seafile_ai import config
+
 
 class RepoStatus(object):
     def __init__(self, repo_id, from_commit, to_commit):
@@ -24,7 +26,6 @@ class RepoStatusIndex(object):
     id.
     """
 
-    index_name = 'repo_head'
     mapping = {
         'properties': {
             'repo_id': {
@@ -40,13 +41,20 @@ class RepoStatusIndex(object):
         },
     }
 
-    def __init__(self, seasearch_api):
+    shard_num = config.SHARD_NUM
+
+    def __init__(self, seasearch_api, index_name):
+        self.index_name = index_name
         self.seasearch_api = seasearch_api
         self.create_index_if_missing()
 
     def create_index_if_missing(self):
         if not self.seasearch_api.check_index_mapping(self.index_name).get('is_exist'):
-            self.seasearch_api.create_mapping(self.index_name, self.mapping)
+            data = {
+                'name': self.index_name,
+                'mappings': self.mapping,
+            }
+            self.seasearch_api.create_index(data)
 
     def check_repo_status(self, repo_id):
         return self.seasearch_api.check_document_by_id(self.index_name, repo_id).get('is_exist')
@@ -66,13 +74,13 @@ class RepoStatusIndex(object):
     def finish_update_repo(self, repo_id, commit_id):
         self.add_repo_status(repo_id, commit_id, None)
 
-    def delete_repo_status_by_id(self, repo_id):
+    def delete_documents_by_repo(self, repo_id):
         return self.seasearch_api.delete_document_by_id(self.index_name, repo_id)
 
     def get_repo_status_by_id(self, repo_id):
         doc = self.seasearch_api.get_document_by_id(self.index_name, repo_id)
         if doc.get('error'):
-            return None
+            return RepoStatus(repo_id, None, None)
         commit_id = doc['_source']['commit_id']
         updatingto = doc['_source']['updatingto']
         repo_id = doc['_source']['repo_id']
@@ -83,7 +91,7 @@ class RepoStatusIndex(object):
         self.seasearch_api.update_document_by_id(self.index_name, doc_id, data)
 
     def get_repo_status_by_time(self, check_time):
-        per_size = 200
+        per_size = 2000
         start = 0
         repo_head_list = []
         while True:
@@ -107,16 +115,38 @@ class RepoStatusIndex(object):
                 "sort": ["-@timestamp"],
             }
 
-            result = self.seasearch_api.normal_search(self.index_name, query_params)
-            total = result['hits']['total']['value']
-            hits = result['hits']['hits']
-
-            for hit in hits:
-                repo_id = hit['_id']
-                commit_id = hit.get('_source').get('commit_id')
-                updatingto = hit.get('_source').get('updatingto')
-                repo_head_list.append({'repo_id': repo_id, 'commit_id': commit_id, 'updatingto': updatingto})
+            repo_heads, total = self._repo_head_search(query_params)
 
             start += per_size
-            if len(hits) < per_size or start == total:
+            if len(repo_heads) < per_size or start == total:
                 return repo_head_list
+
+    def get_all_repos_from_index(self):
+        start = 0
+        per_size = 2000
+        repo_head_list = []
+        while True:
+            query_params = {
+                'from': start,
+                'size': per_size,
+            }
+
+            repo_heads, total = self._repo_head_search(query_params)
+            repo_head_list.extend(repo_heads)
+
+            start += per_size
+            if len(repo_heads) < per_size or start == total:
+                return repo_head_list
+
+    def _repo_head_search(self, query_params):
+        result = self.seasearch_api.normal_search(self.index_name, query_params)
+        total = result['hits']['total']['value']
+        hits = result['hits']['hits']
+        repo_heads = []
+
+        for hit in hits:
+            repo_id = hit['_id']
+            commit_id = hit.get('_source').get('commit_id')
+            updatingto = hit.get('_source').get('updatingto')
+            repo_heads.append({'repo_id': repo_id, 'commit_id': commit_id, 'updatingto': updatingto})
+        return repo_heads, total

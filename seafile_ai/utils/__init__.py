@@ -63,7 +63,7 @@ def get_file_content(repo_id, commit_id, obj_id, path):
 
 def get_library_diff_files(repo_id, old_commit_id, new_commit_id):
     if old_commit_id == new_commit_id:
-        return [], [], []
+        return [], [], [], [], []
 
     old_root = None
     if old_commit_id:
@@ -79,11 +79,12 @@ def get_library_diff_files(repo_id, old_commit_id, new_commit_id):
     except GetObjectError as e:
         # new commit should exists in the obj store
         logger.warning(e)
-        return [], [], []
+        return [], [], [], [], []
 
     new_root = new_commit.root_id
     version = new_commit.get_version()
     differ = CommitDiffer(repo_id, version, old_root, new_root)
+
     added_files, deleted_files, added_dirs, deleted_dirs, modified_files = differ.diff(new_commit.ctime)
 
-    return added_files, deleted_files, modified_files
+    return added_files, deleted_files, modified_files, added_dirs, deleted_dirs

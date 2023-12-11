@@ -74,8 +74,8 @@ def library_sdoc_indexes():
     return {'task_id': task_id}, 200
 
 
-@flask_app.route('/api/v1/similarity-search-in-library/', methods=['POST'])
-def similarity_search_in_library():
+@flask_app.route('/api/v1/search/', methods=['POST'])
+def search():
     is_valid = check_auth_token(request)
     if not is_valid:
         return {'error_msg': 'Permission denied'}, 403
@@ -101,23 +101,24 @@ def similarity_search_in_library():
         count = 10
 
     try:
-        is_exist = flask_app.app.repo_file_index.check_index(repo_id)
+        repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id)
     except Exception as e:
         logger.error(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    if not is_exist:
-        return {'error_msg': 'Library index not found.'}, 400
+    keyword_search_results, total = index_task_manager.keyword_search(query, [repo_id], count)
+    results = keyword_search_results
 
-    try:
-        children_similarity = index_task_manager.search_similar_children_in_library(query, repo_id)
-    except Exception as e:
-        logger.exception(e)
-        return {'error_msg': 'Internet server error.'}, 500
+    if repo_file_index_exist:
+        similar_files = index_task_manager.search_similar_children_in_library(query, repo_id)
 
-    children_list = sorted(children_similarity, key=lambda row: row['score'], reverse=True)[:count]
+        keyword_search_path_set = {result['fullpath'] for result in keyword_search_results}
+        similar_files = [file for file in similar_files if file['fullpath'] not in keyword_search_path_set]
+        similar_files = sorted(similar_files, key=lambda row: row['score'], reverse=True)[:count]
 
-    return {'children_list': children_list}, 200
+        results += similar_files
+
+    return {'results': results}, 200
 
 
 @flask_app.route('/api/v1/question-answering-search-in-library/', methods=['POST'])
@@ -168,7 +169,7 @@ def question_answering_search_in_library():
         download_token = res.get('download_token')
         content_sdoc = get_file_by_token(first_children_path, download_token)
         try:
-            content_md = sdoc2md(json.loads(content_sdoc.decode()))
+            content_md = sdoc2md(json.loads(content_sdoc))
             prompt = open("static/prompts/question_answering_search.txt").read().format(
             str(content_md), str(query)
             )
@@ -204,7 +205,7 @@ def library_sdoc_index():
         return {'error_msg': 'Internet server error.'}, 500
 
     if request.method == 'DELETE':
-        if not repo_status:
+        if not repo_status.from_commit:
             return {'success': True}, 200
 
         task = index_task_manager.get_pending_or_running_task(repo_id)

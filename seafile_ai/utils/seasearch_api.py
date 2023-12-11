@@ -29,9 +29,9 @@ class SeaSearchAPI(object):
             'Authorization': 'Basic ' + self.token
         }
 
-    def create_mapping(self, index_name, mapping):
-        url = self.server + '/es/' + index_name + '/_mapping'
-        response = requests.put(url, headers=self.headers, json=mapping, timeout=self.timeout)
+    def create_index(self, data):
+        url = self.server + '/api/index'
+        response = requests.post(url, headers=self.headers, json=data, timeout=self.timeout)
         data = parse_response(response)
 
         return data
