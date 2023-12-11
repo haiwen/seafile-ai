@@ -199,8 +199,11 @@ class RepoFileNameIndex(object):
             size = dir[3]
 
             if path == '/':
-                repo = repo_data.get_repo_name_mtime_size(repo_id)[0]
-                filename = repo['name']
+                repo = repo_data.get_repo_name_mtime_size(repo_id)
+                if not repo:
+                    return
+
+                filename = repo[0]['name']
             else:
                 filename = os.path.basename(path)
 
