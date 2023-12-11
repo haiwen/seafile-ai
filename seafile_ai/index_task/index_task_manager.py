@@ -105,9 +105,12 @@ class IndexTaskManager:
 
             return task_id
 
-    def search_similar_children_in_library(self, query, associate_id):
+    def search_similar_children_in_library(self, query, repo_id):
         return self.app.index_manager.\
-            search_children_in_library(query, associate_id, self.app.retrieval_model, self.app.repo_file_index)
+            search_children_in_library(query, repo_id, self.app.retrieval_model, self.app.repo_file_index)
+
+    def keyword_search(self, query, repo_id_list, count):
+        return self.app.index_manager.keyword_search(query, repo_id_list, self.app.repo_filename_index, count)
 
     def add_update_a_library_sdoc_index_task(self, context):
         readable_id = context.get('repo_id')
@@ -143,7 +146,7 @@ class IndexTaskManager:
         repo_indexes = self.list_pending_repo_indexes(repo_status_index)
 
         repo_id_list = [repo_index.get('repo_id') for repo_index in repo_indexes]
-        repo_to_commit = repo_data.get_repos_head_commits(repo_id_list)
+        repo_to_commit = repo_data.get_repo_id_commit_id_by_repos(repo_id_list)
 
         for repo_index in repo_indexes:
             repo_id = repo_index.get('repo_id')
@@ -157,7 +160,7 @@ class IndexTaskManager:
             if not new_commit_id:
                 # if not new_commit_id delete repo index
                 repo_file_index.delete_index_by_index_name(repo_id)
-                repo_status_index.delete_repo_status_by_id(repo_id)
+                repo_status_index.delete_documents_by_repo(repo_id)
 
             if old_commit_id == new_commit_id:
                 continue

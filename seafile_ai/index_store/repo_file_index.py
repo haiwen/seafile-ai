@@ -36,14 +36,18 @@ class RepoFileIndex(object):
         }
     }
 
+    shard_num = config.SHARD_NUM
+
     def __init__(self, seasearch_api):
         self.seasearch_api = seasearch_api
 
     def create_index(self, index_name):
-        self.seasearch_api.create_mapping(index_name, self.mapping)
-
-    def bulk(self, bulk_params):
-        self.seasearch_api.bulk(bulk_params)
+        data = {
+            'name': index_name,
+            'shard_num': self.shard_num,
+            'mappings': self.mapping,
+        }
+        self.seasearch_api.create_index(data)
 
     def check_index(self, index_name):
         return self.seasearch_api.check_index_mapping(index_name).get('is_exist')
@@ -58,6 +62,7 @@ class RepoFileIndex(object):
         }
 
         result = self.seasearch_api.vector_search(index_name, data)
+        total = result.get('hits', {}).get('total', {}).get('value', 0)
         hits = result['hits']['hits']
         searched_result = {}
         for hit in hits:
@@ -74,7 +79,8 @@ class RepoFileIndex(object):
                 if score > pre_score:
                     searched_result[path]['children_id'] = children_id
                 continue
-            searched_result[path] = {'path': path, 'children_id': children_id, 'score': score, 'max_score': score}
+            filename = os.path.basename(path).split('.')[0]
+            searched_result[path] = {'fullpath': path, 'name': filename, 'is_dir': False, 'score': score, 'max_score': score}
 
         return list(searched_result.values())
 
@@ -88,7 +94,7 @@ class RepoFileIndex(object):
         """
         old_commit_id is ZERO_OBJ_ID that means create repo file index
         """
-        added_files, deleted_files, modified_files = get_library_diff_files(index_name, old_commit_id, new_commit_id)
+        added_files, deleted_files, modified_files, _, _ = get_library_diff_files(index_name, old_commit_id, new_commit_id)
 
         bulk_update_params = []
         step = SEASEARCH_QUERY_PATH_DOC_STEP
@@ -112,7 +118,7 @@ class RepoFileIndex(object):
 
             # add path to index
             path_string, ext = os.path.splitext(path)
-            if ext not in SUPPORT_FILE_TYPES:
+            if ext.lower() not in SUPPORT_FILE_TYPES:
                 continue
             add_params = get_document_add_params(retrieval_model, path_string, index_name, path, VIRTUAL_PATH_CHILDREN_ID)
             bulk_update_params.extend(add_params)
@@ -133,7 +139,7 @@ class RepoFileIndex(object):
             self.seasearch_api.bulk(bulk_update_params)
 
     def get_doc_delete_params_by_paths(self, path_list, index_name):
-        per_size = 200
+        per_size = 2000
         start = 0
         delete_params = []
         while True:
