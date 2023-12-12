@@ -83,8 +83,12 @@ def get_library_diff_files(repo_id, old_commit_id, new_commit_id):
 
     new_root = new_commit.root_id
     version = new_commit.get_version()
-    differ = CommitDiffer(repo_id, version, old_root, new_root)
 
-    added_files, deleted_files, added_dirs, deleted_dirs, modified_files = differ.diff(new_commit.ctime)
+    try:
+        differ = CommitDiffer(repo_id, version, old_root, new_root)
+        added_files, deleted_files, added_dirs, deleted_dirs, modified_files = differ.diff(new_commit.ctime)
+    except Exception as e:
+        logger.warning('differ error: %s' % e)
+        return [], [], [], [], []
 
     return added_files, deleted_files, modified_files, added_dirs, deleted_dirs

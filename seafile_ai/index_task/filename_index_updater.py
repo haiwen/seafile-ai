@@ -1,7 +1,8 @@
 import logging
 from threading import Thread
 
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.schedulers.gevent import GeventScheduler
 from seafile_ai.repo_data import repo_data
 
 
@@ -59,6 +60,8 @@ def update_repo_file_name_indexes(repo_status_filename_index, repo_filename_inde
 
             index_manager.update_library_filename_index(context, repo_filename_index, repo_status_filename_index)
 
+    logger.info("Finish update filename index")
+
     clear_deleted_repo(repo_status_filename_index, repo_filename_index, index_manager, all_repos)
 
 
@@ -70,13 +73,12 @@ class RepoFilenameIndexUpdaterTimer(Thread):
         self.index_manager = index_manager
 
     def run(self):
-        sched = BlockingScheduler()
-        @sched.scheduled_job('cron', minute='*/5')
-        def timed_job():
-            logging.info('Starts to update filename index...')
-            try:
-                update_repo_file_name_indexes(self.repo_status_filename_index, self.repo_filename_index, self.index_manager)
-            except Exception as e:
-                logging.exception('periodical update filename index error: %s', e)
+        sched = GeventScheduler()
+        logging.info('Start to update filename index...')
+        try:
+            sched.add_job(update_repo_file_name_indexes, CronTrigger(minute='*/5'),
+                          args=(self.repo_status_filename_index, self.repo_filename_index, self.index_manager))
+        except Exception as e:
+            logging.exception('periodical update filename index error: %s', e)
 
         sched.start()
