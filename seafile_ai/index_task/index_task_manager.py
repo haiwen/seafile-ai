@@ -1,16 +1,14 @@
 import logging
 import queue
 import uuid
-import pytz
-from datetime import datetime, timedelta
+from datetime import datetime
 from threading import Thread, Lock
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.gevent import GeventScheduler
 
 from seafile_ai import config
-from seafile_ai.index_store.repo_status_index import RepoStatus
-from seafile_ai.repo_data import repo_data
+
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +86,8 @@ class IndexTaskManager:
         task = self.readable_id2task_map.get(readable_id)
         return task
 
-    def add_library_sdoc_index_task(self, context):
-        readable_id = context.get('repo_id')
+    def add_library_sdoc_index_task(self, repo_id, commit_id):
+        readable_id = repo_id
         with self.check_task_lock:
             task = self.get_pending_or_running_task(readable_id)
             if task:
@@ -97,7 +95,7 @@ class IndexTaskManager:
 
             task_id = str(uuid.uuid4())
             task = IndexTask(task_id, readable_id, self.app.index_manager.create_library_sdoc_index,
-                             (context, self.app.retrieval_model, self.app.repo_file_index, self.app.repo_status_index)
+                             (repo_id, self.app.retrieval_model, self.app.repo_file_index, self.app.repo_status_index, commit_id)
                              )
             self.tasks_map[task_id] = task
             self.readable_id2task_map[task.readable_id] = task
@@ -112,8 +110,8 @@ class IndexTaskManager:
     def keyword_search(self, query, repo_id_list, count):
         return self.app.index_manager.keyword_search(query, repo_id_list, self.app.repo_filename_index, count)
 
-    def add_update_a_library_sdoc_index_task(self, context):
-        readable_id = context.get('repo_id')
+    def add_update_a_library_sdoc_index_task(self, repo_id, commit_id):
+        readable_id = repo_id
         with self.check_task_lock:
             task = self.get_pending_or_running_task(readable_id)
             if task:
@@ -121,7 +119,8 @@ class IndexTaskManager:
 
             task_id = str(uuid.uuid4())
             task = IndexTask(task_id, readable_id, self.app.index_manager.update_library_sdoc_index,
-                             (context, self.app.retrieval_model, self.app.repo_file_index, self.app.repo_status_index)
+                             (repo_id, self.app.retrieval_model, self.app.repo_file_index, self.app.repo_status_index,
+                              commit_id)
                              )
             self.tasks_map[task_id] = task
             self.readable_id2task_map[task.readable_id] = task
@@ -129,50 +128,14 @@ class IndexTaskManager:
 
             return task_id
 
-    @staticmethod
-    def list_pending_repo_indexes(repo_status_index):
-        per_day_check_time = datetime.now() - timedelta(hours=23)
-        utc_zone = pytz.timezone('UTC')
-        per_day_check_time = per_day_check_time.astimezone(utc_zone)
-        per_day_check_time = per_day_check_time.strftime("%Y-%m-%dT%H:%M:%S.8%fZ")
-
-        repo_indexes = repo_status_index.get_repo_status_by_time(per_day_check_time)
-
-        return repo_indexes
-
     def update_library_sdoc_indexes(self):
-        repo_status_index = self.app.repo_status_index
-        repo_file_index = self.app.repo_file_index
-        repo_indexes = self.list_pending_repo_indexes(repo_status_index)
+        per_day_check_time = datetime.now()
+        index_repos = self.app.index_manager.list_index_repos_by_time(per_day_check_time)
 
-        repo_id_list = [repo_index.get('repo_id') for repo_index in repo_indexes]
-        repo_to_commit = repo_data.get_repo_id_commit_id_by_repos(repo_id_list)
-
-        for repo_index in repo_indexes:
-            repo_id = repo_index.get('repo_id')
-            old_commit_id = repo_index.get('commit_id')
-            updatingto = repo_index.get('updatingto')
-
-            repo_status = RepoStatus(repo_id, old_commit_id, updatingto)
-
-            new_commit_id = repo_to_commit.get(repo_id)
-
-            if not new_commit_id:
-                # if not new_commit_id delete repo index
-                repo_file_index.delete_index_by_index_name(repo_id)
-                repo_status_index.delete_documents_by_repo(repo_id)
-
-            if old_commit_id == new_commit_id:
-                continue
-
-            context = {
-                "repo_id": repo_id,
-                "repo_status": repo_status,
-                "commit_id": new_commit_id,
-            }
-
-            self.add_update_a_library_sdoc_index_task(context)
-
+        for repo in index_repos:
+            repo_id = repo[0]
+            commit_id = self.app.repo_data.get_repo_head_commit(repo_id)
+            self.add_update_a_library_sdoc_index_task(repo_id, commit_id)
 
     def cron_update_library_sdoc_indexes(self):
         """

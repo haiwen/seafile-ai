@@ -1,16 +1,14 @@
 import logging
 from sqlalchemy.sql import text
 
-from seafile_ai import config
-
 from seafile_ai.db import init_db_session_class
 
 logger = logging.getLogger(__name__)
 
 
 class RepoData(object):
-    def __init__(self):
-        self.db_session = init_db_session_class(config)
+    def __init__(self, server, port, username, passwd, db_name, unix_socket):
+        self.db_session = init_db_session_class(server, port, username, passwd, db_name, unix_socket)
 
     def to_dict(self, result_proxy):
         res = []
@@ -37,7 +35,7 @@ class RepoData(object):
             sql = """SELECT r.repo_id, b.commit_id from Branch as b inner join Repo as r
                      where b.repo_id=r.repo_id and r.repo_id in :repo_id_list"""
 
-            res = [{r[0]: r[1]} for r in session.execute(text(sql), {'repo_id_list': repo_id_list})]
+            res = {r[0]: r[1] for r in session.execute(text(sql), {'repo_id_list': repo_id_list})}
             return res
         except Exception as e:
             raise e
@@ -82,6 +80,8 @@ class RepoData(object):
             return self._get_repo_head_commit(repo_id)
 
     def get_repo_id_commit_id_by_repos(self, repo_id_list):
+        if not repo_id_list:
+            return {}
         try:
             return self._get_repo_id_commit_id_by_repos(repo_id_list)
         except Exception as e:
@@ -101,6 +101,3 @@ class RepoData(object):
         except Exception as e:
             logger.error(e)
             return self._get_repo_id_commit_id(start, count)
-
-
-repo_data = RepoData()

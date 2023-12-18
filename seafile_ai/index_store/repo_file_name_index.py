@@ -2,7 +2,6 @@ import os
 import logging
 
 from seafile_ai.utils import get_library_diff_files
-from seafile_ai.repo_data import repo_data
 from seafile_ai import config
 
 logger = logging.getLogger(__name__)
@@ -62,8 +61,9 @@ class RepoFileNameIndex(object):
 
     shard_num = config.SHARD_NUM
 
-    def __init__(self, seasearch_api):
+    def __init__(self, seasearch_api, repo_data):
         self.seasearch_api = seasearch_api
+        self.repo_data = repo_data
         self.create_index_if_missing()
 
     def create_index_if_missing(self):
@@ -199,7 +199,7 @@ class RepoFileNameIndex(object):
             size = dir[3]
 
             if path == '/':
-                repo = repo_data.get_repo_name_mtime_size(repo_id)
+                repo = self.repo_data.get_repo_name_mtime_size(repo_id)
                 if not repo:
                     return
 
@@ -298,3 +298,6 @@ class RepoFileNameIndex(object):
                 break
 
         self.seasearch_api.bulk(delete_params)
+
+    def delete_index_by_index_name(self):
+        self.seasearch_api.delete_index_by_name(self.index_name)

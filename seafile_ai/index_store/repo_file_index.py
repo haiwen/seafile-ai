@@ -79,8 +79,8 @@ class RepoFileIndex(object):
                 if score > pre_score:
                     searched_result[path]['children_id'] = children_id
                 continue
-            filename = os.path.basename(path).split('.')[0]
-            searched_result[path] = {'fullpath': path, 'name': filename, 'is_dir': False, 'score': score, 'max_score': score}
+            filename = os.path.basename(path)
+            searched_result[path] = {'repo_id': index_name, 'fullpath': path, 'name': filename, 'is_dir': False, 'score': score, 'max_score': score}
 
         return list(searched_result.values())
 

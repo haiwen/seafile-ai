@@ -48,6 +48,14 @@ SEASEARCH_TOKEN = ''
 VECTOR_M = 1
 SHARD_NUM = 3
 
+# seafile-ai config database
+DB_HOST = ''
+DB_USER = ''
+DB_PASSWORD = ''
+DB_PORT = 3306
+DB_NAME = 'seafile_ai'
+DB_UNIX_SOCKET = ''
+
 # seafile config database
 MYSQL_HOST = ''
 MYSQL_USER = ''
