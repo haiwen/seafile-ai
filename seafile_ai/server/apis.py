@@ -61,7 +61,7 @@ def library_sdoc_indexes():
         return {'error_msg': 'Internet server error.'}, 500
 
     if is_exist:
-        return {'error_msg': 'Index has exists.'}, 400
+        return {'error_msg': 'Index exists.'}, 400
 
     task = index_task_manager.get_pending_or_running_task(repo_id)
 
