@@ -10,15 +10,19 @@ from seafile_ai.index_store.repo_file_name_index import RepoFileNameIndex
 from seafile_ai.utils.openai_api import OpenAIAPI
 from seafile_ai.index_task.filename_index_updater import RepoFilenameIndexUpdater
 from seafile_ai.utils.constants import REPO_STATUS_FILE_INDEX_NAME, REPO_STATUS_FILENAME_INDEX_NAME
+from seafile_ai.repo_data import RepoData
 
 
 class SeafileAIApp(object):
     def __init__(self, config):
         self.config = config
-        self.index_manager = IndexManager()
+        self.index_manager = IndexManager(config.DB_HOST, config.DB_PORT, config.DB_USER, config.DB_PASSWORD,
+                                          config.DB_NAME, config.DB_UNIX_SOCKET)
         self.retrieval_model = PretrainedModelManager.create_retrieval_model(config)
         self.seafile_api = SeafileAPI(config.APP_NAME, config.SEAFILE_SERVER)
         self.seasearch_api = SeaSearchAPI(config.SEASEARCH_SERVER, config.SEASEARCH_TOKEN)
+        self.repo_data = RepoData(config.MYSQL_HOST, config.MYSQL_PORT, config.MYSQL_USER, config.MYSQL_PASSWORD,
+                                  config.MYSQL_DB, config.MYSQL_UNIX_SOCKET)
 
         # for semantic search
         self.repo_status_index = RepoStatusIndex(self.seasearch_api, REPO_STATUS_FILE_INDEX_NAME)
@@ -26,7 +30,7 @@ class SeafileAIApp(object):
 
         # for keyword search
         self.repo_status_filename_index = RepoStatusIndex(self.seasearch_api, REPO_STATUS_FILENAME_INDEX_NAME)
-        self.repo_filename_index = RepoFileNameIndex(self.seasearch_api)
+        self.repo_filename_index = RepoFileNameIndex(self.seasearch_api, self.repo_data)
 
         index_task_manager.init(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)

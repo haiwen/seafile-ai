@@ -1,17 +1,69 @@
 import logging
 import time
+from datetime import datetime
+
+from sqlalchemy.sql import text
 
 from seafile_ai import config
 from seafile_ai.utils.constants import ZERO_OBJ_ID
+from seafile_ai.db import init_db_session_class
+from seafile_ai.index_store.models import IndexRepo
 
 logger = logging.getLogger(__name__)
 
 
 class IndexManager(object):
-    def create_library_sdoc_index(self, context, retrieval_model, repo_file_index, repo_status_index):
-        repo_id = context.get('repo_id')
-        commit_id = context.get('commit_id')
+    def __init__(self, server, port, username, passwd, db_name, unix_socket):
+        self._db_session_class = init_db_session_class(server, port, username, passwd, db_name, unix_socket)
 
+    def create_index_repo_db(self, repo_id):
+        with self._db_session_class() as db_session:
+            index_repo = IndexRepo(repo_id, datetime.now(), datetime.now())
+            db_session.add(index_repo)
+            db_session.commit()
+
+    def delete_index_repo_db(self, repo_id):
+        with self._db_session_class() as db_session:
+            db_session.query(IndexRepo).filter(IndexRepo.repo_id == repo_id).delete()
+            db_session.commit()
+
+    def update_index_repo_db(self, repo_id):
+        with self._db_session_class() as db_session:
+            index_repo = db_session.query(IndexRepo). \
+                filter(IndexRepo.repo_id == repo_id)
+            index_repo.update({"updated": datetime.now()})
+            db_session.commit()
+
+    def get_index_repo_by_repo_id(self, repo_id):
+        with self._db_session_class() as db_session:
+            return db_session.query(IndexRepo).filter(IndexRepo.repo_id == repo_id).first()
+
+    def list_index_repos_by_time(self, check_time):
+        with self._db_session_class() as db_session:
+            sql = """
+                    SELECT `repo_id`
+                    FROM index_repo WHERE `updated`<:check_time
+                    """
+
+            index_repos = db_session.execute(text(sql), {
+                'check_time': check_time,
+            })
+            return index_repos
+
+    def get_index_repos_by_size(self, start, size):
+        with self._db_session_class() as db_session:
+            sql = """
+                    SELECT `repo_id`
+                    FROM index_repo LIMIT :start, :size
+                    """
+
+            index_repos = db_session.execute(text(sql), {
+                'start': start,
+                'size': size,
+            })
+            return index_repos
+
+    def create_library_sdoc_index(self, repo_id, retrieval_model, repo_file_index, repo_status_index, commit_id):
         repo_status_index.begin_update_repo(repo_id, ZERO_OBJ_ID, commit_id)
         repo_file_index.create_index(repo_id)
         repo_file_index.add_files(repo_id, ZERO_OBJ_ID, commit_id, retrieval_model)
@@ -22,11 +74,9 @@ class IndexManager(object):
     def search_children_in_library(self, query, repo_id, retrieval_model, repo_file_index):
         return repo_file_index.search_files(repo_id, config.RETRIEVAL_NUM, retrieval_model, query)
 
-    def update_library_sdoc_index(self, context, retrieval_model, repo_file_index, repo_status_index):
+    def update_library_sdoc_index(self, repo_id, retrieval_model, repo_file_index, repo_status_index, new_commit_id):
         try:
-            repo_id = context.get('repo_id')
-            new_commit_id = context.get('commit_id')
-            repo_status = context.get('repo_status')
+            repo_status = repo_status_index.get_repo_status_by_id(repo_id)
 
             from_commit = repo_status.from_commit
             to_commit = repo_status.to_commit
@@ -49,6 +99,8 @@ class IndexManager(object):
             repo_file_index.update_files(repo_id, commit_id, new_commit_id, retrieval_model)
             repo_status_index.finish_update_repo(repo_id, new_commit_id)
 
+            self.update_index_repo_db(repo_id)
+
             logger.info('repo: %s, update repo file index success', repo_id)
 
         except Exception as e:
@@ -58,6 +110,7 @@ class IndexManager(object):
         # first delete repo_file_index
         repo_file_index.delete_index_by_index_name(repo_id)
         repo_status_index.delete_documents_by_repo(repo_id)
+        self.delete_index_repo_db(repo_id)
 
     def keyword_search(self, query, repo_id_list, repo_filename_index, count):
         return repo_filename_index.search_files(repo_id_list, query, 0, count)

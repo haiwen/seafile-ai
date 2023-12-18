@@ -92,3 +92,35 @@ def get_library_diff_files(repo_id, old_commit_id, new_commit_id):
         return [], [], [], [], []
 
     return added_files, deleted_files, modified_files, added_dirs, deleted_dirs
+
+
+def init_logging(args):
+    level = args.loglevel
+
+    if level == 'debug':
+        level = logging.DEBUG
+    elif level == 'info':
+        level = logging.INFO
+    elif level == 'warning':
+        level = logging.WARNING
+    else:
+        level = logging.INFO
+
+    try:
+        # set boto3 log level
+        import boto3
+        boto3.set_stream_logger(level=logging.WARNING)
+    except:
+        pass
+
+    kw = {
+        'format': '%(asctime)s [%(levelname)s] %(name)s:%(lineno)s %(funcName)s: %(message)s',
+        'datefmt': '%m/%d/%Y %H:%M:%S',
+        'level': level,
+        'stream': args.logfile
+    }
+
+    logging.basicConfig(**kw)
+    logging.getLogger('oss_util').setLevel(logging.WARNING)
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)

@@ -8,7 +8,6 @@ from seafile_ai import config
 from seafile_ai.index_task.index_task_manager import index_task_manager
 from seafile_ai.utils import get_file_by_token
 from seafile_ai.utils.sdoc2md import sdoc2md
-from seafile_ai.repo_data import repo_data
 
 
 logger = logging.getLogger(__name__)
@@ -50,6 +49,11 @@ def library_sdoc_indexes():
     if not repo_id:
         return {'error_msg': 'repo_id invalid.'}, 400
 
+    commit_id = flask_app.app.repo_data.get_repo_head_commit(repo_id)
+
+    if not commit_id:
+        return {'error_msg': 'repo invalid.'}, 400
+
     try:
         is_exist = flask_app.app.repo_file_index.check_index(repo_id)
     except Exception as e:
@@ -64,12 +68,13 @@ def library_sdoc_indexes():
     if task:
         return {'task_id': task.id}, 200
 
-    context = {
-        'repo_id': repo_id,
-        'commit_id': repo_data.get_repo_head_commit(repo_id),
-    }
+    try:
+        flask_app.app.index_manager.create_index_repo_db(repo_id)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
 
-    task_id = index_task_manager.add_library_sdoc_index_task(context)
+    task_id = index_task_manager.add_library_sdoc_index_task(repo_id, commit_id)
 
     return {'task_id': task_id}, 200
 
@@ -87,36 +92,40 @@ def search():
         return {'error_msg': 'Bad request.'}, 400
 
     query = data.get('query').strip()
-    repo_id = data.get('repo_id')
+    repo_id_list = data.get('repo_id_list')
+    is_all_repo = data.get('is_all_repo')
 
     if not query:
         return {'error_msg': 'query invalid.'}, 400
 
-    if not repo_id:
-        return {'error_msg': 'repo_id invalid.'}, 400
+    if not repo_id_list:
+        return {'error_msg': 'repo_id_list invalid.'}, 400
 
     try:
         count = int(data.get('count'))
     except:
         count = 10
 
-    try:
-        repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id)
-    except Exception as e:
-        logger.error(e)
-        return {'error_msg': 'Internet server error.'}, 500
+    if not is_all_repo:
+        try:
+            repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id_list[0])
+        except Exception as e:
+            logger.error(e)
+            return {'error_msg': 'Internet server error.'}, 500
 
-    keyword_search_results, total = index_task_manager.keyword_search(query, [repo_id], count)
-    results = keyword_search_results
+        keyword_search_results, total = index_task_manager.keyword_search(query, repo_id_list, count)
+        results = keyword_search_results
 
-    if repo_file_index_exist:
-        similar_files = index_task_manager.search_similar_children_in_library(query, repo_id)
+        if repo_file_index_exist:
+            similar_files = index_task_manager.search_similar_children_in_library(query, repo_id_list[0])
+            keyword_search_path_set = {result['fullpath'] for result in keyword_search_results}
+            similar_files = [file for file in similar_files if file['fullpath'] not in keyword_search_path_set]
+            similar_files = sorted(similar_files, key=lambda row: row['score'], reverse=True)[:count]
 
-        keyword_search_path_set = {result['fullpath'] for result in keyword_search_results}
-        similar_files = [file for file in similar_files if file['fullpath'] not in keyword_search_path_set]
-        similar_files = sorted(similar_files, key=lambda row: row['score'], reverse=True)[:count]
-
-        results += similar_files
+            results += similar_files
+        return {'results': results}, 200
+    else:
+        results, total = index_task_manager.keyword_search(query, repo_id_list, count)
 
     return {'results': results}, 200
 
@@ -199,13 +208,13 @@ def library_sdoc_index():
         return {'error_msg': 'repo_id invalid'}, 400
 
     try:
-        repo_status = flask_app.app.repo_status_index.get_repo_status_by_id(repo_id)
+        index_repo = flask_app.app.index_manager.get_index_repo_by_repo_id(repo_id)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
     if request.method == 'DELETE':
-        if not repo_status.from_commit:
+        if not index_repo:
             return {'success': True}, 200
 
         task = index_task_manager.get_pending_or_running_task(repo_id)
@@ -222,26 +231,19 @@ def library_sdoc_index():
         return {'success': True}, 200
 
     elif request.method == 'PUT':
-        commit_id = repo_data.get_repo_head_commit(repo_id)
+        commit_id = flask_app.app.repo_data.get_repo_head_commit(repo_id)
 
-        if not repo_status:
-            return {'error_msg': 'repo index not found.'}, 404
-
-        if commit_id == repo_status.from_commit:
-            return {'error_msg': 'repo index is latest.'}, 400
+        if not commit_id:
+            return {'error_msg': 'repo invalid.'}, 400
 
         task = index_task_manager.get_pending_or_running_task(repo_id)
 
         if task:
             return {'task_id': task.id}, 200
 
-        context = {
-            'repo_id': repo_id,
-            'repo_status': repo_status,
-            'commit_id': commit_id,
-        }
+
         try:
-            task_id = index_task_manager.add_update_a_library_sdoc_index_task(context)
+            task_id = index_task_manager.add_update_a_library_sdoc_index_task(repo_id, commit_id)
         except Exception as e:
             logger.exception(e)
             return {'error_msg': 'Internet server error.'}, 500

@@ -116,7 +116,7 @@ class RepoStatusIndex(object):
             }
 
             repo_heads, total = self._repo_head_search(query_params)
-
+            repo_head_list.extend(repo_heads)
             start += per_size
             if len(repo_heads) < per_size or start == total:
                 return repo_head_list
@@ -126,17 +126,21 @@ class RepoStatusIndex(object):
         per_size = 2000
         repo_head_list = []
         while True:
-            query_params = {
-                'from': start,
-                'size': per_size,
-            }
-
-            repo_heads, total = self._repo_head_search(query_params)
+            repo_heads, total = self.get_repos_from_index_by_size(start, per_size)
             repo_head_list.extend(repo_heads)
 
             start += per_size
             if len(repo_heads) < per_size or start == total:
                 return repo_head_list
+
+    def get_repos_from_index_by_size(self, start, per_size):
+        query_params = {
+            'from': start,
+            'size': per_size,
+        }
+
+        repo_heads, total = self._repo_head_search(query_params)
+        return repo_heads, total
 
     def _repo_head_search(self, query_params):
         result = self.seasearch_api.normal_search(self.index_name, query_params)
@@ -150,3 +154,6 @@ class RepoStatusIndex(object):
             updatingto = hit.get('_source').get('updatingto')
             repo_heads.append({'repo_id': repo_id, 'commit_id': commit_id, 'updatingto': updatingto})
         return repo_heads, total
+
+    def delete_index_by_index_name(self):
+        self.seasearch_api.delete_index_by_name(self.index_name)

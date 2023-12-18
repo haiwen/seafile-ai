@@ -1,0 +1,14 @@
+export PYTHONPATH=/mnt/seafile/seafobj:$PYTHONPATH
+
+export SEAFILE_CONF_DIR=/mnt/seafile/conf
+
+
+if [[ $# == 2 && $1 == "repo_file_index" && $2 == "clear" ]]; then
+    python -m repo_file_index_local --loglevel debug clear
+elif [[ $# == 2 && $1 == "repo_file_index" && $2 == "update" ]]; then
+    python -m repo_file_index_local --loglevel debug update
+elif [[ $# == 2 && $1 == "repo_filename_index" && $2 == "clear" ]]; then
+    python -m repo_filename_index_local --loglevel debug clear
+elif [[ $# == 2 && $1 == "repo_filename_index" && $2 == "update" ]]; then
+    python -m repo_filename_index_local --loglevel debug update
+fi

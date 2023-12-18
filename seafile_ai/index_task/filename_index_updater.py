@@ -3,7 +3,6 @@ from threading import Thread
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.schedulers.gevent import GeventScheduler
-from seafile_ai.repo_data import repo_data
 
 
 logger = logging.getLogger(__name__)
@@ -14,10 +13,11 @@ class RepoFilenameIndexUpdater(object):
         self._repo_status_filename_index = app.repo_status_filename_index
         self._repo_filename_index = app.repo_filename_index
         self._index_manager = app.index_manager
+        self._repo_data = app.repo_data
 
     def start(self):
         RepoFilenameIndexUpdaterTimer(
-            self._repo_status_filename_index, self._repo_filename_index, self._index_manager
+            self._repo_status_filename_index, self._repo_filename_index, self._index_manager, self._repo_data
         ).start()
 
 
@@ -36,7 +36,7 @@ def clear_deleted_repo(repo_status_filename_index, repo_filename_index, index_ma
     logger.info("filename index deleted repo has been cleared")
 
 
-def update_repo_file_name_indexes(repo_status_filename_index, repo_filename_index, index_manager):
+def update_repo_file_name_indexes(repo_status_filename_index, repo_filename_index, index_manager, repo_data):
     start, count = 0, 1000
     all_repos = []
     while True:
@@ -66,18 +66,19 @@ def update_repo_file_name_indexes(repo_status_filename_index, repo_filename_inde
 
 
 class RepoFilenameIndexUpdaterTimer(Thread):
-    def __init__(self, repo_status_filename_index, repo_filename_index, index_manager):
+    def __init__(self, repo_status_filename_index, repo_filename_index, index_manager, repo_data):
         super(RepoFilenameIndexUpdaterTimer, self).__init__()
         self.repo_status_filename_index = repo_status_filename_index
         self.repo_filename_index = repo_filename_index
         self.index_manager = index_manager
+        self.repo_data = repo_data
 
     def run(self):
         sched = GeventScheduler()
         logging.info('Start to update filename index...')
         try:
             sched.add_job(update_repo_file_name_indexes, CronTrigger(minute='*/5'),
-                          args=(self.repo_status_filename_index, self.repo_filename_index, self.index_manager))
+                          args=(self.repo_status_filename_index, self.repo_filename_index, self.index_manager, self.repo_data))
         except Exception as e:
             logging.exception('periodical update filename index error: %s', e)
 
