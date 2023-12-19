@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 
 from seafile_ai.utils import get_library_diff_files
@@ -108,7 +109,7 @@ class RepoFileNameIndex(object):
         searches.append(_make_match_query('filename', keyword, **match_query_kwargs))
         searches.append({
             'match': {
-                'filename.ngram': {
+                'filename.fields.ngram': {
                     'query': keyword,
                     'minimum_should_match': '80%',
                 }
@@ -147,6 +148,8 @@ class RepoFileNameIndex(object):
                 'score': score,
             }
             files.append(r)
+
+        logger.debug('Search in index: %s, query param: %s.', self.index_name, json.dumps(data))
 
         return files, total
 
