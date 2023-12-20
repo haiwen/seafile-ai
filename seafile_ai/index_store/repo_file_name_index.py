@@ -207,6 +207,7 @@ class RepoFileNameIndex(object):
             else:
                 filename = os.path.basename(path)
 
+            path = path + '/' if path != '/' else path
             index_info = {'index': {'_index': self.index_name, '_id': repo_id + path}}
             doc_info = {
                 'repo_id': repo_id,
