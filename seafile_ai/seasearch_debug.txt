@@ -1,0 +1,75 @@
+Simple request
+curl --location 'http://127.0.0.1:4080/es/repofilenames/_search' \
+--header 'Authorization: Basic YWRtaW46Q29tcGxleHBhc3MjMTIz' \
+--header 'Content-Type: application/json' \
+--data '
+{
+	"query": {
+		"bool": {
+			"filter": [{
+				"bool": {
+					"must": [{
+						"terms": {
+							"repo_id": ["60dcf317-3eaf-4e56-85c1-65214d6d83df", "c6fadcb9-c823-4a65-8b2a-e7d05eaa3462", "43228a34-e68b-4b64-94e7-cc9a2c253cde", "7a16bbe7-abab-4f79-bb5f-b7df67f8ae5b", "837f3516-af69-493e-8d58-5ad439484bc0"]
+						}
+					}]
+				}
+			}],
+			"should": [{
+				"match": {
+					"filename": {
+						"query": "美国1",
+						"minimum_should_match": "-25%"
+					}
+				}
+			}, {
+				"match": {
+					"filename.fields.ngram": {
+						"query": "美国1",
+						"minimum_should_match": "80%"
+					}
+				}
+			}],
+			"minimum_should_match": 1
+		}
+	},
+	"from": 0,
+	"size": 10,
+	"_source": ["path", "repo_id", "filename", "is_dir"],
+	"sort": ["_score"]
+}
+
+---------------------------------------------------------
+Response
+{
+    "took": 25,
+    "timed_out": false,
+    "_shards": {
+        "total": 3,
+        "successful": 3,
+        "skipped": 0,
+        "failed": 0
+    },
+    "hits": {
+        "total": {
+            "value": 1
+        },
+        "max_score": 3.5023399738492906,
+        "hits": [
+            {
+                "_index": "repofilenames",
+                "_type": "_doc",
+                "_id": "43228a34-e68b-4b64-94e7-cc9a2c253cde/美国1.sdoc",
+                "_score": 3.5023399738492906,
+                "@timestamp": "2023-12-18T07:07:50.9825047Z",
+                "_source": {
+                    "@timestamp": "2023-12-18T07:07:50.9825047Z",
+                    "filename": "美国1.sdoc",
+                    "is_dir": false,
+                    "path": "/美国1.sdoc",
+                    "repo_id": "43228a34-e68b-4b64-94e7-cc9a2c253cde"
+                }
+            }
+        ]
+    }
+}
