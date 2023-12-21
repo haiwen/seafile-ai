@@ -65,6 +65,12 @@ class SeaSearchAPI(object):
 
         return parse_response(response)
 
+    def m_search(self, data):
+        url = self.server + '/es/_msearch'
+        data = ndjson.dumps(data)
+        response = requests.post(url, headers=self.headers, data=data, timeout=self.timeout)
+        return parse_response(response)
+
     def check_index_mapping(self, index_name):
         url = self.server + '/es/' + index_name + '/_mapping'
         response = requests.get(url, headers=self.headers, timeout=self.timeout)

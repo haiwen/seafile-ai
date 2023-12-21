@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy.sql import text
 
 from seafile_ai import config
-from seafile_ai.utils.constants import ZERO_OBJ_ID
+from seafile_ai.utils.constants import ZERO_OBJ_ID, REPO_FILENAME_INDEX_PREFIX
 from seafile_ai.db import init_db_session_class
 from seafile_ai.index_store.models import IndexRepo
 
@@ -115,12 +115,14 @@ class IndexManager(object):
     def keyword_search(self, query, repo_id_list, repo_filename_index, count):
         return repo_filename_index.search_files(repo_id_list, query, 0, count)
 
-    def update_library_filename_index(self, context, repo_filename_index, repo_status_filename_index):
+    def update_library_filename_index(self, repo_id, commit_id, repo_filename_index, repo_status_filename_index):
         try:
-            repo_id = context.get('repo_id')
-            new_commit_id = context.get('commit_id')
-            repo_status = repo_status_filename_index.get_repo_status_by_id(repo_id)
+            new_commit_id = commit_id
+            index_name = REPO_FILENAME_INDEX_PREFIX + repo_id
 
+            repo_filename_index.create_index_if_missing(index_name)
+
+            repo_status = repo_status_filename_index.get_repo_status_by_id(repo_id)
             from_commit = repo_status.from_commit
             to_commit = repo_status.to_commit
 
@@ -134,12 +136,12 @@ class IndexManager(object):
 
             if repo_status.need_recovery():
                 logger.warning('%s: repo filename index inrecovery', repo_id)
-                repo_filename_index.update(repo_id, commit_id, to_commit)
+                repo_filename_index.update(index_name, repo_id, commit_id, to_commit)
                 commit_id = to_commit
                 time.sleep(1)
 
             repo_status_filename_index.begin_update_repo(repo_id, commit_id, new_commit_id)
-            repo_filename_index.update(repo_id, commit_id, new_commit_id)
+            repo_filename_index.update(index_name, repo_id, commit_id, new_commit_id)
             repo_status_filename_index.finish_update_repo(repo_id, new_commit_id)
 
             logger.info('repo: %s, update repo filename index success', repo_id)
@@ -149,5 +151,6 @@ class IndexManager(object):
 
     def delete_repo_filename_index(self, repo_id, repo_filename_index, repo_status_filename_index):
         # first delete repo_file_index
-        repo_filename_index.delete_documents_by_repo(repo_id)
+        repo_filename_index_name = REPO_FILENAME_INDEX_PREFIX + repo_id
+        repo_filename_index.delete_index_by_index_name(repo_filename_index_name)
         repo_status_filename_index.delete_documents_by_repo(repo_id)

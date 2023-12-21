@@ -1,8 +1,11 @@
+import json
 import os
 import logging
 
 from seafile_ai.utils import get_library_diff_files
 from seafile_ai import config
+from seafile_ai.utils.constants import REPO_FILENAME_INDEX_PREFIX
+from seafile_ai.utils import md5
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +13,6 @@ SEASEARCH_BULK_OPETATE_LIMIT = 2000
 
 
 class RepoFileNameIndex(object):
-    index_name = 'repofilenames'
     mapping = {
         'properties': {
             'repo_id': {
@@ -64,12 +66,11 @@ class RepoFileNameIndex(object):
     def __init__(self, seasearch_api, repo_data):
         self.seasearch_api = seasearch_api
         self.repo_data = repo_data
-        self.create_index_if_missing()
 
-    def create_index_if_missing(self):
-        if not self.seasearch_api.check_index_mapping(self.index_name).get('is_exist'):
+    def create_index_if_missing(self, index_name):
+        if not self.seasearch_api.check_index_mapping(index_name).get('is_exist'):
             data = {
-                'name': self.index_name,
+                'name': index_name,
                 'shard_num': self.shard_num,
                 'mappings': self.mapping,
                 'settings': self.index_settings
@@ -116,39 +117,47 @@ class RepoFileNameIndex(object):
         })
         return searches
 
-    def search_files(self, repos_map, keyword, start=0, size=10):
-        query_map = {'bool': {'filter': [], 'should': [], 'minimum_should_match': 1}}
-        query_map = self._add_repos_filter(query_map, repos_map)
+    def search_files(self, repos, keyword, start=0, size=10):
+        bulk_search_params = []
+        for repo_id in repos:
+            query_map = {'bool': {'filter': [], 'should': [], 'minimum_should_match': 1}}
+            searches = self._make_query_searches(keyword)
+            query_map['bool']['should'] = searches
+            query_map = self._add_repos_filter(query_map, [repo_id])
 
-        searches = self._make_query_searches(keyword)
-        query_map['bool']['should'] = searches
-
-        data = {
-            'query': query_map,
-            'from': start,
-            'size': size,
-            '_source': ['path', 'repo_id', 'filename', 'is_dir'],
-            'sort': ['_score']
-        }
-
-        results = self.seasearch_api.normal_search(self.index_name, data)
-        total = results.get('hits', {}).get('total', {}).get('value', 0)
-        hits = results.get('hits', {}).get('hits', [])
-
-        files = []
-        for hit in hits:
-            source = hit.get('_source')
-            score = hit.get('_score')
-            r = {
-                'repo_id': source['repo_id'],
-                'fullpath': source['path'],
-                'name': source['filename'],
-                'is_dir': source['is_dir'],
-                'score': score,
+            data = {
+                'query': query_map,
+                'from': start,
+                'size': size,
+                '_source': ['path', 'repo_id', 'filename', 'is_dir'],
+                'sort': ['_score']
             }
-            files.append(r)
+            index_name = REPO_FILENAME_INDEX_PREFIX + repo_id
+            index_info = {"index": index_name}
+            bulk_search_params.append(index_info)
+            bulk_search_params.append(data)
 
-        return files, total
+        logger.debug('search in repo_filename_index params: %s', json.dumps(bulk_search_params))
+
+        results = self.seasearch_api.m_search(bulk_search_params)
+        files = []
+
+        for result in results.get('responses'):
+            hits = result.get('hits', {}).get('hits', [])
+            for hit in hits:
+                source = hit.get('_source')
+                score = hit.get('_score')
+                r = {
+                    'repo_id': source['repo_id'],
+                    'fullpath': source['path'],
+                    'name': source['filename'],
+                    'is_dir': source['is_dir'],
+                    'score': score,
+                }
+                files.append(r)
+        files = sorted(files, key=lambda row: row['score'], reverse=True)[:size]
+
+        return files
 
     @staticmethod
     def get_file_suffix(path):
@@ -161,7 +170,7 @@ class RepoFileNameIndex(object):
         except:
             return None
 
-    def add_files(self, repo_id, files):
+    def add_files(self, index_name, repo_id, files):
         bulk_add_params = []
         for file_info in files:
             path = file_info[0]
@@ -171,7 +180,7 @@ class RepoFileNameIndex(object):
             filename = os.path.basename(path)
             suffix = self.get_file_suffix(path)
 
-            index_info = {'index': {'_index': self.index_name, '_id': repo_id + path}}
+            index_info = {'index': {'_index': index_name, '_id': md5(path)}}
             doc_info = {
                 'repo_id': repo_id,
                 'path': path,
@@ -190,7 +199,7 @@ class RepoFileNameIndex(object):
         if bulk_add_params:
             self.seasearch_api.bulk(bulk_add_params)
 
-    def add_dirs(self, repo_id, dirs):
+    def add_dirs(self, index_name, repo_id, dirs):
         bulk_add_params = []
         for dir in dirs:
             path = dir[0]
@@ -207,7 +216,8 @@ class RepoFileNameIndex(object):
             else:
                 filename = os.path.basename(path)
 
-            index_info = {'index': {'_index': self.index_name, '_id': repo_id + path}}
+            path = path + '/' if path != '/' else path
+            index_info = {'index': {'_index': index_name, '_id': md5(path)}}
             doc_info = {
                 'repo_id': repo_id,
                 'path': path,
@@ -225,12 +235,11 @@ class RepoFileNameIndex(object):
         if bulk_add_params:
             self.seasearch_api.bulk(bulk_add_params)
 
-    def delete_files(self, repo_id, files):
+    def delete_files(self, index_name, files):
         delete_params = []
         for file in files:
             path = file[0]
-            _id = repo_id + path
-            delete_params.append({'delete': {'_id': _id, '_index': self.index_name}})
+            delete_params.append({'delete': {'_id': md5(path), '_index': index_name}})
             # bulk add every 2000 params
             if len(delete_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
                 self.seasearch_api.bulk(delete_params)
@@ -238,12 +247,11 @@ class RepoFileNameIndex(object):
         if delete_params:
             self.seasearch_api.bulk(delete_params)
 
-    def delete_dirs(self, repo_id, dirs):
+    def delete_dirs(self, index_name, dirs):
         delete_params = []
         for dir in dirs:
             path = dir
-            _id = repo_id + path
-            delete_params.append({'delete': {'_id': _id, '_index': self.index_name}})
+            delete_params.append({'delete': {'_id': md5(path), '_index': index_name}})
             # bulk add every 2000 params
             if len(delete_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
                 self.seasearch_api.bulk(delete_params)
@@ -251,53 +259,19 @@ class RepoFileNameIndex(object):
         if delete_params:
             self.seasearch_api.bulk(delete_params)
 
-    def add(self, repo_id, old_commit_id, new_commit_id):
-        self.update(repo_id, old_commit_id, new_commit_id)
-
-    def update(self, repo_id, old_commit_id, new_commit_id):
+    def update(self, index_name, repo_id, old_commit_id, new_commit_id):
         added_files, deleted_files, modified_files, added_dirs, deleted_dirs = \
             get_library_diff_files(repo_id, old_commit_id, new_commit_id)
 
         need_deleted_files = deleted_files
-        self.delete_files(repo_id, need_deleted_files)
+        self.delete_files(index_name, need_deleted_files)
 
-        self.delete_dirs(repo_id, deleted_dirs)
+        self.delete_dirs(index_name, deleted_dirs)
 
         need_added_files = added_files + modified_files
-        self.add_files(repo_id, need_added_files)
+        self.add_files(index_name, repo_id, need_added_files)
 
-        self.add_dirs(repo_id, added_dirs)
+        self.add_dirs(index_name, repo_id, added_dirs)
 
-    def delete_documents_by_repo(self, repo_id):
-        per_size = 2000
-        start = 0
-        delete_params = []
-        while True:
-            data = {
-                "query": {
-                    "term": {
-                        "repo_id": repo_id
-                    }
-                },
-                "from": start,
-                "size": per_size,
-                "_source": False,
-                "sort": ["-@timestamp"],  # sort is for getting data ordered
-            }
-            doc_item = self.seasearch_api.normal_search(self.index_name, data)
-
-            total = doc_item['hits']['total']['value']
-
-            hits = doc_item['hits']['hits']
-            for hit in hits:
-                _id = hit['_id']
-                delete_params.append({'delete': {'_id': _id, '_index': self.index_name}})
-
-            start += per_size
-            if len(hits) < per_size or start == total:
-                break
-
-        self.seasearch_api.bulk(delete_params)
-
-    def delete_index_by_index_name(self):
-        self.seasearch_api.delete_index_by_name(self.index_name)
+    def delete_index_by_index_name(self, index_name):
+        self.seasearch_api.delete_index_by_name(index_name)
