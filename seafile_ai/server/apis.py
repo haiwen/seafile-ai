@@ -113,7 +113,7 @@ def search():
             logger.error(e)
             return {'error_msg': 'Internet server error.'}, 500
 
-        keyword_search_results, total = index_task_manager.keyword_search(query, repo_id_list, count)
+        keyword_search_results = index_task_manager.keyword_search(query, repo_id_list, count)
         results = keyword_search_results
 
         if repo_file_index_exist:
@@ -125,7 +125,7 @@ def search():
             results += similar_files
         return {'results': results}, 200
     else:
-        results, total = index_task_manager.keyword_search(query, repo_id_list, count)
+        results = index_task_manager.keyword_search(query, repo_id_list, count)
 
     return {'results': results}, 200
 

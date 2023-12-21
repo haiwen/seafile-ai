@@ -4,6 +4,7 @@ import jwt
 import os
 import requests
 import json
+import hashlib
 
 from urllib.parse import quote as urlquote
 
@@ -124,3 +125,7 @@ def init_logging(args):
     logging.getLogger('oss_util').setLevel(logging.WARNING)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
+
+
+def md5(text):
+    return hashlib.md5(text.encode()).hexdigest()

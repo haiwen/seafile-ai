@@ -53,12 +53,7 @@ def update_repo_file_name_indexes(repo_status_filename_index, repo_filename_inde
         for repo_id, commit_id in repo_commits.items():
             all_repos.append(repo_id)
 
-            context = {
-                'repo_id': repo_id,
-                'commit_id': commit_id
-            }
-
-            index_manager.update_library_filename_index(context, repo_filename_index, repo_status_filename_index)
+            index_manager.update_library_filename_index(repo_id, commit_id, repo_filename_index, repo_status_filename_index)
 
     logger.info("Finish update filename index")
 

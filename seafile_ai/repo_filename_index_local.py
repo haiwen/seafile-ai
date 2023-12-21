@@ -13,7 +13,7 @@ from seafile_ai.repo_data import RepoData
 from seafile_ai.index_store.index_manager import IndexManager
 from seafile_ai.utils.seasearch_api import SeaSearchAPI
 from seafile_ai.index_store.repo_status_index import RepoStatusIndex
-from seafile_ai.utils.constants import REPO_STATUS_FILENAME_INDEX_NAME
+from seafile_ai.utils.constants import REPO_STATUS_FILENAME_INDEX_NAME, REPO_FILENAME_INDEX_PREFIX
 from seafile_ai.index_store.repo_file_name_index import RepoFileNameIndex
 
 MAX_ERRORS_ALLOWED = 1000
@@ -97,8 +97,7 @@ class RepoFileNameIndexLocal(object):
                 repo_id = queue_data[0]
                 commit_id = queue_data[1]
                 try:
-                    context = {'repo_id': repo_id, 'commit_id': commit_id}
-                    self.index_manager.update_library_filename_index(context, self.repo_filename_index, self.repo_status_filename_index)
+                    self.index_manager.update_library_filename_index(repo_id, commit_id, self.repo_filename_index, self.repo_status_filename_index)
                 except Exception as e:
                     logger.exception('Repo filename index error: %s, repo_id: %s' % (e, repo_id), exc_info=True)
                     self.incr_error()
@@ -172,7 +171,22 @@ def delete_indices():
                          config.MYSQL_DB, config.MYSQL_UNIX_SOCKET)
     repo_filename_index = RepoFileNameIndex(seasearch_api, repo_data)
 
-    repo_filename_index.delete_index_by_index_name()
+    start, count = 0, 1000
+    while True:
+        try:
+            repo_commits = repo_data.get_repo_id_commit_id(start, count)
+        except Exception as e:
+            logger.error("Error: %s" % e)
+            return
+        start += 1000
+
+        if len(repo_commits) == 0:
+            break
+
+        for repo_id, commit_id in repo_commits.items():
+            repo_filename_index_name = REPO_FILENAME_INDEX_PREFIX + repo_id
+            repo_filename_index.delete_index_by_index_name(repo_filename_index_name)
+
     repo_status_filename_index.delete_index_by_index_name()
 
 
