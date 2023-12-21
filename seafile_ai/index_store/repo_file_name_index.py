@@ -117,12 +117,25 @@ class RepoFileNameIndex(object):
         })
         return searches
 
+    def _add_path_filter(self, query_map, search_path):
+        if search_path is None:
+            return query_map
+        query_map['bool']['filter'].append({'prefix': {'path': search_path}})
+        return query_map
+
     def search_files(self, repos, keyword, start=0, size=10):
         bulk_search_params = []
-        for repo_id in repos:
+        for repo in repos:
+            repo_id = repo[0]
+            origin_repo_id = repo[1]
+            origin_path = repo[2]
             query_map = {'bool': {'filter': [], 'should': [], 'minimum_should_match': 1}}
             searches = self._make_query_searches(keyword)
             query_map['bool']['should'] = searches
+
+            if origin_repo_id:
+                repo_id = origin_repo_id
+                query_map = self._add_path_filter(query_map, origin_path)
             query_map = self._add_repos_filter(query_map, [repo_id])
 
             data = {
@@ -144,6 +157,10 @@ class RepoFileNameIndex(object):
 
         for result in results.get('responses'):
             hits = result.get('hits', {}).get('hits', [])
+
+            if not hits:
+                continue
+
             for hit in hits:
                 source = hit.get('_source')
                 score = hit.get('_score')
