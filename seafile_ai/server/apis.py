@@ -92,14 +92,14 @@ def search():
         return {'error_msg': 'Bad request.'}, 400
 
     query = data.get('query').strip()
-    repo_id_list = data.get('repo_id_list')
+    repos = data.get('repos')
     is_all_repo = data.get('is_all_repo')
 
     if not query:
         return {'error_msg': 'query invalid.'}, 400
 
-    if not repo_id_list:
-        return {'error_msg': 'repo_id_list invalid.'}, 400
+    if not repos:
+        return {'error_msg': 'repos invalid.'}, 400
 
     try:
         count = int(data.get('count'))
@@ -107,17 +107,18 @@ def search():
         count = 10
 
     if not is_all_repo:
+        repo_id = repos[0][0]
         try:
-            repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id_list[0])
+            repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id)
         except Exception as e:
             logger.error(e)
             return {'error_msg': 'Internet server error.'}, 500
 
-        keyword_search_results = index_task_manager.keyword_search(query, repo_id_list, count)
+        keyword_search_results = index_task_manager.keyword_search(query, repos, count)
         results = keyword_search_results
 
         if repo_file_index_exist:
-            similar_files = index_task_manager.search_similar_children_in_library(query, repo_id_list[0])
+            similar_files = index_task_manager.search_similar_children_in_library(query, repo_id)
             keyword_search_path_set = {result['fullpath'] for result in keyword_search_results}
             similar_files = [file for file in similar_files if file['fullpath'] not in keyword_search_path_set]
             similar_files = sorted(similar_files, key=lambda row: row['score'], reverse=True)[:count]
@@ -125,7 +126,7 @@ def search():
             results += similar_files
         return {'results': results}, 200
     else:
-        results = index_task_manager.keyword_search(query, repo_id_list, count)
+        results = index_task_manager.keyword_search(query, repos, count)
 
     return {'results': results}, 200
 
