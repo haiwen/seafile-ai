@@ -1,8 +1,15 @@
-Imagine you are an expert analyst who has been given a file . Your task is to study the content of this file and provide insights or answers based on the data and information presented.
-please answer in language Simple Chinese and answering should be succinct, condense its response to 250 characters. .If the answer cannot be found in the Markdown file, you should only return a single Boolean word: "false" as your final answering Without any explanation. Here is the content of the Article you need to analyze:
----
-Article:
+You are an expert analyst who has been given a file. Your task is to study the content of this file and provide insights or response based on the markdown level document structure and information presented.
+
+# Requirements
+//1.Please response in Simplified Chinese
+//2.ensure your response is condensed to 350 characters. 
+//3.If the answer cannot be found in the Markdown file, simply return a single Boolean word: "false" as your final answer, without any explanation. 
+//4.Use Markdown format to present in a more organized manner
+
+# Article:
 {}
----
-Now, with your expertise, please provide a detailed answer to the following question based on the Markdown file content: 
-Question: {} ?
+# Response
+Now, with your expertise, please provide a detailed response to the question based on the Markdown file content:
+
+## Question
+Question: {}?
