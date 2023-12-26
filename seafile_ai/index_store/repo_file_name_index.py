@@ -87,23 +87,6 @@ class RepoFileNameIndex(object):
     def check_index(self, index_name):
         return self.seasearch_api.check_index_mapping(index_name).get('is_exist')
 
-    def _add_repos_filter(self, query_map, repos):
-        repo_search_dsl = []
-        repo_search_dsl.append({
-            'bool': {
-                'must': [
-                    {'terms': {
-                        'repo_id': repos
-                    }},
-                ]
-            }
-        })
-
-        repo_filter = repo_search_dsl[0]
-        query_map['bool']['filter'].append(repo_filter)
-
-        return query_map
-
     def _make_query_searches(self, keyword):
         match_query_kwargs = {'minimum_should_match': '-25%'}
 
@@ -127,7 +110,11 @@ class RepoFileNameIndex(object):
     def _add_path_filter(self, query_map, search_path):
         if search_path is None:
             return query_map
-        query_map['bool']['filter'].append({'prefix': {'path': search_path}})
+
+        if query_map['bool'].get('filter'):
+            query_map['bool']['filter'].append({'prefix': {'path': search_path}})
+        else:
+            query_map['bool']['filter'] = [{'prefix': {'path': search_path}}]
         return query_map
 
     def search_files(self, repos, keyword, start=0, size=10):
@@ -136,14 +123,13 @@ class RepoFileNameIndex(object):
             repo_id = repo[0]
             origin_repo_id = repo[1]
             origin_path = repo[2]
-            query_map = {'bool': {'filter': [], 'should': [], 'minimum_should_match': 1}}
+            query_map = {'bool': {'should': [], 'minimum_should_match': 1}}
             searches = self._make_query_searches(keyword)
             query_map['bool']['should'] = searches
 
             if origin_repo_id:
                 repo_id = origin_repo_id
                 query_map = self._add_path_filter(query_map, origin_path)
-            query_map = self._add_repos_filter(query_map, [repo_id])
 
             data = {
                 'query': query_map,
