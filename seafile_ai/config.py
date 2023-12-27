@@ -46,7 +46,7 @@ THRESHOLD = 0.01
 SEASEARCH_SERVER = 'http://127.0.0.1:4080'
 SEASEARCH_TOKEN = ''
 VECTOR_M = 1
-SHARD_NUM = 3
+SHARD_NUM = 1
 
 # seafile-ai config database
 DB_HOST = ''
