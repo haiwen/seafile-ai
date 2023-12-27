@@ -108,6 +108,10 @@ def search():
 
     if not is_all_repo:
         repo_id = repos[0][0]
+        origin_repo_id = repos[0][1]
+        origin_path = repos[0][2]
+        if origin_repo_id:
+            repo_id = origin_repo_id
         try:
             repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id)
         except Exception as e:
@@ -120,8 +124,16 @@ def search():
         if repo_file_index_exist:
             similar_files = index_task_manager.search_similar_children_in_library(query, repo_id)
             keyword_search_path_set = {result['fullpath'] for result in keyword_search_results}
-            similar_files = [file for file in similar_files if file['fullpath'] not in keyword_search_path_set]
-            similar_files = sorted(similar_files, key=lambda row: row['score'], reverse=True)[:count]
+
+            filtered_files = []
+            for file in similar_files:
+                if file['fullpath'] in keyword_search_path_set:
+                    continue
+                if origin_path and origin_path not in file['fullpath']:
+                    continue
+                filtered_files.append(file)
+
+            similar_files = sorted(filtered_files, key=lambda row: row['score'], reverse=True)[:count]
 
             results += similar_files
         return {'results': results}, 200
@@ -131,71 +143,82 @@ def search():
     return {'results': results}, 200
 
 
-from flask import request, jsonify
-
 @flask_app.route('/api/v1/question-answering-search-in-library/', methods=['POST'])
 def question_answering_search_in_library():
-    def _get_request_data():
-        try:
-            return json.loads(request.data)
-        except Exception as e:
-            logger.exception(e)
-            return None
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
 
-    def _search_similar_children(query, repo_id):
-        try:
-            return index_task_manager.search_similar_children_in_library(query, repo_id)
-        except Exception as e:
-            logger.exception(e)
-            return None
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+    
+    query = data.get('query')
+    repo = data.get('repo')
+    if not query:
+        return {'error_msg': 'query invalid.'}, 400
 
-    def _get_first_child_content(repo_id, first_children_path, query):
-        try:
-            res = flask_app.app.seafile_api.get_file_download_token(repo_id, first_children_path)
-            download_token = res.get('download_token')
-            content_sdoc = get_file_by_token(first_children_path, download_token)
-            content_md = sdoc2md(content_sdoc)
-            prompt = open("static/prompts/question_answering_search.txt").read().format(content_md, query)
-            return flask_app.app.openai_api.chat_completions(prompt, 0)
-        except json.JSONDecodeError:
-            logger.error('Error decoding JSON.')
-            return 'false'
-
-    def _process_children(children_similarity, repo_id, count, query):        
-        # Filter the list for items where the 'fullpath' ends with '.sdoc' and then sort them by the 'score' in descending order
-        children_list = sorted(
-            [item for item in children_similarity if item['fullpath'].endswith('.sdoc')],
-            key=lambda x: x['score'],
-            reverse=True
-        )[:count]
-        if not children_list:
-            return '', ['']
-
-        first_children_path = children_list[0].get('fullpath')
-        return _get_first_child_content(repo_id, first_children_path, query), [first_children_path]
-
-    # Main execution flow
-    if not check_auth_token(request):
-        return jsonify(error_msg='Permission denied'), 403
-
-    data = _get_request_data()
-    if data is None:
-        return jsonify(error_msg='Bad request.'), 400
-
-    query, repo_id = data.get('query'), data.get('repo_id')
-    if not all([query, repo_id]):
-        return jsonify(error_msg='Query or Repo ID invalid.'), 400
-
+    if not repo:
+        return {'error_msg': 'repo_id invalid.'}, 400
+    
     count = int(data.get('count', 10))
-    if not flask_app.app.repo_file_index.check_index(repo_id):
-        return jsonify(error_msg='Library index not found.'), 400
 
-    children_similarity = _search_similar_children(query, repo_id)
-    if children_similarity is None:
-        return jsonify(error_msg='Internal server error.'), 500
+    repo_id = repo[0]
+    origin_repo_id = repo[1]
+    origin_path = repo[2]
+    if origin_repo_id:
+        repo_id = origin_repo_id
+    try:
+        repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id)
+    except Exception as e:
+        logger.error(e)
+        return {'error_msg': 'Internet server error.'}, 500
 
-    answering_result, hit_files = _process_children(children_similarity, repo_id, count, query)
-    return jsonify(answering_result=answering_result, hit_files=hit_files), 200
+    keyword_search_results = index_task_manager.keyword_search(query, [repo], count)
+    results = keyword_search_results
+
+    if repo_file_index_exist:
+        similar_files = index_task_manager.search_similar_children_in_library(query, repo_id)
+        keyword_search_path_set = {result['fullpath'] for result in keyword_search_results}
+        filtered_files = []
+        for file in similar_files:
+            if file['fullpath'] in keyword_search_path_set:
+                continue
+            if origin_path and origin_path not in file['fullpath']:
+                continue
+            filtered_files.append(file)
+
+        similar_files = sorted(filtered_files, key=lambda row: row['score'], reverse=True)[:count]
+        results += similar_files
+
+    sdoc_files = [file for file in results if file['fullpath'].endswith('.sdoc')]
+
+    if not sdoc_files:
+        return {'answering_result': '', 'hit_files': []}, 200
+
+    first_file_path = sdoc_files[0].get('fullpath')
+
+    res = flask_app.app.seafile_api.get_file_download_token(repo_id, first_file_path)
+    download_token = res.get('download_token')
+    content_sdoc = get_file_by_token(first_file_path, download_token)
+    content_md = sdoc2md(content_sdoc)
+
+    if origin_path:
+        first_file_path = first_file_path.split(origin_path)[-1]
+
+    try:
+        prompt = open("static/prompts/question_answering_search.txt").read().format(content_md, query)
+        answering_result = flask_app.app.openai_api.chat_completions(prompt, 0)
+    except json.JSONDecodeError:
+        logger.error('Error decoding JSON.')
+        answering_result = 'false'
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'answering_result': answering_result, 'hit_files': [first_file_path]}, 200
 
 
 @flask_app.route('/api/v1/library-sdoc-index/', methods=['PUT', 'DELETE'])
