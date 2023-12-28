@@ -8,6 +8,7 @@ from seafile_ai import config
 from seafile_ai.utils.constants import ZERO_OBJ_ID, REPO_FILENAME_INDEX_PREFIX
 from seafile_ai.db import init_db_session_class
 from seafile_ai.index_store.models import IndexRepo
+from seafile_ai.index_store.utils import rank_fusion, filter_hybrid_searched_files
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +72,8 @@ class IndexManager(object):
 
         logger.info('library: %s, save library file to SeaSearch success', repo_id)
 
-    def search_children_in_library(self, query, repo_id, retrieval_model, repo_file_index):
-        return repo_file_index.search_files(repo_id, config.RETRIEVAL_NUM, retrieval_model, query)
+    def search_children_in_library(self, query, repo, retrieval_model, repo_file_index, count=10):
+        return repo_file_index.search_files(repo, config.RETRIEVAL_NUM, retrieval_model, query)[:count]
 
     def update_library_sdoc_index(self, repo_id, retrieval_model, repo_file_index, repo_status_index, new_commit_id):
         try:
@@ -112,8 +113,8 @@ class IndexManager(object):
         repo_status_index.delete_documents_by_repo(repo_id)
         self.delete_index_repo_db(repo_id)
 
-    def keyword_search(self, query, repo_id_list, repo_filename_index, count):
-        return repo_filename_index.search_files(repo_id_list, query, 0, count)
+    def keyword_search(self, query, repos, repo_filename_index, count):
+        return repo_filename_index.search_files(repos, query, 0, count)
 
     def update_library_filename_index(self, repo_id, commit_id, repo_filename_index, repo_status_filename_index):
         try:
@@ -154,3 +155,10 @@ class IndexManager(object):
         repo_filename_index_name = REPO_FILENAME_INDEX_PREFIX + repo_id
         repo_filename_index.delete_index_by_index_name(repo_filename_index_name)
         repo_status_filename_index.delete_documents_by_repo(repo_id)
+
+    def hybrid_search(self, query, repo, repo_filename_index, retrieval_model, repo_file_index, count):
+        keyword_files = self.keyword_search(query, [repo], repo_filename_index, count)
+        similar_files = self.search_children_in_library(query, repo, retrieval_model, repo_file_index, count)
+        fused_files = rank_fusion([keyword_files, similar_files])
+
+        return filter_hybrid_searched_files(fused_files)[:count]

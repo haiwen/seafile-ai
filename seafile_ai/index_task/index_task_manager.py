@@ -103,12 +103,12 @@ class IndexTaskManager:
 
             return task_id
 
-    def search_similar_children_in_library(self, query, repo_id):
-        return self.app.index_manager.\
-            search_children_in_library(query, repo_id, self.app.retrieval_model, self.app.repo_file_index)
+    def keyword_search(self, query, repos, count):
+        return self.app.index_manager.keyword_search(query, repos, self.app.repo_filename_index, count)
 
-    def keyword_search(self, query, repo_id_list, count):
-        return self.app.index_manager.keyword_search(query, repo_id_list, self.app.repo_filename_index, count)
+    def hybrid_search(self, query, repo, count):
+        return self.app.index_manager.hybrid_search(query, repo, self.app.repo_filename_index,
+                                                    self.app.retrieval_model, self.app.repo_file_index, count)
 
     def add_update_a_library_sdoc_index_task(self, repo_id, commit_id):
         readable_id = repo_id
