@@ -180,15 +180,17 @@ class RepoFileNameIndex(object):
             obj_id = file_info[1]
             mtime = file_info[2]
             size = file_info[3]
-            filename = os.path.basename(path)
             suffix = self.get_file_suffix(path)
+            filename = os.path.basename(path)
+            if suffix:
+                filename = filename[:len(suffix)]
 
             index_info = {'index': {'_index': index_name, '_id': md5(path)}}
             doc_info = {
                 'repo_id': repo_id,
                 'path': path,
                 'suffix': suffix,
-                'filename': filename.replace('.' + suffix, ''),
+                'filename': filename,
                 'is_dir': False,
             }
 
