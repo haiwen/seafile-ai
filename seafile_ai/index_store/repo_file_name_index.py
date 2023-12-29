@@ -55,14 +55,7 @@ class RepoFileNameIndex(object):
                 'seafile_file_name_ngram_tokenizer': {
                     'type': 'ngram',
                     'min_gram': 4,
-                    'max_gram': 4,
-                    "token_chars": [
-                        "letter",
-                        "digit",
-                        "symbol",
-                        # "punctuation",
-                        # "whitespace"
-                    ]
+                    'max_gram': 4
                 }
             }
         }
@@ -195,7 +188,7 @@ class RepoFileNameIndex(object):
                 'repo_id': repo_id,
                 'path': path,
                 'suffix': suffix,
-                'filename': filename,
+                'filename': filename.replace('.' + suffix, ''),
                 'is_dir': False,
             }
 
