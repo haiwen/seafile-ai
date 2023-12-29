@@ -2,13 +2,21 @@
 import os
 import logging
 import json
+import re 
+from seafile_ai import config
+from zipfile import ZipFile
+from io import BytesIO
+from typing import List
 
-from seafile_ai.utils.constants import ZERO_OBJ_ID
+from seafile_ai.utils.constants import ZERO_OBJ_ID, sdoc_suffixes, office_suffixes
 
 from seafobj import fs_mgr
 
 logger = logging.getLogger(__name__)
 
+class ZipString(ZipFile):
+    def __init__(self, content):
+        ZipFile.__init__(self, BytesIO(content))
 
 def extract_sdoc_text(content):
     content = content.decode()
@@ -16,11 +24,28 @@ def extract_sdoc_text(content):
         content = json.loads(content)
     return content
 
+def extract_docx_text(content):
+    doc = ZipString(content)
+    content = doc.read('word/document.xml')
+    
+    return content.decode()
+
+def extract_pptx_text(content) -> List:
+    doc = ZipString(content)
+    unpacked = doc.infolist()
+    slides = []
+    for item in unpacked:
+        if item.orig_filename.startswith('ppt/slides') or item.orig_filename.startswith('ppt/notesSlides'):
+            if item.orig_filename.endswith('xml'):
+                slides.append(doc.read(item.orig_filename).decode())
+
+    return slides
 
 EXTRACT_TEXT_FUNCS = {
     'sdoc': extract_sdoc_text,
+    'docx': extract_docx_text,
+    'pptx': extract_pptx_text,
 }
-
 
 def get_file_suffix(path):
     try:
@@ -32,6 +57,31 @@ def get_file_suffix(path):
     except:
         return None
 
+def is_sdoc_file(path):
+    suffix = get_file_suffix(path)
+    
+    if not suffix:
+        return False
+
+    if suffix in sdoc_suffixes:
+        return True
+
+    return False
+
+def is_office_file(path):
+    """Determine whether the document is docx or pptx structured
+    
+    Args:
+        path: file path
+    """
+    suffix = get_file_suffix(path)
+    if not suffix:
+        return False
+
+    if suffix in office_suffixes:
+        return True
+
+    return False
 
 class Extractor(object):
     def __init__(self, func, file_size_limit=-1):
@@ -64,13 +114,28 @@ class Extractor(object):
 class ExtractorFactory(object):
     @classmethod
     def get_extractor(cls, filename):
+        if not cls.should_extract(filename):
+            return None
+
         suffix = get_file_suffix(filename)
         func = EXTRACT_TEXT_FUNCS.get(suffix, None)
         if not func:
             return None
         return Extractor(func, cls.get_file_size_limit(filename))
+    
+    @classmethod
+    def should_extract(cls, filename):
+        if config.INDEX_OFFICE:
+            return is_sdoc_file(filename) or is_office_file(filename)
+        else:
+            return is_sdoc_file(filename)
 
     @classmethod
     def get_file_size_limit(cls, filename):
-        # limit file size if necessary
-        return 1024 * 1024
+        if is_sdoc_file(filename):
+            limit = config.SDOC_SIZE_LIMITED
+        elif is_office_file(filename):
+            limit = config.OFFICE_FILE_SIZE_LIMIT
+        else:
+            limit = -1
+        return limit

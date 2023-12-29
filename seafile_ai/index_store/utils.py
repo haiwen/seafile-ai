@@ -2,6 +2,8 @@
 import json
 import logging
 import numpy as np
+import re
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,85 @@ def parse_sdoc_to_add_params(content, retrieval_model, index_name, path):
 
     return document_add_params
 
+def parse_docx_to_add_params(content, retrieval_model, index_name, path):
+    document_add_params = []
+    # Initializes the end position of the previous match
+    prev_end = 0
+    xml_pattern = re.compile('<(.|\n)*?>')
+    end_symbol_pattern = re.compile('。|\.|\?|？|;|；')
+    seg_text = ''
+
+    for match in re.finditer(xml_pattern, content):
+        # Match text content
+        text_between_tags = content[prev_end:match.start()]
+        striped_text = text_between_tags.strip()
+        # No cutoff punctuation in a line of text
+        no_punctuation = True
+
+        if striped_text:
+            for seg_symbol in re.finditer(end_symbol_pattern, striped_text):
+                # -1 aimed at remove end_symbol
+                seg_text = striped_text[0:seg_symbol.end()-1]
+                if seg_text:
+                    add_params = get_document_add_params(retrieval_model, seg_text,
+                                                        index_name, path, str(uuid.uuid4()))
+                    document_add_params.extend(add_params)
+                
+                seg_text = striped_text[seg_symbol.end():]
+                no_punctuation = False
+            if no_punctuation:
+                add_params = get_document_add_params(retrieval_model, striped_text,
+                                                    index_name, path, str(uuid.uuid4()))
+                document_add_params.extend(add_params)
+            # When it doesn't end with a cut-off symbol，seg_text is not empty
+            if seg_text:
+                add_params = get_document_add_params(retrieval_model, seg_text,
+                                                    index_name, path, str(uuid.uuid4()))
+                document_add_params.extend(add_params)
+        prev_end = match.end()
+    
+    return document_add_params
+
+def parse_pptx_to_add_params(slides: list, retrieval_model, index_name, path):
+    document_add_params = []
+    # Initializes the end position of the previous match
+    prev_end = 0
+    xml_pattern = re.compile('<(.|\n)*?>')
+    end_symbol_pattern = re.compile('。|\.|\?|？|;|；')
+    seg_text = ''
+    
+    for slide in slides:
+        # Match each text content in slide 
+        for match in re.finditer(xml_pattern, slide):
+            # Match text content
+            text_between_tags = slide[prev_end:match.start()]
+            striped_text = text_between_tags.strip()
+            # No cutoff punctuation in a line of text
+            no_punctuation = True
+
+            if striped_text:
+                for seg_symbol in re.finditer(end_symbol_pattern, striped_text):
+                    # -1 aimed at remove end_symbol
+                    seg_text = striped_text[0:seg_symbol.end()-1]
+                    if seg_text:
+                        add_params = get_document_add_params(retrieval_model, seg_text,
+                                                            index_name, path, str(uuid.uuid4()))
+                        document_add_params.extend(add_params)
+                    
+                    seg_text = striped_text[seg_symbol.end():]
+                    no_punctuation = False
+                if no_punctuation:
+                    add_params = get_document_add_params(retrieval_model, striped_text,
+                                                        index_name, path, str(uuid.uuid4()))
+                    document_add_params.extend(add_params)
+                # When it doesn't end with a cut-off symbol，seg_text is not empty
+                if seg_text.strip():
+                    add_params = get_document_add_params(retrieval_model, seg_text,
+                                                        index_name, path, str(uuid.uuid4()))
+                    document_add_params.extend(add_params)
+            prev_end = match.end()
+    
+    return document_add_params
 
 def parse_children_text(children, text_list=[]):
     text = children.get('text')

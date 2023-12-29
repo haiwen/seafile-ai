@@ -3,3 +3,12 @@ ZERO_OBJ_ID = '0000000000000000000000000000000000000000'
 REPO_STATUS_FILE_INDEX_NAME = 'repo_status_file'
 REPO_STATUS_FILENAME_INDEX_NAME = 'repo_status_filename'
 REPO_FILENAME_INDEX_PREFIX = 'filename_'
+
+sdoc_suffixes = [
+    'sdoc'
+]
+
+office_suffixes = [
+    'docx',
+    'pptx',
+]
