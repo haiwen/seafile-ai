@@ -2,8 +2,10 @@
 import os
 import logging
 import json
+import re 
+from seafile_ai import config
 
-from seafile_ai.utils.constants import ZERO_OBJ_ID
+from seafile_ai.utils.constants import ZERO_OBJ_ID, md_suffixes, sdoc_suffixes
 
 from seafobj import fs_mgr
 
@@ -16,11 +18,15 @@ def extract_sdoc_text(content):
         content = json.loads(content)
     return content
 
+def extract_md_text(content):
+    content = content.decode('utf-8')
+
+    return content
 
 EXTRACT_TEXT_FUNCS = {
     'sdoc': extract_sdoc_text,
+    'md': extract_md_text,
 }
-
 
 def get_file_suffix(path):
     try:
@@ -31,6 +37,29 @@ def get_file_suffix(path):
         return None
     except:
         return None
+
+def is_md_file(path):
+    suffix = get_file_suffix(path)
+
+    if not suffix:
+        return False
+
+    if suffix in md_suffixes:
+        return True
+
+    return False
+
+
+def is_sdoc_file(path):
+    suffix = get_file_suffix(path)
+    
+    if not suffix:
+        return False
+
+    if suffix in sdoc_suffixes:
+        return True
+
+    return False
 
 
 class Extractor(object):
@@ -64,13 +93,25 @@ class Extractor(object):
 class ExtractorFactory(object):
     @classmethod
     def get_extractor(cls, filename):
+        if not cls.should_extract(filename):
+            return None
+
         suffix = get_file_suffix(filename)
         func = EXTRACT_TEXT_FUNCS.get(suffix, None)
         if not func:
             return None
         return Extractor(func, cls.get_file_size_limit(filename))
+    
+    @classmethod
+    def should_extract(cls, filename):
+        return is_md_file(filename) or is_sdoc_file(filename)
 
     @classmethod
     def get_file_size_limit(cls, filename):
-        # limit file size if necessary
-        return 1024 * 1024
+        if is_md_file(filename):
+            limit = config.MD_SIZE_LIMITED
+        elif is_sdoc_file(filename):
+            limit = config.SDOC_SIZE_LIMITED
+        else:
+            limit = -1
+        return limit
