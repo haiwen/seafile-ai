@@ -49,20 +49,25 @@ class RepoFileNameIndex(object):
                     'filter': [
                         'lowercase',
                     ],
+                    "char_filter": [
+                        "seafile_file_name_ngram_char_filter"
+                    ]
+                }
+            },
+            "char_filter": {
+                "seafile_file_name_ngram_char_filter": {
+                    "mappings": [
+                        ". => ",
+                        "  => "
+                    ],
+                    "type": "mapping"
                 }
             },
             'tokenizer': {
                 'seafile_file_name_ngram_tokenizer': {
                     'type': 'ngram',
                     'min_gram': 4,
-                    'max_gram': 4,
-                    "token_chars": [
-                        "letter",
-                        "digit",
-                        "symbol",
-                        # "punctuation",
-                        # "whitespace"
-                    ]
+                    'max_gram': 4
                 }
             }
         }
