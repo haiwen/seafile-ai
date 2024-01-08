@@ -107,36 +107,7 @@ def search():
         count = 10
 
     if not is_all_repo:
-        repo_id = repos[0][0]
-        origin_repo_id = repos[0][1]
-        origin_path = repos[0][2]
-        if origin_repo_id:
-            repo_id = origin_repo_id
-        try:
-            repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id)
-        except Exception as e:
-            logger.error(e)
-            return {'error_msg': 'Internet server error.'}, 500
-
-        keyword_search_results = index_task_manager.keyword_search(query, repos, count)
-        results = keyword_search_results
-
-        if repo_file_index_exist:
-            similar_files = index_task_manager.search_similar_children_in_library(query, repo_id)
-            keyword_search_path_set = {result['fullpath'] for result in keyword_search_results}
-
-            filtered_files = []
-            for file in similar_files:
-                if file['fullpath'] in keyword_search_path_set:
-                    continue
-                if origin_path and origin_path not in file['fullpath']:
-                    continue
-                filtered_files.append(file)
-
-            similar_files = sorted(filtered_files, key=lambda row: row['score'], reverse=True)[:count]
-
-            results += similar_files
-        return {'results': results}, 200
+        results = index_task_manager.hybrid_search(query, repos[0], count)
     else:
         results = index_task_manager.keyword_search(query, repos, count)
 
@@ -165,40 +136,18 @@ def question_answering_search_in_library():
     
     count = int(data.get('count', 10))
 
+    files = index_task_manager.hybrid_search(query, repo, count)
+    sdoc_files = [file for file in files if file['fullpath'].endswith('.sdoc')]
+    if not sdoc_files:
+        return {'answering_result': '', 'hit_files': []}, 200
+
+    first_file_path = sdoc_files[0].get('fullpath')
+
     repo_id = repo[0]
     origin_repo_id = repo[1]
     origin_path = repo[2]
     if origin_repo_id:
         repo_id = origin_repo_id
-    try:
-        repo_file_index_exist = flask_app.app.repo_file_index.check_index(repo_id)
-    except Exception as e:
-        logger.error(e)
-        return {'error_msg': 'Internet server error.'}, 500
-
-    keyword_search_results = index_task_manager.keyword_search(query, [repo], count)
-    results = keyword_search_results
-
-    if repo_file_index_exist:
-        similar_files = index_task_manager.search_similar_children_in_library(query, repo_id)
-        keyword_search_path_set = {result['fullpath'] for result in keyword_search_results}
-        filtered_files = []
-        for file in similar_files:
-            if file['fullpath'] in keyword_search_path_set:
-                continue
-            if origin_path and origin_path not in file['fullpath']:
-                continue
-            filtered_files.append(file)
-
-        similar_files = sorted(filtered_files, key=lambda row: row['score'], reverse=True)[:count]
-        results += similar_files
-
-    sdoc_files = [file for file in results if file['fullpath'].endswith('.sdoc')]
-
-    if not sdoc_files:
-        return {'answering_result': '', 'hit_files': []}, 200
-
-    first_file_path = sdoc_files[0].get('fullpath')
 
     res = flask_app.app.seafile_api.get_file_download_token(repo_id, first_file_path)
     download_token = res.get('download_token')

@@ -52,23 +52,39 @@ class RepoFileIndex(object):
     def check_index(self, index_name):
         return self.seasearch_api.check_index_mapping(index_name).get('is_exist')
 
-    def search_files(self, index_name, k, model, query):
+    def search_files(self, repo, k, model, query):
+        repo_id = repo[0]
+        origin_repo_id = repo[1]
+        origin_path = repo[2]
+
+        if origin_repo_id:
+            repo_id = origin_repo_id
+
         vector = model.encode([query])[0].tolist()
         data = {
             "query_field": "vec",
             "k": k,
             "return_fields": ["path", "children_id"],
+            "_source": False,
             "vector": vector
         }
 
-        result = self.seasearch_api.vector_search(index_name, data)
+        result = self.seasearch_api.vector_search(repo_id, data)
         total = result.get('hits', {}).get('total', {}).get('value', 0)
+        if result.get('error'):
+            logger.info('search in repo_file_index error: %s .', result.get('error'))
+            return []
+
         hits = result['hits']['hits']
         searched_result = {}
         for hit in hits:
             score = hit['_score']
+            _id = hit['_id']
             children_id = hit['fields']['children_id'][0]
             path = hit['fields']['path'][0]
+
+            if origin_path and not path.startswith(origin_path):
+                continue
 
             if score < config.THRESHOLD:
                 continue
@@ -80,7 +96,14 @@ class RepoFileIndex(object):
                     searched_result[path]['children_id'] = children_id
                 continue
             filename = os.path.basename(path)
-            searched_result[path] = {'repo_id': index_name, 'fullpath': path, 'name': filename, 'is_dir': False, 'score': score, 'max_score': score}
+            searched_result[path] = {'repo_id': repo_id,
+                                     'fullpath': path,
+                                     'name': filename,
+                                     'is_dir': False,
+                                     'score': score,
+                                     'max_score': score,
+                                     '_id': _id
+                                     }
 
         return list(searched_result.values())
 

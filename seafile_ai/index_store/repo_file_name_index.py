@@ -150,12 +150,14 @@ class RepoFileNameIndex(object):
             for hit in hits:
                 source = hit.get('_source')
                 score = hit.get('_score')
+                _id = hit.get('_id')
                 r = {
                     'repo_id': source['repo_id'],
                     'fullpath': source['path'],
                     'name': source['filename'],
                     'is_dir': source['is_dir'],
                     'score': score,
+                    '_id': _id,
                 }
                 files.append(r)
         files = sorted(files, key=lambda row: row['score'], reverse=True)[:size]
