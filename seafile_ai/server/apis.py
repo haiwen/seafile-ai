@@ -93,7 +93,8 @@ def search():
 
     query = data.get('query').strip()
     repos = data.get('repos')
-    is_all_repo = data.get('is_all_repo')
+    suffixes = data.get('suffixes')
+    search_filename_only = data.get('search_filename_only')
 
     if not query:
         return {'error_msg': 'query invalid.'}, 400
@@ -106,10 +107,10 @@ def search():
     except:
         count = 10
 
-    if not is_all_repo:
-        results = index_task_manager.hybrid_search(query, repos[0], count)
+    if search_filename_only:
+        results = index_task_manager.keyword_search(query, repos, count, suffixes)
     else:
-        results = index_task_manager.keyword_search(query, repos, count)
+        results = index_task_manager.hybrid_search(query, repos[0], count)
 
     return {'results': results}, 200
 
