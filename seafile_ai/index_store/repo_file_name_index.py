@@ -266,6 +266,46 @@ class RepoFileNameIndex(object):
         if delete_params:
             self.seasearch_api.bulk(delete_params)
 
+    def query_data_by_dir(self, index_name, directory, start, size):
+        dsl = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {"prefix": {"path": directory}}
+                    ]
+                }
+            },
+            "from": start,
+            "size": size,
+            "_source": False,
+            "sort": ["-@timestamp"],  # sort is for getting data ordered
+        }
+
+        hits, total = self.normal_search(index_name, dsl)
+        return hits, total
+
+    def normal_search(self, index_name, dsl):
+        doc_item = self.seasearch_api.normal_search(index_name, dsl)
+        total = doc_item['hits']['total']['value']
+
+        return doc_item['hits']['hits'], total
+
+    def delete_files_by_deleted_dirs(self, index_name, dirs):
+        for directory in dirs:
+            per_size = SEASEARCH_BULK_OPETATE_LIMIT
+            start = 0
+            delete_params = []
+            while True:
+                hits, total = self.query_data_by_dir(index_name, directory, start, per_size)
+                for hit in hits:
+                    _id = hit['_id']
+                    delete_params.append({'delete': {'_id': _id, '_index': index_name}})
+
+                if delete_params:
+                    self.seasearch_api.bulk(delete_params)
+                if len(hits) < per_size:
+                    break
+
     def update(self, index_name, repo_id, old_commit_id, new_commit_id):
         added_files, deleted_files, modified_files, added_dirs, deleted_dirs = \
             get_library_diff_files(repo_id, old_commit_id, new_commit_id)
@@ -274,6 +314,8 @@ class RepoFileNameIndex(object):
         self.delete_files(index_name, need_deleted_files)
 
         self.delete_dirs(index_name, deleted_dirs)
+
+        self.delete_files_by_deleted_dirs(index_name, deleted_dirs)
 
         need_added_files = added_files + modified_files
         self.add_files(index_name, repo_id, need_added_files)
