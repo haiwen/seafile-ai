@@ -67,7 +67,7 @@ class IndexManager(object):
     def create_library_sdoc_index(self, repo_id, retrieval_model, repo_file_index, repo_status_index, commit_id):
         repo_status_index.begin_update_repo(repo_id, ZERO_OBJ_ID, commit_id)
         repo_file_index.create_index(repo_id)
-        repo_file_index.add_files(repo_id, ZERO_OBJ_ID, commit_id, retrieval_model)
+        repo_file_index.add(repo_id, ZERO_OBJ_ID, commit_id, retrieval_model)
         repo_status_index.finish_update_repo(repo_id, commit_id)
 
         logger.info('library: %s, save library file to SeaSearch success', repo_id)
@@ -90,14 +90,14 @@ class IndexManager(object):
                 if not is_exist:
                     repo_file_index.create_index(repo_id)
 
-                repo_file_index.update_files(repo_id, from_commit, to_commit, retrieval_model)
+                repo_file_index.update(repo_id, from_commit, to_commit, retrieval_model)
 
                 # time sleep for SeaSearch save data
                 time.sleep(1)
 
                 commit_id = to_commit
             repo_status_index.begin_update_repo(repo_id, commit_id, new_commit_id)
-            repo_file_index.update_files(repo_id, commit_id, new_commit_id, retrieval_model)
+            repo_file_index.update(repo_id, commit_id, new_commit_id, retrieval_model)
             repo_status_index.finish_update_repo(repo_id, new_commit_id)
 
             self.update_index_repo_db(repo_id)

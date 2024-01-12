@@ -32,6 +32,9 @@ class RepoFileIndex(object):
             },
             "children_id": {
                 "type": "keyword"
+            },
+            'content': {
+                'type': 'text'
             }
         }
     }
@@ -61,10 +64,13 @@ class RepoFileIndex(object):
             repo_id = origin_repo_id
 
         vector = model.encode([query])[0].tolist()
+        return_fields = ["path", "children_id"]
+        if config.LOG_LEVEL == "debug":
+            return_fields.append("content")
         data = {
             "query_field": "vec",
             "k": k,
-            "return_fields": ["path", "children_id"],
+            "return_fields": return_fields,
             "_source": False,
             "vector": vector
         }
@@ -104,36 +110,107 @@ class RepoFileIndex(object):
                                      'max_score': score,
                                      '_id': _id
                                      }
+            if config.LOG_LEVEL == 'debug':
+                searched_result[path]['content'] = hit['fields']['content'][0]
 
         return list(searched_result.values())
 
     def delete_index_by_index_name(self, index_name):
         self.seasearch_api.delete_index_by_name(index_name)
 
-    def add_files(self, index_name, old_commit_id, new_commit_id, retrieval_model):
-        self.update_files(index_name, old_commit_id, new_commit_id, retrieval_model)
+    def add(self, index_name, old_commit_id, new_commit_id, retrieval_model):
+        self.update(index_name, old_commit_id, new_commit_id, retrieval_model)
 
-    def update_files(self, index_name, old_commit_id, new_commit_id, retrieval_model):
+    def update(self, index_name, old_commit_id, new_commit_id, retrieval_model):
         """
         old_commit_id is ZERO_OBJ_ID that means create repo file index
         """
-        added_files, deleted_files, modified_files, _, _ = get_library_diff_files(index_name, old_commit_id, new_commit_id)
+        added_files, deleted_files, modified_files, _, deleted_dirs = get_library_diff_files(index_name, old_commit_id, new_commit_id)
 
-        bulk_update_params = []
-        step = SEASEARCH_QUERY_PATH_DOC_STEP
         need_deleted_files = deleted_files + modified_files
-        for pos in range(0, len(need_deleted_files), step):
-            files = need_deleted_files[pos: pos + step]
-            paths = [file[0] for file in files]
-            delete_params = self.get_doc_delete_params_by_paths(paths, index_name)
-            bulk_update_params.extend(delete_params)
-            if len(bulk_update_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
-                self.seasearch_api.bulk(bulk_update_params)
-                bulk_update_params = []
+        self.delete_files(index_name, need_deleted_files)
+
+        self.delete_files_by_deleted_dirs(index_name, deleted_dirs)
 
         need_added_files = added_files + modified_files
+        self.add_files(index_name, need_added_files, retrieval_model, new_commit_id)
 
-        for file_info in need_added_files:
+    def query_data_by_paths(self, index_name, path_list, start, size):
+        dsl = {
+            "query": {
+                "terms": {
+                    "path": path_list
+                }
+            },
+            "from": start,
+            "size": size,
+            "_source": False,
+            "sort": ["-@timestamp"],  # sort is for getting data ordered
+        }
+        hits, total = self.normal_search(index_name, dsl)
+        return hits, total
+
+    def query_data_by_dir(self, index_name, directory, start, size):
+        dsl = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {"prefix": {"path": directory}}
+                    ]
+                }
+            },
+            "from": start,
+            "size": size,
+            "_source": False,
+            "sort": ["-@timestamp"],  # sort is for getting data ordered
+        }
+
+        hits, total = self.normal_search(index_name, dsl)
+        return hits, total
+
+    def normal_search(self, index_name, dsl):
+        doc_item = self.seasearch_api.normal_search(index_name, dsl)
+        total = doc_item['hits']['total']['value']
+
+        return doc_item['hits']['hits'], total
+
+    def delete_files(self, index_name, files):
+        step = SEASEARCH_QUERY_PATH_DOC_STEP
+        for pos in range(0, len(files), step):
+            paths = [file[0] for file in files[pos: pos + step]]
+            per_size = SEASEARCH_BULK_OPETATE_LIMIT
+            start = 0
+            delete_params = []
+            while True:
+                hits, total = self.query_data_by_paths(index_name, paths, start, per_size)
+                for hit in hits:
+                    _id = hit['_id']
+                    delete_params.append({'delete': {'_id': _id, '_index': index_name}})
+
+                if delete_params:
+                    self.seasearch_api.bulk(delete_params)
+                if len(hits) < per_size:
+                    break
+
+    def delete_files_by_deleted_dirs(self, index_name, dirs):
+        for directory in dirs:
+            per_size = SEASEARCH_BULK_OPETATE_LIMIT
+            start = 0
+            delete_params = []
+            while True:
+                hits, total = self.query_data_by_dir(index_name, directory, start, per_size)
+                for hit in hits:
+                    _id = hit['_id']
+                    delete_params.append({'delete': {'_id': _id, '_index': index_name}})
+
+                if delete_params:
+                    self.seasearch_api.bulk(delete_params)
+                if len(hits) < per_size:
+                    break
+
+    def add_files(self, index_name, files, retrieval_model, commit_id):
+        bulk_add_params = []
+        for file_info in files:
             path = file_info[0]
             obj_id = file_info[1]
             mtime = file_info[2]
@@ -143,49 +220,21 @@ class RepoFileIndex(object):
             path_string, ext = os.path.splitext(path)
             if ext.lower() not in SUPPORT_FILE_TYPES:
                 continue
-            add_params = get_document_add_params(retrieval_model, path_string, index_name, path, VIRTUAL_PATH_CHILDREN_ID)
-            bulk_update_params.extend(add_params)
+            add_params = get_document_add_params(retrieval_model, path_string, index_name, path,
+                                                 VIRTUAL_PATH_CHILDREN_ID)
+            bulk_add_params.extend(add_params)
 
             file_content = b''
             if size:
-                file_content = get_file_content(index_name, new_commit_id, obj_id, path)
+                file_content = get_file_content(index_name, commit_id, obj_id, path)
 
             if file_content:
                 add_params = parse_sdoc_to_add_params(file_content, retrieval_model, index_name, path)
-                bulk_update_params.extend(add_params)
+                bulk_add_params.extend(add_params)
 
             # bulk add every 2000 params
-            if len(bulk_update_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
-                self.seasearch_api.bulk(bulk_update_params)
-                bulk_update_params = []
-        if bulk_update_params:
-            self.seasearch_api.bulk(bulk_update_params)
-
-    def get_doc_delete_params_by_paths(self, path_list, index_name):
-        per_size = 2000
-        start = 0
-        delete_params = []
-        while True:
-            data = {
-                "query": {
-                    "terms": {
-                        "path": path_list
-                    }
-                },
-                "from": start,
-                "size": per_size,
-                "_source": False,
-                "sort": ["-@timestamp"],  # sort is for getting data ordered
-            }
-            doc_item = self.seasearch_api.normal_search(index_name, data)
-
-            total = doc_item['hits']['total']['value']
-
-            hits = doc_item['hits']['hits']
-            for hit in hits:
-                _id = hit['_id']
-                delete_params.append({'delete': {'_id': _id, '_index': index_name}})
-
-            start += per_size
-            if len(hits) < per_size or start == total:
-                return delete_params
+            if len(bulk_add_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
+                self.seasearch_api.bulk(bulk_add_params)
+                bulk_add_params = []
+        if bulk_add_params:
+            self.seasearch_api.bulk(bulk_add_params)

@@ -2,9 +2,11 @@
 import json
 import logging
 import numpy as np
+from config import LOG_LEVEL
 
 logger = logging.getLogger(__name__)
 
+REPO_FILE_INDEX_CONTENT_LIMIT = 200
 
 def retrieval_encode(retrieval_model, string_list, per_limit=1000):
     step = per_limit
@@ -51,7 +53,7 @@ def get_document_add_params(retrieval_model, sentence, index_name, path, childre
     add_params = []
     embeddings = retrieval_encode(retrieval_model, [sentence])
     index_info = {"index": {"_index": index_name}}
-    vector_info = {"path": path, "children_id": children_id, "vec": embeddings[0].tolist()}
+    vector_info = {"path": path, "children_id": children_id, "vec": embeddings[0].tolist(), "content": sentence[:REPO_FILE_INDEX_CONTENT_LIMIT]}
     add_params.append(index_info)
     add_params.append(vector_info)
     return add_params
@@ -73,7 +75,7 @@ def rank_fusion(doc_lists, weights=None, c=60):
     """
 
     if weights is None:
-        weights = [0.5, 0.5]
+        weights = [0.6, 0.4]
     if len(doc_lists) != len(weights):
         raise ValueError(
             "Number of rank lists must be equal to the number of weights."
@@ -123,7 +125,9 @@ def filter_hybrid_searched_files(files):
             continue
         path_set.add(fullpath)
         file.pop('_id', None)
-        file.pop('score', None)
-        file.pop('max_score', None)
+        if LOG_LEVEL != 'debug':
+            file.pop('score', None)
+            file.pop('max_score', None)
+            file.pop('content', None)
         filtered_files.append(file)
     return filtered_files

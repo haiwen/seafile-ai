@@ -32,7 +32,7 @@ RETRIEVAL_SOURCE = 'alibaba'
 RETRIEVAL_MODEL_ID = 'damo/nlp_corom_sentence-embedding_chinese-base'
 RETRIEVAL_METRIC = 'L2'
 DIMENSION = 768
-RETRIEVAL_NUM = 10
+RETRIEVAL_NUM = 20
 RETRIEVAL_MODEL_PATH = None
 
 ## rerank model settings
