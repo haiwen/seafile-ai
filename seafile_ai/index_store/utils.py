@@ -2,7 +2,6 @@
 import json
 import logging
 import numpy as np
-from config import LOG_LEVEL
 
 logger = logging.getLogger(__name__)
 
@@ -125,9 +124,7 @@ def filter_hybrid_searched_files(files):
             continue
         path_set.add(fullpath)
         file.pop('_id', None)
-        if LOG_LEVEL != 'debug':
-            file.pop('score', None)
-            file.pop('max_score', None)
-            file.pop('content', None)
+        file.pop('score', None)
+        file.pop('max_score', None)
         filtered_files.append(file)
     return filtered_files

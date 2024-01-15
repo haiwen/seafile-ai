@@ -64,13 +64,10 @@ class RepoFileIndex(object):
             repo_id = origin_repo_id
 
         vector = model.encode([query])[0].tolist()
-        return_fields = ["path", "children_id"]
-        if config.LOG_LEVEL == "debug":
-            return_fields.append("content")
         data = {
             "query_field": "vec",
             "k": k,
-            "return_fields": return_fields,
+            "return_fields": ["path", "children_id", "content"],
             "_source": False,
             "vector": vector
         }
@@ -82,12 +79,15 @@ class RepoFileIndex(object):
             return []
 
         hits = result['hits']['hits']
+        if not hits:
+            return []
         searched_result = {}
         for hit in hits:
             score = hit['_score']
             _id = hit['_id']
             children_id = hit['fields']['children_id'][0]
             path = hit['fields']['path'][0]
+            content = hit['fields']['content'][0]
 
             if origin_path and not path.startswith(origin_path):
                 continue
@@ -108,10 +108,9 @@ class RepoFileIndex(object):
                                      'is_dir': False,
                                      'score': score,
                                      'max_score': score,
+                                     'content': content,
                                      '_id': _id
                                      }
-            if config.LOG_LEVEL == 'debug':
-                searched_result[path]['content'] = hit['fields']['content'][0]
 
         return list(searched_result.values())
 
