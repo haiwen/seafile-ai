@@ -1,7 +1,7 @@
 import logging
 import queue
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Thread, Lock
 
 from apscheduler.triggers.cron import CronTrigger
@@ -77,7 +77,7 @@ class IndexTaskManager:
             'expire_time': config.INDEX_TASK_EXPIRE_TIME
         }
         self.sched.add_job(self.clear_expired_tasks, CronTrigger(minute='*/10'))
-        self.sched.add_job(self.cron_update_library_sdoc_indexes, CronTrigger(day_of_week='*'))
+        self.sched.add_job(self.cron_update_library_sdoc_indexes, CronTrigger(hour='*'))
 
     def init(self, app):
         self.app = app
@@ -129,7 +129,7 @@ class IndexTaskManager:
             return task_id
 
     def update_library_sdoc_indexes(self):
-        per_day_check_time = datetime.now()
+        per_day_check_time = datetime.now() - timedelta(minutes=50)
         index_repos = self.app.index_manager.list_index_repos_by_time(per_day_check_time)
 
         for repo in index_repos:
