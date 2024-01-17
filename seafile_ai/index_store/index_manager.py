@@ -113,8 +113,8 @@ class IndexManager(object):
         repo_status_index.delete_documents_by_repo(repo_id)
         self.delete_index_repo_db(repo_id)
 
-    def keyword_search(self, query, repos, repo_filename_index, count):
-        return repo_filename_index.search_files(repos, query, 0, count)
+    def keyword_search(self, query, repos, repo_filename_index, count, suffixes=None):
+        return repo_filename_index.search_files(repos, query, 0, count, suffixes)
 
     def update_library_filename_index(self, repo_id, commit_id, repo_filename_index, repo_status_filename_index):
         try:

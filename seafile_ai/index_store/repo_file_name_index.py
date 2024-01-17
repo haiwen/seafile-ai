@@ -110,7 +110,18 @@ class RepoFileNameIndex(object):
             query_map['bool']['filter'] = [{'prefix': {'path': search_path}}]
         return query_map
 
-    def search_files(self, repos, keyword, start=0, size=10):
+    def _add_suffix_filter(self, query_map, suffixes):
+        if suffixes:
+            if not query_map['bool'].get('filter'):
+                query_map['bool']['filter'] = []
+            if isinstance(suffixes, list):
+                suffixes = [x.lower() for x in suffixes]
+                query_map['bool']['filter'].append({'terms': {'suffix': suffixes}})
+            else:
+                query_map['bool']['filter'].append({'term': {'suffix': suffixes.lower()}})
+        return query_map
+
+    def search_files(self, repos, keyword, start=0, size=10, suffixes=None):
         bulk_search_params = []
         for repo in repos:
             repo_id = repo[0]
@@ -123,6 +134,7 @@ class RepoFileNameIndex(object):
             if origin_repo_id:
                 repo_id = origin_repo_id
                 query_map = self._add_path_filter(query_map, origin_path)
+            query_map = self._add_suffix_filter(query_map, suffixes)
 
             data = {
                 'query': query_map,

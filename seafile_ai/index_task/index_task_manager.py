@@ -103,8 +103,8 @@ class IndexTaskManager:
 
             return task_id
 
-    def keyword_search(self, query, repos, count):
-        return self.app.index_manager.keyword_search(query, repos, self.app.repo_filename_index, count)
+    def keyword_search(self, query, repos, count, suffixes):
+        return self.app.index_manager.keyword_search(query, repos, self.app.repo_filename_index, count, suffixes)
 
     def hybrid_search(self, query, repo, count):
         return self.app.index_manager.hybrid_search(query, repo, self.app.repo_filename_index,
