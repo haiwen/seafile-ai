@@ -1,7 +1,7 @@
 import logging
 import queue
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from threading import Thread, Lock
 
 from apscheduler.triggers.cron import CronTrigger
@@ -129,9 +129,7 @@ class IndexTaskManager:
             return task_id
 
     def update_library_sdoc_indexes(self):
-        per_day_check_time = datetime.now() - timedelta(minutes=50)
-        index_repos = self.app.index_manager.list_index_repos_by_time(per_day_check_time)
-
+        index_repos = self.app.index_manager.list_index_repos()
         for repo in index_repos:
             repo_id = repo[0]
             commit_id = self.app.repo_data.get_repo_head_commit(repo_id)
