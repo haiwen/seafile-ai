@@ -3,6 +3,8 @@ import logging
 import numpy as np
 import uuid
 import re
+import markdown
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -39,23 +41,16 @@ def parse_md_to_add_params(content, retrieval_model, index_name, path):
     document_add_params = []
     modified_content = re.sub(r'\n{2,}', '\n\n', content)
     modified_content = re.sub(r'\u3000', '', modified_content)
+
     paragraphs = modified_content.split("\n\n")
-    in_code_block = False
     headers_to_split_on = ["#", "##", "###", "####", "#####", "######"]
 
     for paragraph in paragraphs:
         stripped_paragraph = paragraph.strip()
 
-        if stripped_paragraph.startswith("````"):
-            # code block in one row
-            if stripped_paragraph.count("````") >= 2:
-                in_code_block = False
-            else:
-                in_code_block = not in_code_block
-
-        if in_code_block:
-            continue
-        
+        if stripped_paragraph.startswith("```"):
+                continue
+ 
         # Check each line against each of the header types (e.g., #, ##)
         for sep in headers_to_split_on:
             if stripped_paragraph.startswith(sep) and (
@@ -70,13 +65,19 @@ def parse_md_to_add_params(content, retrieval_model, index_name, path):
                 break
         else:
             if stripped_paragraph:
-                sentences = re.split('[.。?？；;]', stripped_paragraph)
+                html = markdown.markdown(stripped_paragraph)
+                soup = BeautifulSoup(html, features="html.parser")
+                text = soup.get_text()
+
+                sentences = re.split('([。；;])', text)
+                sentences = [sentences[i] + sentences[i+1] for i in range(0, len(sentences) - 1, 2) if sentences[i]]
+
                 for sentence in sentences:
                     if sentence: 
                         add_params = get_document_add_params(retrieval_model, sentence,
                                                         index_name, path, str(uuid.uuid4()))
                         document_add_params.extend(add_params)
-    print(document_add_params)
+
     return document_add_params
 
 def parse_children_text(children, text_list=[]):

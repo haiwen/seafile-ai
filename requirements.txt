@@ -20,3 +20,5 @@ loguru
 html2text
 ndjson
 pytz
+markdown
+bs4
