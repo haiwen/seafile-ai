@@ -11,6 +11,9 @@ from seafobj import fs_mgr
 
 logger = logging.getLogger(__name__)
 
+MD_SIZE_LIMITED = 1024 * 1024
+SDOC_SIZE_LIMITED = 1024 * 1024
+
 
 def extract_sdoc_text(content):
     content = content.decode()
@@ -37,30 +40,6 @@ def get_file_suffix(path):
         return None
     except:
         return None
-
-def is_md_file(path):
-    suffix = get_file_suffix(path)
-
-    if not suffix:
-        return False
-
-    if suffix in md_suffixes:
-        return True
-
-    return False
-
-
-def is_sdoc_file(path):
-    suffix = get_file_suffix(path)
-    
-    if not suffix:
-        return False
-
-    if suffix in sdoc_suffixes:
-        return True
-
-    return False
-
 
 class Extractor(object):
     def __init__(self, func, file_size_limit=-1):
@@ -93,25 +72,19 @@ class Extractor(object):
 class ExtractorFactory(object):
     @classmethod
     def get_extractor(cls, filename):
-        if not cls.should_extract(filename):
-            return None
 
         suffix = get_file_suffix(filename)
         func = EXTRACT_TEXT_FUNCS.get(suffix, None)
         if not func:
             return None
         return Extractor(func, cls.get_file_size_limit(filename))
-    
-    @classmethod
-    def should_extract(cls, filename):
-        return is_md_file(filename) or is_sdoc_file(filename)
 
     @classmethod
     def get_file_size_limit(cls, filename):
-        if is_md_file(filename):
-            limit = config.MD_SIZE_LIMITED
-        elif is_sdoc_file(filename):
-            limit = config.SDOC_SIZE_LIMITED
+        if get_file_suffix(filename) in md_suffixes:
+            limit = MD_SIZE_LIMITED
+        elif get_file_suffix(filename) in sdoc_suffixes:
+            limit = SDOC_SIZE_LIMITED
         else:
             limit = -1
         return limit

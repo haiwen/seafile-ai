@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import json
 import logging
 import numpy as np
 import uuid
@@ -38,23 +37,18 @@ def parse_sdoc_to_add_params(content, retrieval_model, index_name, path):
 
 def parse_md_to_add_params(content, retrieval_model, index_name, path):
     document_add_params = []
-    lines = content.split("\n")
+    modified_content = re.sub(r'\n{2,}', '\n\n', content)
+    modified_content = re.sub(r'\u3000', '', modified_content)
+    paragraphs = modified_content.split("\n\n")
     in_code_block = False
     headers_to_split_on = ["#", "##", "###", "####", "#####", "######"]
-    end_symbol_pattern = re.compile('。|\.|\?|？|;|；')
-    comma_symbol_pattern = re.compile(',|，')
-    seg_text = ''
-    # Text truncated by lines
-    pre_text = ''
 
-    for line in lines:
-        # No cutoff punctuation in a line of text
-        no_punctuation = True
-        stripped_line = line.strip()
+    for paragraph in paragraphs:
+        stripped_paragraph = paragraph.strip()
 
-        if stripped_line.startswith("```"):
+        if stripped_paragraph.startswith("````"):
             # code block in one row
-            if stripped_line.count("```") >= 2:
+            if stripped_paragraph.count("````") >= 2:
                 in_code_block = False
             else:
                 in_code_block = not in_code_block
@@ -64,46 +58,25 @@ def parse_md_to_add_params(content, retrieval_model, index_name, path):
         
         # Check each line against each of the header types (e.g., #, ##)
         for sep in headers_to_split_on:
-            if stripped_line.startswith(sep) and (
+            if stripped_paragraph.startswith(sep) and (
                 # Make sure the tag is followed by a space
-                len(stripped_line) == len(sep) or stripped_line[len(sep)] == ' '
+                len(stripped_paragraph) == len(sep) or stripped_paragraph[len(sep)] == ' '
                 ):
-                header_content = stripped_line[len(sep):]
+                header_content = stripped_paragraph[len(sep):]
                 if header_content.strip():
                     header_params = get_document_add_params(retrieval_model, header_content.strip(), index_name, path, str(uuid.uuid4()))
                     document_add_params.extend(header_params)
                 
                 break
         else:
-            if stripped_line:
-                for end_symbol in re.finditer(end_symbol_pattern, stripped_line):
-                    if pre_text:
-                        seg_text = pre_text + stripped_line[0:end_symbol.end()-1]
-                        pre_text = ''
-                    else: 
-                        # -1 aimed at remove end_symbol
-                        seg_text = stripped_line[0:end_symbol.end()-1]
-                    if seg_text:
-                        line_params = get_document_add_params(retrieval_model, seg_text,
-                                                            index_name, path, str(uuid.uuid4()))
-                        document_add_params.extend(line_params)
-                    
-                    seg_text = stripped_line[end_symbol.end():]
-                    no_punctuation = False
-                if no_punctuation:
-                    comm_mathes = [comma.start() for comma in re.finditer(comma_symbol_pattern, stripped_line)]
-                    last_comma_position = comm_mathes[-1] if comm_mathes else None
-                    if last_comma_position:
-                        pre_text = stripped_line[last_comma_position:]
-                        stripped_line = stripped_line[:last_comma_position]
-
-                    add_params = get_document_add_params(retrieval_model, stripped_line,
+            if stripped_paragraph:
+                sentences = re.split('[.。?？；;]', stripped_paragraph)
+                for sentence in sentences:
+                    if sentence: 
+                        add_params = get_document_add_params(retrieval_model, sentence,
                                                         index_name, path, str(uuid.uuid4()))
-                    document_add_params.extend(add_params)
-                # The finished content is truncated by two lines
-                if seg_text:
-                    pre_text = seg_text
-
+                        document_add_params.extend(add_params)
+    print(document_add_params)
     return document_add_params
 
 def parse_children_text(children, text_list=[]):
