@@ -14,6 +14,7 @@ VIRTUAL_PATH_CHILDREN_ID = 'file_path'
 SEASEARCH_BULK_OPETATE_LIMIT = 2000
 SEASEARCH_QUERY_PATH_DOC_STEP = 20
 
+SUPPORT_FILE_TYPES = ['.sdoc', '.docx', '.pptx']
 
 class RepoFileIndex(object):
     """
@@ -218,7 +219,7 @@ class RepoFileIndex(object):
             # add path to index
             filename = os.path.basename(path)
             path_string, ext = os.path.splitext(path)
-            if not ExtractorFactory.should_extract(filename):
+            if ext.lower() not in SUPPORT_FILE_TYPES:
                 continue
             add_params = get_document_add_params(retrieval_model, path_string, index_name, path,
                                                  VIRTUAL_PATH_CHILDREN_ID)

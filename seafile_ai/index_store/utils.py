@@ -4,6 +4,8 @@ import logging
 import numpy as np
 import re
 import uuid
+import xml.etree.ElementTree as ET
+
 
 logger = logging.getLogger(__name__)
 
@@ -38,83 +40,60 @@ def parse_sdoc_to_add_params(content, retrieval_model, index_name, path):
 
 def parse_docx_to_add_params(content, retrieval_model, index_name, path):
     document_add_params = []
-    # Initializes the end position of the previous match
-    prev_end = 0
-    xml_pattern = re.compile('<(.|\n)*?>')
-    end_symbol_pattern = re.compile('。|\.|\?|？|;|；')
-    seg_text = ''
+    # Parsing XML content
+    root = ET.fromstring(content)
 
-    for match in re.finditer(xml_pattern, content):
-        # Match text content
-        text_between_tags = content[prev_end:match.start()]
-        striped_text = text_between_tags.strip()
-        # No cutoff punctuation in a line of text
-        no_punctuation = True
+    for paragraph in root.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p'):
+        texts = [node.text for node in paragraph.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')]
+        paragraph_text = ''.join(filter(None, texts))
+        if paragraph_text:
+            sentences = re.split('([。；;])', paragraph_text)
+            new_sentences = []
+            i = 0
+            while i < len(sentences):
+                if sentences[i]:
+                    if i + 1 < len(sentences):
+                        new_sentences.append(sentences[i] + sentences[i + 1])
+                    else:
+                        new_sentences.append(sentences[i])
+                i += 2
 
-        if striped_text:
-            for seg_symbol in re.finditer(end_symbol_pattern, striped_text):
-                # -1 aimed at remove end_symbol
-                seg_text = striped_text[0:seg_symbol.end()-1]
-                if seg_text:
-                    add_params = get_document_add_params(retrieval_model, seg_text,
-                                                        index_name, path, str(uuid.uuid4()))
+            for sentence in new_sentences:
+                if sentence: 
+                    add_params = get_document_add_params(retrieval_model, sentence,
+                                                    index_name, path, str(uuid.uuid4()))
                     document_add_params.extend(add_params)
-                
-                seg_text = striped_text[seg_symbol.end():]
-                no_punctuation = False
-            if no_punctuation:
-                add_params = get_document_add_params(retrieval_model, striped_text,
-                                                    index_name, path, str(uuid.uuid4()))
-                document_add_params.extend(add_params)
-            # When it doesn't end with a cut-off symbol，seg_text is not empty
-            if seg_text:
-                add_params = get_document_add_params(retrieval_model, seg_text,
-                                                    index_name, path, str(uuid.uuid4()))
-                document_add_params.extend(add_params)
-        prev_end = match.end()
     
     return document_add_params
 
-def parse_pptx_to_add_params(slides: list, retrieval_model, index_name, path):
+def parse_pptx_to_add_params(slides, retrieval_model, index_name, path):
     document_add_params = []
-    # Initializes the end position of the previous match
-    prev_end = 0
-    xml_pattern = re.compile('<(.|\n)*?>')
-    end_symbol_pattern = re.compile('。|\.|\?|？|;|；')
-    seg_text = ''
-    
     for slide in slides:
-        # Match each text content in slide 
-        for match in re.finditer(xml_pattern, slide):
-            # Match text content
-            text_between_tags = slide[prev_end:match.start()]
-            striped_text = text_between_tags.strip()
-            # No cutoff punctuation in a line of text
-            no_punctuation = True
+        root = ET.fromstring(slide)
+        for txBody in root.iter('{http://schemas.openxmlformats.org/presentationml/2006/main}txBody'):
+            for paragraph in txBody.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}p'):
+                texts = [node.text for node in paragraph.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}t')]
+                paragraph_text = ''.join(filter(None, texts))
+                if paragraph_text: 
+                        sentences = re.split('([。；;])', paragraph_text)
+                        new_sentences = []
+                        i = 0
+                        while i < len(sentences):
+                            if sentences[i]:
+                                if i + 1 < len(sentences):
+                                    new_sentences.append(sentences[i] + sentences[i + 1])
+                                else:
+                                    new_sentences.append(sentences[i])
+                            i += 2
 
-            if striped_text:
-                for seg_symbol in re.finditer(end_symbol_pattern, striped_text):
-                    # -1 aimed at remove end_symbol
-                    seg_text = striped_text[0:seg_symbol.end()-1]
-                    if seg_text:
-                        add_params = get_document_add_params(retrieval_model, seg_text,
-                                                            index_name, path, str(uuid.uuid4()))
-                        document_add_params.extend(add_params)
-                    
-                    seg_text = striped_text[seg_symbol.end():]
-                    no_punctuation = False
-                if no_punctuation:
-                    add_params = get_document_add_params(retrieval_model, striped_text,
-                                                        index_name, path, str(uuid.uuid4()))
-                    document_add_params.extend(add_params)
-                # When it doesn't end with a cut-off symbol，seg_text is not empty
-                if seg_text.strip():
-                    add_params = get_document_add_params(retrieval_model, seg_text,
-                                                        index_name, path, str(uuid.uuid4()))
-                    document_add_params.extend(add_params)
-            prev_end = match.end()
-    
+                        for sentence in new_sentences:
+                            if sentence: 
+                                add_params = get_document_add_params(retrieval_model, sentence,
+                                                                index_name, path, str(uuid.uuid4()))
+                                document_add_params.extend(add_params)
+
     return document_add_params
+
 
 def parse_children_text(children, text_list=[]):
     text = children.get('text')

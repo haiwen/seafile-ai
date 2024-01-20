@@ -48,14 +48,6 @@ SEASEARCH_TOKEN = ''
 VECTOR_M = 1
 SHARD_NUM = 1
 
-### seasearch file size limit
-SDOC_SIZE_LIMITED = 1024 * 1024
-
-### seasearch office file config
-INDEX_OFFICE = True
-CONTENT_EXTRA_TIME = 5 * 60
-OFFICE_FILE_SIZE_LIMIT = 10 * 1024 * 1024
-
 # seafile-ai config database
 DB_HOST = ''
 DB_USER = ''
