@@ -38,6 +38,7 @@ def parse_sdoc_to_add_params(content, retrieval_model, index_name, path):
 
     return document_add_params
 
+
 def parse_docx_to_add_params(content, retrieval_model, index_name, path):
     document_add_params = []
     # Parsing XML content
@@ -47,24 +48,12 @@ def parse_docx_to_add_params(content, retrieval_model, index_name, path):
         texts = [node.text for node in paragraph.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')]
         paragraph_text = ''.join(filter(None, texts))
         if paragraph_text:
-            sentences = re.split('([。；;])', paragraph_text)
-            new_sentences = []
-            i = 0
-            while i < len(sentences):
-                if sentences[i]:
-                    if i + 1 < len(sentences):
-                        new_sentences.append(sentences[i] + sentences[i + 1])
-                    else:
-                        new_sentences.append(sentences[i])
-                i += 2
-
-            for sentence in new_sentences:
-                if sentence: 
-                    add_params = get_document_add_params(retrieval_model, sentence,
-                                                    index_name, path, str(uuid.uuid4()))
-                    document_add_params.extend(add_params)
+            add_params = get_document_add_params(retrieval_model, paragraph_text,
+                                            index_name, path, str(uuid.uuid4()))
+            document_add_params.extend(add_params)
     
     return document_add_params
+
 
 def parse_pptx_to_add_params(slides, retrieval_model, index_name, path):
     document_add_params = []
@@ -75,22 +64,9 @@ def parse_pptx_to_add_params(slides, retrieval_model, index_name, path):
                 texts = [node.text for node in paragraph.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}t')]
                 paragraph_text = ''.join(filter(None, texts))
                 if paragraph_text: 
-                        sentences = re.split('([。；;])', paragraph_text)
-                        new_sentences = []
-                        i = 0
-                        while i < len(sentences):
-                            if sentences[i]:
-                                if i + 1 < len(sentences):
-                                    new_sentences.append(sentences[i] + sentences[i + 1])
-                                else:
-                                    new_sentences.append(sentences[i])
-                            i += 2
-
-                        for sentence in new_sentences:
-                            if sentence: 
-                                add_params = get_document_add_params(retrieval_model, sentence,
-                                                                index_name, path, str(uuid.uuid4()))
-                                document_add_params.extend(add_params)
+                    add_params = get_document_add_params(retrieval_model, paragraph_text,
+                                                    index_name, path, str(uuid.uuid4()))
+                    document_add_params.extend(add_params)
 
     return document_add_params
 
