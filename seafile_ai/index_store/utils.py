@@ -50,6 +50,20 @@ def parse_md_to_add_params(content, retrieval_model, index_name, path):
 
         if stripped_paragraph.startswith("```"):
                 continue
+        
+        #Processing Table Text
+        if stripped_paragraph.startswith("|") and stripped_paragraph.endswith("|"):
+            table_rows = stripped_paragraph.split("\n")
+            for table_row in table_rows:
+                if set(table_row).issubset({'-', ':', '|', ' ', '\n'}):
+                    continue
+                cell_texts = [cell.strip() for cell in table_row.split("|") if cell]
+                for cell_text in cell_texts:
+                    if cell_text:
+                        cell_params = get_document_add_params(retrieval_model, cell_text.strip(), \
+                                                            index_name, path, str(uuid.uuid4()))
+                        document_add_params.extend(cell_params)
+            continue
  
         # Check each line against each of the header types (e.g., #, ##)
         for sep in headers_to_split_on:
@@ -59,7 +73,8 @@ def parse_md_to_add_params(content, retrieval_model, index_name, path):
                 ):
                 header_content = stripped_paragraph[len(sep):]
                 if header_content.strip():
-                    header_params = get_document_add_params(retrieval_model, header_content.strip(), index_name, path, str(uuid.uuid4()))
+                    header_params = get_document_add_params(retrieval_model, header_content.strip(), \
+                                                                    index_name, path, str(uuid.uuid4()))
                     document_add_params.extend(header_params)
                 
                 break
@@ -70,10 +85,17 @@ def parse_md_to_add_params(content, retrieval_model, index_name, path):
                 text = soup.get_text()
 
                 sentences = re.split('([。；;])', text)
-                if len(sentences) != 1:
-                    sentences = [sentences[i] + sentences[i+1] for i in range(0, len(sentences) - 1, 2) if sentences[i]]
+                new_sentences = []
+                i = 0
+                while i < len(sentences):
+                    if sentences[i]:
+                        if i + 1 < len(sentences):
+                            new_sentences.append(sentences[i] + sentences[i + 1])
+                        else:
+                            new_sentences.append(sentences[i])
+                    i += 2
 
-                for sentence in sentences:
+                for sentence in new_sentences:
                     if sentence: 
                         add_params = get_document_add_params(retrieval_model, sentence,
                                                         index_name, path, str(uuid.uuid4()))
