@@ -2,18 +2,15 @@ import os
 import logging
 
 from seafile_ai import config
-from seafile_ai.utils import get_file_content
-from seafile_ai.index_store.utils import get_document_add_params, parse_sdoc_to_add_params, parse_md_to_add_params
 from seafile_ai.utils import get_library_diff_files
-from seafile_ai.utils.extract import ExtractorFactory
+from seafile_ai.index_store.utils import parse_file_to_add_params
 
 logger = logging.getLogger(__name__)
 
 
-VIRTUAL_PATH_CHILDREN_ID = 'file_path'
 SEASEARCH_BULK_OPETATE_LIMIT = 2000
 SEASEARCH_QUERY_PATH_DOC_STEP = 20
-SUPPORT_FILE_TYPES = ['.sdoc', '.md', '.markdown']
+
 
 class RepoFileIndex(object):
     """
@@ -210,32 +207,8 @@ class RepoFileIndex(object):
     def add_files(self, index_name, files, retrieval_model, commit_id):
         bulk_add_params = []
         for file_info in files:
-            path = file_info[0]
-            obj_id = file_info[1]
-            mtime = file_info[2]
-            size = file_info[3]
-
-            # add path to index
-            filename = os.path.basename(path)
-            path_string, ext = os.path.splitext(path)
-            if ext.lower() not in SUPPORT_FILE_TYPES:
-                continue
-            add_params = get_document_add_params(retrieval_model, path_string, index_name, path,
-                                                 VIRTUAL_PATH_CHILDREN_ID)
+            add_params = parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id)
             bulk_add_params.extend(add_params)
-
-            file_content = b''
-            if size:
-                file_content = get_file_content(index_name, commit_id, obj_id, path)
-
-            if file_content:
-                ext_lower = ext.lower()
-                if ext_lower == '.sdoc':
-                    add_params = parse_sdoc_to_add_params(file_content, retrieval_model, index_name, path)
-                    bulk_add_params.extend(add_params)
-                elif ext_lower == '.md' or '.markdown':
-                    add_params = parse_md_to_add_params(file_content, retrieval_model, index_name, path)
-                    bulk_add_params.extend(add_params)
 
             # bulk add every 2000 params
             if len(bulk_add_params) >= SEASEARCH_BULK_OPETATE_LIMIT:

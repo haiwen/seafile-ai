@@ -1,129 +1,40 @@
 # -*- coding: utf-8 -*-
+import os
 import logging
-import numpy as np
-import uuid
-import re
-import markdown
-from bs4 import BeautifulSoup
+from seafile_ai.index_store.extract import ExtractorFactory, get_document_add_params
+
+from seafobj import fs_mgr, commit_mgr
 
 logger = logging.getLogger(__name__)
 
-REPO_FILE_INDEX_CONTENT_LIMIT = 200
 
-def retrieval_encode(retrieval_model, string_list, per_limit=1000):
-    step = per_limit
-    embeddings = np.empty((0, retrieval_model.dimension))
-    for pos in range(0, len(string_list), step):
-        texts = string_list[pos: pos + step]
-        embeddings = np.vstack((embeddings, retrieval_model.encode(texts)))
-    return embeddings
+VIRTUAL_PATH_CHILDREN_ID = 'file_path'
+SUPPORT_FILE_TYPES = ['.sdoc', '.md', '.markdown']
 
 
-def parse_sdoc_to_add_params(content, retrieval_model, index_name, path):
-    document_add_params = []
-    for children in content.get('children', []):
-        if children.get('type') == 'code_block':
-            continue
+def parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id):
+    path = file_info[0]
+    obj_id = file_info[1]
+    mtime = file_info[2]
+    size = file_info[3]
+    repo_id = index_name
+    bulk_add_params = []
+    path_string, ext = os.path.splitext(path)
+    if ext.lower() not in SUPPORT_FILE_TYPES:
+        return []
+    add_params = get_document_add_params(retrieval_model, path_string, index_name, path, VIRTUAL_PATH_CHILDREN_ID)
+    bulk_add_params.extend(add_params)
 
-        children_id = children.get('id')
-        combined_text_list = parse_children_text(children, [])
+    if size:
+        new_commit = commit_mgr.load_commit(repo_id, 0, commit_id)
+        version = new_commit.get_version()
 
-        if not combined_text_list:
-            continue
+        extractor = ExtractorFactory.get_extractor(os.path.basename(path))
+        add_params = extractor.extract(repo_id, version, obj_id, path, retrieval_model) if extractor else []
+        if add_params:
+            bulk_add_params.extend(add_params)
 
-        sentence = '。'.join(combined_text_list)
-        add_params = get_document_add_params(retrieval_model, sentence, index_name, path, children_id)
-        document_add_params.extend(add_params)
-
-    return document_add_params
-
-def parse_md_to_add_params(content, retrieval_model, index_name, path):
-    document_add_params = []
-    modified_content = re.sub(r'\n{2,}', '\n\n', content)
-    modified_content = re.sub(r'\u3000', '', modified_content)
-
-    paragraphs = modified_content.split("\n\n")
-    headers_to_split_on = ["#", "##", "###", "####", "#####", "######"]
-
-    for paragraph in paragraphs:
-        stripped_paragraph = paragraph.strip()
-
-        if stripped_paragraph.startswith("```"):
-                continue
-        
-        #Processing Table Text
-        if stripped_paragraph.startswith("|") and stripped_paragraph.endswith("|"):
-            table_rows = stripped_paragraph.split("\n")
-            for table_row in table_rows:
-                if set(table_row).issubset({'-', ':', '|', ' ', '\n'}):
-                    continue
-                cell_texts = [cell.strip() for cell in table_row.split("|") if cell]
-                for cell_text in cell_texts:
-                    if cell_text:
-                        cell_params = get_document_add_params(retrieval_model, cell_text.strip(), \
-                                                            index_name, path, str(uuid.uuid4()))
-                        document_add_params.extend(cell_params)
-            continue
- 
-        # Check each line against each of the header types (e.g., #, ##)
-        for sep in headers_to_split_on:
-            if stripped_paragraph.startswith(sep) and (
-                # Make sure the tag is followed by a space
-                len(stripped_paragraph) == len(sep) or stripped_paragraph[len(sep)] == ' '
-                ):
-                header_content = stripped_paragraph[len(sep):]
-                if header_content.strip():
-                    header_params = get_document_add_params(retrieval_model, header_content.strip(), \
-                                                                    index_name, path, str(uuid.uuid4()))
-                    document_add_params.extend(header_params)
-                
-                break
-        else:
-            if stripped_paragraph:
-                html = markdown.markdown(stripped_paragraph)
-                soup = BeautifulSoup(html, features="html.parser")
-                text = soup.get_text()
-
-                sentences = re.split('([。；;])', text)
-                new_sentences = []
-                i = 0
-                while i < len(sentences):
-                    if sentences[i]:
-                        if i + 1 < len(sentences):
-                            new_sentences.append(sentences[i] + sentences[i + 1])
-                        else:
-                            new_sentences.append(sentences[i])
-                    i += 2
-
-                for sentence in new_sentences:
-                    if sentence: 
-                        add_params = get_document_add_params(retrieval_model, sentence,
-                                                        index_name, path, str(uuid.uuid4()))
-                        document_add_params.extend(add_params)
-
-    return document_add_params
-
-def parse_children_text(children, text_list=[]):
-    text = children.get('text')
-    if text:
-        text_list.append(text)
-
-    children_list = children.get('children')
-    if children_list:
-        for children in children_list:
-            parse_children_text(children, text_list)
-
-    return text_list
-
-
-def get_document_add_params(retrieval_model, sentence, index_name, path, children_id):
-    add_params = []
-    embeddings = retrieval_encode(retrieval_model, [sentence])
-    index_info = {"index": {"_index": index_name}}
-    vector_info = {"path": path, "children_id": children_id, "vec": embeddings[0].tolist(), "content": sentence[:REPO_FILE_INDEX_CONTENT_LIMIT]}
-    add_params.append(index_info)
-    add_params.append(vector_info)
-    return add_params
+    return bulk_add_params
 
 
 def rank_fusion(doc_lists, weights=None, c=60):

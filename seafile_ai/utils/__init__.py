@@ -9,9 +9,7 @@ import hashlib
 from urllib.parse import quote as urlquote
 
 from seafile_ai.config import SECRET_KEY, FILE_SERVER
-from seafile_ai.utils.extract import ExtractorFactory
 from seafile_ai.utils.commit_differ import CommitDiffer
-
 
 from seafobj import fs_mgr, commit_mgr
 from seafobj.exceptions import GetObjectError
@@ -50,15 +48,6 @@ def get_file_by_token(path, token):
 
     if content:
         content = json.loads(content)
-    return content
-
-
-def get_file_content(repo_id, commit_id, obj_id, path):
-    new_commit = commit_mgr.load_commit(repo_id, 0, commit_id)
-    version = new_commit.get_version()
-    extractor = ExtractorFactory.get_extractor(os.path.basename(path))
-    content = extractor.extract(repo_id, version, obj_id, path) if extractor else None
-
     return content
 
 
