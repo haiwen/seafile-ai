@@ -43,7 +43,7 @@ def parse_pdf_to_add_params(content, retrieval_model, index_name, path):
     for line in lines:
         stripped_line = line.strip()
         if stripped_line:
-            add_params = get_document_add_params(retrieval_model, stripped_line, index_name, path, children_id)
+            add_params = get_document_add_params(retrieval_model, stripped_line, index_name, path, str(uuid.uuid4()))
             document_add_params.extend(add_params)
 
     return document_add_params
