@@ -12,6 +12,8 @@ from seafobj import fs_mgr
 
 logger = logging.getLogger(__name__)
 
+SDOC_SIZE_LIMITED = 1024 * 1024
+PDF_FILE_SIZE_LIMIT = 10 * 1024 * 1024
 
 def extract_sdoc_text(content):
     content = content.decode()
@@ -107,28 +109,18 @@ class Extractor(object):
 class ExtractorFactory(object):
     @classmethod
     def get_extractor(cls, filename):
-        if not cls.should_extract(filename):
-            return None
-
         suffix = get_file_suffix(filename)
         func = EXTRACT_TEXT_FUNCS.get(suffix, None)
         if not func:
             return None
         return Extractor(func, cls.get_file_size_limit(filename))
-    
-    @classmethod
-    def should_extract(cls, filename):
-        if config.INDEX_PDF:
-            return is_sdoc_file(filename) or is_pdf_file(filename)
-        else:
-            return is_sdoc_file(filename)
 
     @classmethod
     def get_file_size_limit(cls, filename):
         if is_sdoc_file(filename):
-            limit = config.SDOC_SIZE_LIMITED
+            limit = SDOC_SIZE_LIMITED
         elif is_pdf_file(filename):
-            limit = config.PDF_FILE_SIZE_LIMIT
+            limit = PDF_FILE_SIZE_LIMIT
         else:
             limit = -1
         return limit

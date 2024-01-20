@@ -39,44 +39,12 @@ def parse_sdoc_to_add_params(content, retrieval_model, index_name, path):
 def parse_pdf_to_add_params(content, retrieval_model, index_name, path):
     document_add_params = []
     lines = content.split("\n")
-    end_symbol_pattern = re.compile('。|\.|\?|？|;|；')
-    comma_symbol_pattern = re.compile(',|，')
-    seg_text = ''
-    # Text truncated by lines
-    pre_text = ''
     
     for line in lines:
-        no_punctuation = True
         stripped_line = line.strip()
-
         if stripped_line:
-            for end_symbol in re.finditer(end_symbol_pattern, stripped_line):
-                if pre_text:
-                    seg_text = pre_text + stripped_line[0:end_symbol.end()-1]
-                    pre_text = ''
-                else: 
-                    # -1 aimed at remove end_symbol
-                    seg_text = stripped_line[0:end_symbol.end()-1]
-                if seg_text:
-                    line_params = get_document_add_params(retrieval_model, seg_text,
-                                                        index_name, path, str(uuid.uuid4()))
-                    document_add_params.extend(line_params)
-                
-                seg_text = stripped_line[end_symbol.end():]
-                no_punctuation = False
-            if no_punctuation:
-                comm_mathes = [comma.start() for comma in re.finditer(comma_symbol_pattern, stripped_line)]
-                last_comma_position = comm_mathes[-1] if comm_mathes else None
-                if last_comma_position:
-                    pre_text = stripped_line[last_comma_position:]
-                    stripped_line = stripped_line[:last_comma_position]
-
-                add_params = get_document_add_params(retrieval_model, stripped_line,
-                                                    index_name, path, str(uuid.uuid4()))
-                document_add_params.extend(add_params)
-            # The finished content is truncated by two lines
-            if seg_text:
-                    pre_text = seg_text
+            add_params = get_document_add_params(retrieval_model, stripped_line, index_name, path, children_id)
+            document_add_params.extend(add_params)
 
     return document_add_params
 

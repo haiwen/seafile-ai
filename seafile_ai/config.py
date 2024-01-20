@@ -48,13 +48,6 @@ SEASEARCH_TOKEN = ''
 VECTOR_M = 1
 SHARD_NUM = 1
 
-### seasearch file size limit
-SDOC_SIZE_LIMITED = 1024 * 1024
-
-### seasearch pdf file config
-INDEX_PDF = True
-PDF_FILE_SIZE_LIMIT = 10 * 1024 * 1024
-
 # seafile-ai config database
 DB_HOST = ''
 DB_USER = ''
