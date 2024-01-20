@@ -47,8 +47,8 @@ def parse_docx_to_add_params(content, retrieval_model, index_name, path):
     for paragraph in root.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p'):
         texts = [node.text for node in paragraph.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')]
         paragraph_text = ''.join(filter(None, texts))
-        if paragraph_text:
-            add_params = get_document_add_params(retrieval_model, paragraph_text,
+        if paragraph_text.strip():
+            add_params = get_document_add_params(retrieval_model, paragraph_text.strip(),
                                             index_name, path, str(uuid.uuid4()))
             document_add_params.extend(add_params)
     
@@ -63,8 +63,8 @@ def parse_pptx_to_add_params(slides, retrieval_model, index_name, path):
             for paragraph in txBody.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}p'):
                 texts = [node.text for node in paragraph.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}t')]
                 paragraph_text = ''.join(filter(None, texts))
-                if paragraph_text: 
-                    add_params = get_document_add_params(retrieval_model, paragraph_text,
+                if paragraph_text.strip(): 
+                    add_params = get_document_add_params(retrieval_model, paragraph_text.strip(),
                                                     index_name, path, str(uuid.uuid4()))
                     document_add_params.extend(add_params)
 
