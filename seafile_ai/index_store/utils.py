@@ -70,7 +70,8 @@ def parse_md_to_add_params(content, retrieval_model, index_name, path):
                 text = soup.get_text()
 
                 sentences = re.split('([。；;])', text)
-                sentences = [sentences[i] + sentences[i+1] for i in range(0, len(sentences) - 1, 2) if sentences[i]]
+                if len(sentences) != 1:
+                    sentences = [sentences[i] + sentences[i+1] for i in range(0, len(sentences) - 1, 2) if sentences[i]]
 
                 for sentence in sentences:
                     if sentence: 
