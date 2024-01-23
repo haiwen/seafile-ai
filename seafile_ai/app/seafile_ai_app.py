@@ -11,6 +11,7 @@ from seafile_ai.utils.openai_api import OpenAIAPI
 from seafile_ai.index_task.filename_index_updater import RepoFilenameIndexUpdater
 from seafile_ai.utils.constants import REPO_STATUS_FILE_INDEX_NAME, REPO_STATUS_FILENAME_INDEX_NAME
 from seafile_ai.repo_data import RepoData
+from seafile_ai.event_redis import RedisClient
 
 
 class SeafileAIApp(object):
@@ -31,6 +32,8 @@ class SeafileAIApp(object):
         # for keyword search
         self.repo_status_filename_index = RepoStatusIndex(self.seasearch_api, REPO_STATUS_FILENAME_INDEX_NAME)
         self.repo_filename_index = RepoFileNameIndex(self.seasearch_api, self.repo_data)
+
+        self.redis = RedisClient(config.REDIS_HOST, config.REDIS_PORT, config.REDIS_PASSWORD)
 
         index_task_manager.init(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)

@@ -126,7 +126,7 @@ def question_answering_search_in_library():
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
-    
+
     query = data.get('query')
     repo = data.get('repo')
     if not query:
@@ -167,6 +167,13 @@ def question_answering_search_in_library():
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
+
+    message = json.dumps({'question': query, 'answer': answering_result})
+    channel_name = 'seafile_ai_qa_channel'
+    try:
+        flask_app.app.redis.publish(channel_name, message)
+    except Exception as e:
+        logger.warning('redis publish message: %s, to channel: %s, error: %s .', message, channel_name, e)
 
     return {'answering_result': answering_result, 'hit_files': [first_file_path]}, 200
 

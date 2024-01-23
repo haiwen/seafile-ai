@@ -64,6 +64,10 @@ MYSQL_PORT = 3306
 MYSQL_DB = 'seafile'
 MYSQL_UNIX_SOCKET = ''
 
+# redis
+REDIS_HOST = ''
+REDIS_PORT = 6379
+REDIS_PASSWORD = None
 
 CONF_DIR = '/opt/seafile/conf/'
 
