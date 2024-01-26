@@ -2,17 +2,14 @@ import os
 import logging
 
 from seafile_ai import config
-from seafile_ai.utils import get_file_content
-from seafile_ai.index_store.utils import get_document_add_params, parse_sdoc_to_add_params
 from seafile_ai.utils import get_library_diff_files
+from seafile_ai.index_store.utils import parse_file_to_add_params
 
 logger = logging.getLogger(__name__)
 
 
-VIRTUAL_PATH_CHILDREN_ID = 'file_path'
 SEASEARCH_BULK_OPETATE_LIMIT = 2000
 SEASEARCH_QUERY_PATH_DOC_STEP = 20
-SUPPORT_FILE_TYPES = ['.sdoc']
 
 
 class RepoFileIndex(object):
@@ -28,9 +25,6 @@ class RepoFileIndex(object):
                 "m": config.VECTOR_M
             },
             "path": {
-                "type": "keyword"
-            },
-            "children_id": {
                 "type": "keyword"
             },
             'content': {
@@ -67,7 +61,7 @@ class RepoFileIndex(object):
         data = {
             "query_field": "vec",
             "k": k,
-            "return_fields": ["path", "children_id", "content"],
+            "return_fields": ["path", "content"],
             "_source": False,
             "vector": vector
         }
@@ -85,7 +79,6 @@ class RepoFileIndex(object):
         for hit in hits:
             score = hit['_score']
             _id = hit['_id']
-            children_id = hit['fields']['children_id'][0]
             path = hit['fields']['path'][0]
             content = hit['fields']['content'][0]
 
@@ -98,8 +91,6 @@ class RepoFileIndex(object):
             if searched_result.get(path):
                 pre_score = searched_result[path]['max_score']
                 searched_result[path]['score'] = score + pre_score
-                if score > pre_score:
-                    searched_result[path]['children_id'] = children_id
                 continue
             filename = os.path.basename(path)
             searched_result[path] = {'repo_id': repo_id,
@@ -210,26 +201,8 @@ class RepoFileIndex(object):
     def add_files(self, index_name, files, retrieval_model, commit_id):
         bulk_add_params = []
         for file_info in files:
-            path = file_info[0]
-            obj_id = file_info[1]
-            mtime = file_info[2]
-            size = file_info[3]
-
-            # add path to index
-            path_string, ext = os.path.splitext(path)
-            if ext.lower() not in SUPPORT_FILE_TYPES:
-                continue
-            add_params = get_document_add_params(retrieval_model, path_string, index_name, path,
-                                                 VIRTUAL_PATH_CHILDREN_ID)
+            add_params = parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id)
             bulk_add_params.extend(add_params)
-
-            file_content = b''
-            if size:
-                file_content = get_file_content(index_name, commit_id, obj_id, path)
-
-            if file_content:
-                add_params = parse_sdoc_to_add_params(file_content, retrieval_model, index_name, path)
-                bulk_add_params.extend(add_params)
 
             # bulk add every 2000 params
             if len(bulk_add_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
