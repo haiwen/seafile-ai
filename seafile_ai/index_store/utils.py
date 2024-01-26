@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
-import json
+import os
 import logging
 import numpy as np
+from seafile_ai.index_store.extract import ExtractorFactory
+
+from seafobj import fs_mgr, commit_mgr
 
 logger = logging.getLogger(__name__)
 
+
+SUPPORT_FILE_TYPES = ['.sdoc', '.md', '.markdown']
 REPO_FILE_INDEX_CONTENT_LIMIT = 200
+
 
 def retrieval_encode(retrieval_model, string_list, per_limit=1000):
     step = per_limit
@@ -16,46 +22,42 @@ def retrieval_encode(retrieval_model, string_list, per_limit=1000):
     return embeddings
 
 
-def parse_sdoc_to_add_params(content, retrieval_model, index_name, path):
-    document_add_params = []
-    for children in content.get('children', []):
-        if children.get('type') == 'code_block':
-            continue
-
-        children_id = children.get('id')
-        combined_text_list = parse_children_text(children, [])
-
-        if not combined_text_list:
-            continue
-
-        sentence = '。'.join(combined_text_list)
-        add_params = get_document_add_params(retrieval_model, sentence, index_name, path, children_id)
-        document_add_params.extend(add_params)
-
-    return document_add_params
-
-
-def parse_children_text(children, text_list=[]):
-    text = children.get('text')
-    if text:
-        text_list.append(text)
-
-    children_list = children.get('children')
-    if children_list:
-        for children in children_list:
-            parse_children_text(children, text_list)
-
-    return text_list
-
-
-def get_document_add_params(retrieval_model, sentence, index_name, path, children_id):
+def get_document_add_params(retrieval_model, sentences, index_name, path):
     add_params = []
-    embeddings = retrieval_encode(retrieval_model, [sentence])
-    index_info = {"index": {"_index": index_name}}
-    vector_info = {"path": path, "children_id": children_id, "vec": embeddings[0].tolist(), "content": sentence[:REPO_FILE_INDEX_CONTENT_LIMIT]}
-    add_params.append(index_info)
-    add_params.append(vector_info)
+    embeddings = retrieval_encode(retrieval_model, sentences)
+    for i, sentence in enumerate(sentences):
+        index_info = {"index": {"_index": index_name}}
+        vector_info = {"path": path, "vec": embeddings[i].tolist(), "content": sentence[:REPO_FILE_INDEX_CONTENT_LIMIT]}
+        add_params.append(index_info)
+        add_params.append(vector_info)
     return add_params
+
+
+def parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id):
+    path = file_info[0]
+    obj_id = file_info[1]
+    mtime = file_info[2]
+    size = file_info[3]
+    repo_id = index_name
+    bulk_add_params = []
+    path_string, ext = os.path.splitext(path)
+    if ext.lower() not in SUPPORT_FILE_TYPES:
+        return []
+    add_params = get_document_add_params(retrieval_model, [path_string], index_name, path)
+    bulk_add_params.extend(add_params)
+
+    if size:
+        new_commit = commit_mgr.load_commit(repo_id, 0, commit_id)
+        version = new_commit.get_version()
+
+        extractor = ExtractorFactory.get_extractor(os.path.basename(path))
+        sentences = extractor.extract(repo_id, version, obj_id, path) if extractor else []
+
+        add_params = get_document_add_params(retrieval_model, sentences, index_name, path)
+        if add_params:
+            bulk_add_params.extend(add_params)
+
+    return bulk_add_params
 
 
 def rank_fusion(doc_lists, weights=None, c=60):
