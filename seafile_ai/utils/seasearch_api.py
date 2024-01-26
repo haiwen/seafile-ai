@@ -65,8 +65,10 @@ class SeaSearchAPI(object):
 
         return parse_response(response)
 
-    def m_search(self, data):
+    def m_search(self, data, unify_score=True):
         url = self.server + '/es/_msearch'
+        if unify_score:
+            url += '?unify_score=true'
         data = ndjson.dumps(data)
         response = requests.post(url, headers=self.headers, data=data, timeout=self.timeout)
         return parse_response(response)
