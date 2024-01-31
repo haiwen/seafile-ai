@@ -2,10 +2,9 @@ import json
 import os
 import logging
 
-from seafile_ai.utils import get_library_diff_files
+from seafile_ai.utils import get_library_diff_files, md5, is_sys_dir_or_file
 from seafile_ai import config
 from seafile_ai.utils.constants import REPO_FILENAME_INDEX_PREFIX
-from seafile_ai.utils import md5
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +193,10 @@ class RepoFileNameIndex(object):
             obj_id = file_info[1]
             mtime = file_info[2]
             size = file_info[3]
+
+            if is_sys_dir_or_file(path):
+                continue
+
             suffix = self.get_file_suffix(path)
             filename = os.path.basename(path)
             if suffix:
@@ -225,6 +228,9 @@ class RepoFileNameIndex(object):
             obj_id = dir[1]
             mtime = dir[2]
             size = dir[3]
+
+            if is_sys_dir_or_file(path):
+                continue
 
             if path == '/':
                 repo = self.repo_data.get_repo_name_mtime_size(repo_id)
@@ -258,6 +264,8 @@ class RepoFileNameIndex(object):
         delete_params = []
         for file in files:
             path = file[0]
+            if is_sys_dir_or_file(path):
+                continue
             delete_params.append({'delete': {'_id': md5(path), '_index': index_name}})
             # bulk add every 2000 params
             if len(delete_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
@@ -270,6 +278,9 @@ class RepoFileNameIndex(object):
         delete_params = []
         for dir in dirs:
             path = dir
+
+            if is_sys_dir_or_file(path):
+                continue
             delete_params.append({'delete': {'_id': md5(path), '_index': index_name}})
             # bulk add every 2000 params
             if len(delete_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
@@ -304,6 +315,8 @@ class RepoFileNameIndex(object):
 
     def delete_files_by_deleted_dirs(self, index_name, dirs):
         for directory in dirs:
+            if is_sys_dir_or_file(directory):
+                continue
             per_size = SEASEARCH_BULK_OPETATE_LIMIT
             start = 0
             delete_params = []

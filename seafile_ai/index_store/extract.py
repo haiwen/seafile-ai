@@ -30,9 +30,9 @@ def parse_sdoc_to_spilt_sentences(content):
 
 
 def parse_children_text(children, text_list=[]):
-    text = children.get('text')
-    if text:
-        text_list.append(text)
+    text = children.get('text', '')
+    if text and text.strip():
+        text_list.append(text.strip())
 
     children_list = children.get('children')
     if children_list:

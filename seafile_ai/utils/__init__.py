@@ -17,6 +17,8 @@ from seafobj.exceptions import GetObjectError
 
 logger = logging.getLogger(__name__)
 
+SYS_DIRS = ['images', '_Internal']
+
 
 def gen_headers(repo_id, username):
     access_token = get_server_token(repo_id, username)
@@ -118,3 +120,9 @@ def init_logging(args):
 
 def md5(text):
     return hashlib.md5(text.encode()).hexdigest()
+
+
+def is_sys_dir_or_file(path):
+    if path.split('/')[1] in SYS_DIRS:
+        return True
+    return False

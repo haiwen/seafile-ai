@@ -39,16 +39,13 @@ class IndexManager(object):
         with self._db_session_class() as db_session:
             return db_session.query(IndexRepo).filter(IndexRepo.repo_id == repo_id).first()
 
-    def list_index_repos_by_time(self, check_time):
+    def list_index_repos(self):
         with self._db_session_class() as db_session:
             sql = """
-                    SELECT `repo_id`
-                    FROM index_repo WHERE `updated`<:check_time
+                    SELECT `repo_id` FROM index_repo
                     """
 
-            index_repos = db_session.execute(text(sql), {
-                'check_time': check_time,
-            })
+            index_repos = db_session.execute(text(sql))
             return index_repos
 
     def get_index_repos_by_size(self, start, size):
@@ -81,6 +78,9 @@ class IndexManager(object):
 
             from_commit = repo_status.from_commit
             to_commit = repo_status.to_commit
+
+            if new_commit_id == from_commit:
+                return
 
             commit_id = from_commit
             if repo_status.need_recovery():

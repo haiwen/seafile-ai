@@ -2,8 +2,8 @@ import os
 import logging
 
 from seafile_ai import config
-from seafile_ai.utils import get_library_diff_files
 from seafile_ai.index_store.utils import parse_file_to_add_params
+from seafile_ai.utils import get_library_diff_files, is_sys_dir_or_file
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ class RepoFileIndex(object):
     def delete_files(self, index_name, files):
         step = SEASEARCH_QUERY_PATH_DOC_STEP
         for pos in range(0, len(files), step):
-            paths = [file[0] for file in files[pos: pos + step]]
+            paths = [file[0] for file in files[pos: pos + step] if not is_sys_dir_or_file(file[0])]
             per_size = SEASEARCH_BULK_OPETATE_LIMIT
             start = 0
             delete_params = []
@@ -184,6 +184,8 @@ class RepoFileIndex(object):
 
     def delete_files_by_deleted_dirs(self, index_name, dirs):
         for directory in dirs:
+            if is_sys_dir_or_file(directory):
+                continue
             per_size = SEASEARCH_BULK_OPETATE_LIMIT
             start = 0
             delete_params = []
@@ -201,6 +203,9 @@ class RepoFileIndex(object):
     def add_files(self, index_name, files, retrieval_model, commit_id):
         bulk_add_params = []
         for file_info in files:
+            path = file_info[0]
+            if is_sys_dir_or_file(path):
+                continue
             add_params = parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id)
             bulk_add_params.extend(add_params)
 
