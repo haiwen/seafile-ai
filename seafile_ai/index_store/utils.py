@@ -3,13 +3,13 @@ import os
 import logging
 import numpy as np
 from seafile_ai.index_store.extract import ExtractorFactory
+from seafile_ai.config import SUPPORT_INDEX_FILE_TYPES
 
 from seafobj import fs_mgr, commit_mgr
 
 logger = logging.getLogger(__name__)
 
 
-SUPPORT_FILE_TYPES = ['.sdoc', '.md', '.markdown', '.doc', '.docx', '.ppt', '.pptx']
 REPO_FILE_INDEX_CONTENT_LIMIT = 200
 
 
@@ -41,7 +41,7 @@ def parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id):
     repo_id = index_name
     bulk_add_params = []
     path_string, ext = os.path.splitext(path)
-    if ext.lower() not in SUPPORT_FILE_TYPES:
+    if ext.lower() not in SUPPORT_INDEX_FILE_TYPES:
         return []
     add_params = get_document_add_params(retrieval_model, [path_string], index_name, path)
     bulk_add_params.extend(add_params)

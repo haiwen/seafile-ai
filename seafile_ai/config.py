@@ -64,6 +64,17 @@ MYSQL_PORT = 3306
 MYSQL_DB = 'seafile'
 MYSQL_UNIX_SOCKET = ''
 
+# repo file index support file types
+SUPPORT_INDEX_FILE_TYPES = [
+    '.sdoc',
+    '.md',
+    '.markdown',
+    '.doc',
+    '.docx',
+    '.ppt',
+    '.pptx'
+]
+
 
 CONF_DIR = '/opt/seafile/conf/'
 
