@@ -82,8 +82,8 @@ CONF_DIR = '/opt/seafile/conf/'
 OPENAI_PROXY_URL = ''
 
 try:
-    if os.path.exists('local_settings.py'):
-        from local_settings import *
+    if os.path.exists('seafile_ai_settings.py'):
+        from seafile_ai_settings import *
 except:
     pass
 
