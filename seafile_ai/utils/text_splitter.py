@@ -132,10 +132,8 @@ def _split_text_with_regex(text, separator, keep_separator):
         if keep_separator:
             # The parentheses in the pattern keep the delimiters in the result.
             _splits = re.split(f"({separator})", text)
-            splits = [_splits[i] + _splits[i + 1] for i in range(1, len(_splits), 2)]
-            if len(_splits) % 2 == 0:
-                splits += _splits[-1:]
-            splits = [_splits[0]] + splits
+            splits = [_splits[i - 1] + _splits[i] for i in range(1, len(_splits), 2)]
+            splits = splits + _splits[-1:]
         else:
             splits = re.split(separator, text)
     else:
@@ -162,7 +160,7 @@ class RecursiveCharacterTextSplitter(object):
         strip_whitespace: bool = True
     ) -> None:
         """Create a new TextSplitter."""
-        self._separators = separators or ["\n\n", "\n", " ", ""]
+        self._separators = separators or ["\n\n", "\n", " ", "。|！|？", "\.|\!|\?"]
         self._is_separator_regex = is_separator_regex
 
         if chunk_overlap > chunk_size:
@@ -220,7 +218,10 @@ class RecursiveCharacterTextSplitter(object):
         return self._split_text(text, self._separators)
 
     def _join_docs(self, docs, separator):
-        text = separator.join(docs)
+        if self._keep_separator:
+            text = separator.join(docs)
+        else:
+            text = ''.join(docs)
         if self._strip_whitespace:
             text = text.strip()
         if text == "":
