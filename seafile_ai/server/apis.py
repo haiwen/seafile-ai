@@ -105,7 +105,7 @@ def search():
     try:
         count = int(data.get('count'))
     except:
-        count = 10
+        count = 20
 
     if search_filename_only:
         results = index_task_manager.keyword_search(query, repos, count, suffixes)
@@ -135,7 +135,7 @@ def question_answering_search_in_library():
     if not repo:
         return {'error_msg': 'repo_id invalid.'}, 400
     
-    count = int(data.get('count', 10))
+    count = int(data.get('count', 20))
 
     files = index_task_manager.hybrid_search(query, repo, count)
     sdoc_files = [file for file in files if file['fullpath'].endswith('.sdoc')]

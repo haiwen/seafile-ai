@@ -69,7 +69,7 @@ class IndexManager(object):
 
         logger.info('library: %s, save library file to SeaSearch success', repo_id)
 
-    def search_children_in_library(self, query, repo, retrieval_model, repo_file_index, count=10):
+    def search_children_in_library(self, query, repo, retrieval_model, repo_file_index, count=20):
         return repo_file_index.search_files(repo, config.RETRIEVAL_NUM, retrieval_model, query)[:count]
 
     def update_library_sdoc_index(self, repo_id, retrieval_model, repo_file_index, repo_status_index, new_commit_id):
