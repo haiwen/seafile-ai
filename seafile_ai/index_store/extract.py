@@ -3,6 +3,13 @@ import os
 import json
 import logging
 from io import BytesIO
+
+from unstructured.partition.pptx import partition_pptx
+from unstructured.partition.doc import partition_doc
+from unstructured.partition.docx import partition_docx
+from unstructured.partition.ppt import partition_ppt
+from unstructured.staging.base import convert_to_text
+
 from seafile_ai.utils.constants import ZERO_OBJ_ID
 from seafile_ai.utils.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
@@ -79,30 +86,47 @@ def parse_md_to_spilt_sentences(content):
     return sentences
 
 
-def parse_office_to_split_sentences(content):
-    from unstructured.partition.auto import partition
-    from unstructured.staging.base import convert_to_text
-
-    doc_elements = partition(file=BytesIO(content))
-
-    chunk_size = 100
+def recursive_split_text_to_sentences(text, chunk_size=100):
     recursive_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=0)
-    doc_text = convert_to_text(doc_elements)
-    if len(doc_text) > chunk_size:
-        sentences = recursive_splitter.split_text(doc_text)
+    if len(text) > chunk_size:
+        sentences = recursive_splitter.split_text(text)
     else:
-        sentences = [doc_text]
+        sentences = [text]
 
     return sentences
+
+
+def parse_doc_to_split_sentences(content):
+    doc_elements = partition_doc(file=BytesIO(content))
+    doc_text = convert_to_text(doc_elements)
+    return recursive_split_text_to_sentences(doc_text)
+
+
+def parse_docx_to_split_sentences(content):
+    doc_elements = partition_docx(file=BytesIO(content))
+    doc_text = convert_to_text(doc_elements)
+    return recursive_split_text_to_sentences(doc_text)
+
+
+def parse_ppt_to_split_sentences(content):
+    doc_elements = partition_ppt(file=BytesIO(content))
+    doc_text = convert_to_text(doc_elements)
+    return recursive_split_text_to_sentences(doc_text)
+
+
+def parse_pptx_to_split_sentences(content):
+    doc_elements = partition_pptx(file=BytesIO(content))
+    doc_text = convert_to_text(doc_elements)
+    return recursive_split_text_to_sentences(doc_text)
 
 
 EXTRACT_TEXT_FUNCS = {
     'sdoc': parse_sdoc_to_spilt_sentences,
     'md': parse_md_to_spilt_sentences,
-    'doc': parse_office_to_split_sentences,
-    'docx': parse_office_to_split_sentences,
-    'ppt': parse_office_to_split_sentences,
-    'pptx': parse_office_to_split_sentences
+    'doc': parse_doc_to_split_sentences,
+    'docx': parse_docx_to_split_sentences,
+    'ppt': parse_ppt_to_split_sentences,
+    'pptx': parse_pptx_to_split_sentences
 }
 
 
