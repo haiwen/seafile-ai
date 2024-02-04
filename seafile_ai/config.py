@@ -72,7 +72,8 @@ SUPPORT_INDEX_FILE_TYPES = [
     '.doc',
     '.docx',
     '.ppt',
-    '.pptx'
+    '.pptx',
+    '.pdf',
 ]
 
 
