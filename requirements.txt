@@ -21,3 +21,4 @@ html2text
 ndjson
 pytz
 unstructured[docx,pptx]
+PyPDF2
