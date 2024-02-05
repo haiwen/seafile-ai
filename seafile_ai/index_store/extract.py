@@ -30,7 +30,8 @@ office_suffixes = [
     'doc',
     'docx',
     'ppt',
-    'pptx'
+    'pptx',
+    'pdf',
 ]
 
 
@@ -120,13 +121,27 @@ def parse_pptx_to_split_sentences(content):
     return recursive_split_text_to_sentences(doc_text)
 
 
+def parse_pdf_to_split_sentences(content):
+    import PyPDF2
+
+    sentences = []
+    pdf_reader = PyPDF2.PdfReader(BytesIO(content))
+    for page in pdf_reader.pages:
+        text = page.extract_text()
+        split_sentences = recursive_split_text_to_sentences(text)
+        sentences.extend(split_sentences)
+
+    return sentences
+
+
 EXTRACT_TEXT_FUNCS = {
     'sdoc': parse_sdoc_to_spilt_sentences,
     'md': parse_md_to_spilt_sentences,
     'doc': parse_doc_to_split_sentences,
     'docx': parse_docx_to_split_sentences,
     'ppt': parse_ppt_to_split_sentences,
-    'pptx': parse_pptx_to_split_sentences
+    'pptx': parse_pptx_to_split_sentences,
+    'pdf': parse_pdf_to_split_sentences,
 }
 
 
