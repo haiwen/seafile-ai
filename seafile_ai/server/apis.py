@@ -135,7 +135,7 @@ def question_answering_search_in_library():
     if not repo:
         return {'error_msg': 'repo_id invalid.'}, 400
     
-    count = int(data.get('count', 20))
+    count = int(data.get('count', 10))
 
     files = index_task_manager.hybrid_search(query, repo, count)
     sdoc_files = [file for file in files if file['fullpath'].endswith('.sdoc')]
