@@ -105,7 +105,7 @@ def search():
     try:
         count = int(data.get('count'))
     except:
-        count = 10
+        count = 20
 
     if search_filename_only:
         results = index_task_manager.keyword_search(query, repos, count, suffixes)
