@@ -16,14 +16,14 @@ class OpenAIAPI:
         json_data = {
             'model': 'gpt-3.5-turbo-16k',
             'messages': [
-                    {
-                        "role": "system",
-                        "content": sys_input,
-                    },
-                    {
-                        "role": "user",
-                        "content": user_input
-                    }
+                {
+                    "role": "system",
+                    "content": sys_input,
+                },
+                {
+                    "role": "user",
+                    "content": user_input
+                }
             ],
             'temperature': temperature
         }
