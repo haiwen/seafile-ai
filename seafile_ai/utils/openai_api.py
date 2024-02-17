@@ -12,14 +12,18 @@ class OpenAIAPI:
         self.openai_url = openai_url.rstrip('/') + '/api/v1/chat-completions/create'
         self.timeout = timeout
 
-    def chat_completions(self, prompt, temperature):
+    def chat_completions(self, sys_input, user_input, temperature):
         json_data = {
-            'model': 'gpt-3.5-turbo',
+            'model': 'gpt-3.5-turbo-16k',
             'messages': [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                    {
+                        "role": "system",
+                        "content": sys_input,
+                    },
+                    {
+                        "role": "user",
+                        "content": user_input
+                    }
             ],
             'temperature': temperature
         }

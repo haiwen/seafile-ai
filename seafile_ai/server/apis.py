@@ -141,26 +141,32 @@ def question_answering_search_in_library():
     sdoc_files = [file for file in files if file['fullpath'].endswith('.sdoc')]
     if not sdoc_files:
         return {'answering_result': '', 'hit_files': []}, 200
-
-    first_file_path = sdoc_files[0].get('fullpath')
+    
+    if len(sdoc_files) > 3:
+        sdoc_files = sdoc_files[:3]
+    sdocs_path = [sdoc.get('fullpath') for sdoc in sdoc_files]
 
     repo_id = repo[0]
     origin_repo_id = repo[1]
     origin_path = repo[2]
     if origin_repo_id:
         repo_id = origin_repo_id
-
-    res = flask_app.app.seafile_api.get_file_download_token(repo_id, first_file_path)
-    download_token = res.get('download_token')
-    content_sdoc = get_file_by_token(first_file_path, download_token)
-    content_md = sdoc2md(content_sdoc)
+    
+    content_mds = []
+    for sdoc_path in sdocs_path:
+        res = flask_app.app.seafile_api.get_file_download_token(repo_id, sdoc_path)
+        download_token = res.get('download_token')
+        content_sdoc = get_file_by_token(sdoc_path, download_token)
+        content_md = sdoc2md(content_sdoc)
+        content_mds.append(content_md)
 
     if origin_path:
-        first_file_path = first_file_path.split(origin_path)[-1]
+        sdocs_path = [path.split(origin_path)[-1] for path in sdoc_path]
 
     try:
-        prompt = open("static/prompts/question_answering_search.txt").read().format(content_md, query)
-        answering_result = flask_app.app.openai_api.chat_completions(prompt, 0)
+        sys_input = open("static/prompts/question_answering_search.txt").read().format(
+            context="\n\n".join([f"[[citation:{i+1}]] {c}" for i, c in enumerate(content_mds)]))
+        answering_result = flask_app.app.openai_api.chat_completions(sys_input, query, 0.9)
     except json.JSONDecodeError:
         logger.error('Error decoding JSON.')
         answering_result = 'false'
@@ -168,7 +174,7 @@ def question_answering_search_in_library():
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    return {'answering_result': answering_result, 'hit_files': [first_file_path]}, 200
+    return {'answering_result': answering_result, 'hit_files': sdocs_path}, 200
 
 
 @flask_app.route('/api/v1/library-sdoc-index/', methods=['PUT', 'DELETE'])
