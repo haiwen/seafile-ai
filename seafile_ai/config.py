@@ -24,6 +24,11 @@ ENABLE_SYS_LOG = False
 INDEX_MANAGER_WORKERS = 2
 INDEX_TASK_EXPIRE_TIME = 30 * 60
 
+RETRIEVAL_NUM = 20
+
+# embedding dimension
+DIMENSION = 768
+
 THRESHOLD = 0.01
 
 ## seasearch
@@ -35,12 +40,8 @@ SHARD_NUM = 1
 ## sea-embedding
 SEA_EMBEDDING_SERVER = ''
 SEA_EMBEDDING_KEY = ''
-SEA_EMBEDDING_DIMENSION = 768
-RETRIEVAL_NUM = 20
 
 EMBEDDING_API_TYPE = 'sea-embedding'
-if EMBEDDING_API_TYPE == 'sea-embedding':
-    DIMENSION = SEA_EMBEDDING_DIMENSION
 
 # seafile-ai config database
 DB_HOST = ''
