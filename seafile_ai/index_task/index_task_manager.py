@@ -72,7 +72,6 @@ class IndexTaskManager:
         self.check_task_lock = Lock()   # lock access to readable_id2task_map
         self.sched = GeventScheduler()
         self.app = None
-        self.embedding_api = None
         self.conf = {
             'workers': config.INDEX_MANAGER_WORKERS,
             'expire_time': config.INDEX_TASK_EXPIRE_TIME
