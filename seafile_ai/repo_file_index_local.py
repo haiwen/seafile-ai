@@ -16,7 +16,6 @@ from seafile_ai.utils.seasearch_api import SeaSearchAPI
 from seafile_ai.index_store.repo_status_index import RepoStatusIndex
 from seafile_ai.index_store.repo_file_index import RepoFileIndex
 from seafile_ai.utils.constants import REPO_STATUS_FILE_INDEX_NAME
-from seafile_ai.models.pretrained_model_manager import PretrainedModelManager
 
 MAX_ERRORS_ALLOWED = 1000
 logger = logging.getLogger('seafile_ai')
@@ -29,11 +28,11 @@ NO_TASKS = False
 class RepoFileIndexLocal(object):
     """ Independent update repo file index.
     """
-    def __init__(self, index_manager, repo_status_index, repo_file_index, retrieval_model, repo_data, workers=3):
+    def __init__(self, index_manager, repo_status_index, repo_file_index, embedding_api, repo_data, workers=3):
         self.index_manager = index_manager
         self.repo_status_index = repo_status_index
         self.repo_file_index = repo_file_index
-        self.retrieval_model = retrieval_model
+        self.embedding_api = embedding_api
         self.repo_data = repo_data
         self.error_counter = 0
         self.worker_list = []
@@ -107,7 +106,7 @@ class RepoFileIndexLocal(object):
                 repo_id = queue_data[0]
                 commit_id = queue_data[1]
                 try:
-                    self.index_manager.create_library_sdoc_index(repo_id, self.retrieval_model, self.repo_file_index, self.repo_status_index, commit_id)
+                    self.index_manager.create_library_sdoc_index(repo_id, self.embedding_api, self.repo_file_index, self.repo_status_index, commit_id)
                 except Exception as e:
                     logger.exception('Repo file index error: %s, repo_id: %s' % (e, repo_id), exc_info=True)
                     self.incr_error()
@@ -150,13 +149,16 @@ def start_index_local():
                                           config.DB_NAME, config.DB_UNIX_SOCKET)
     repo_status_index = RepoStatusIndex(seasearch_api, REPO_STATUS_FILE_INDEX_NAME)
     repo_file_index = RepoFileIndex(seasearch_api)
-    retrieval_model = PretrainedModelManager.create_retrieval_model(config)
+    embedding_api = None
+    if config.EMBEDDING_API_TYPE == 'sea-embedding':
+        from seafile_ai.utils.sea_embedding_api import SeaEmbeddingAPI
+        embedding_api = SeaEmbeddingAPI(config.APP_NAME, config.SEA_EMBEDDING_SERVER)
     repo_data = RepoData(config.MYSQL_HOST, config.MYSQL_PORT, config.MYSQL_USER, config.MYSQL_PASSWORD,
                          config.MYSQL_DB, config.MYSQL_UNIX_SOCKET)
     workers = config.INDEX_MANAGER_WORKERS
 
     try:
-        index_local = RepoFileIndexLocal(index_manager, repo_status_index, repo_file_index, retrieval_model, repo_data, workers)
+        index_local = RepoFileIndexLocal(index_manager, repo_status_index, repo_file_index, embedding_api, repo_data, workers)
     except Exception as e:
         logger.error("Index repo file process init error: %s." % e)
         return
