@@ -24,22 +24,6 @@ ENABLE_SYS_LOG = False
 INDEX_MANAGER_WORKERS = 2
 INDEX_TASK_EXPIRE_TIME = 30 * 60
 
-# model settings
-MODEL_CACHE_DIR = ''
-
-## retrieval model settings
-RETRIEVAL_SOURCE = 'alibaba'
-RETRIEVAL_MODEL_ID = 'damo/nlp_corom_sentence-embedding_chinese-base'
-RETRIEVAL_METRIC = 'L2'
-DIMENSION = 768
-RETRIEVAL_NUM = 20
-RETRIEVAL_MODEL_PATH = None
-
-## rerank model settings
-RERANK_SOURCE = 'alibaba'
-RERANK_MODEL_ID = 'damo/nlp_rom_passage-ranking_chinese-base'
-RERANK_MODEL_PATH = None
-
 THRESHOLD = 0.01
 
 ## seasearch
@@ -47,6 +31,15 @@ SEASEARCH_SERVER = 'http://127.0.0.1:4080'
 SEASEARCH_TOKEN = ''
 VECTOR_M = 1
 SHARD_NUM = 1
+
+## sea-embedding
+SEA_EMBEDDING_SERVER = ''
+SEA_EMBEDDING_KEY = ''
+SEA_EMBEDDING_DIMENSION = 768
+
+EMBEDDING_API_TYPE = 'sea-embedding'
+if EMBEDDING_API_TYPE == 'sea-embedding':
+    DIMENSION = SEA_EMBEDDING_DIMENSION
 
 # seafile-ai config database
 DB_HOST = ''
@@ -94,6 +87,3 @@ try:
     from seafile_ai_settings import *
 except ImportError as e:
     pass
-
-
-os.makedirs(MODEL_CACHE_DIR, exist_ok=True)

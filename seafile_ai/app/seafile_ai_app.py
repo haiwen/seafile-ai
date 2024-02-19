@@ -1,7 +1,6 @@
 from seafile_ai.index_task.index_task_manager import index_task_manager
 from seafile_ai.index_store.index_manager import IndexManager
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
-from seafile_ai.models.pretrained_model_manager import PretrainedModelManager
 from seafile_ai.utils.seafile_api import SeafileAPI
 from seafile_ai.utils.seasearch_api import SeaSearchAPI
 from seafile_ai.index_store.repo_status_index import RepoStatusIndex
@@ -18,11 +17,15 @@ class SeafileAIApp(object):
         self.config = config
         self.index_manager = IndexManager(config.DB_HOST, config.DB_PORT, config.DB_USER, config.DB_PASSWORD,
                                           config.DB_NAME, config.DB_UNIX_SOCKET)
-        self.retrieval_model = PretrainedModelManager.create_retrieval_model(config)
         self.seafile_api = SeafileAPI(config.APP_NAME, config.SEAFILE_SERVER)
         self.seasearch_api = SeaSearchAPI(config.SEASEARCH_SERVER, config.SEASEARCH_TOKEN)
         self.repo_data = RepoData(config.MYSQL_HOST, config.MYSQL_PORT, config.MYSQL_USER, config.MYSQL_PASSWORD,
                                   config.MYSQL_DB, config.MYSQL_UNIX_SOCKET)
+        self.openai_api = OpenAIAPI(config.OPENAI_PROXY_URL)
+        self.embedding_api = None
+        if config.EMBEDDING_API_TYPE == 'sea-embedding':
+            from seafile_ai.utils.sea_embedding_api import SeaEmbeddingAPI
+            self.embedding_api = SeaEmbeddingAPI(config.APP_NAME, config.SEA_EMBEDDING_SERVER)
 
         # for semantic search
         self.repo_status_index = RepoStatusIndex(self.seasearch_api, REPO_STATUS_FILE_INDEX_NAME)
@@ -34,9 +37,6 @@ class SeafileAIApp(object):
 
         index_task_manager.init(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
-
-        self.openai_api = OpenAIAPI(config.OPENAI_PROXY_URL)
-
         self._repo_filename_index_updater = RepoFilenameIndexUpdater(self)
 
     def serve_forever(self):

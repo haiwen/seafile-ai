@@ -61,18 +61,18 @@ class IndexManager(object):
             })
             return index_repos
 
-    def create_library_sdoc_index(self, repo_id, retrieval_model, repo_file_index, repo_status_index, commit_id):
+    def create_library_sdoc_index(self, repo_id, embedding_api, repo_file_index, repo_status_index, commit_id):
         repo_status_index.begin_update_repo(repo_id, ZERO_OBJ_ID, commit_id)
         repo_file_index.create_index(repo_id)
-        repo_file_index.add(repo_id, ZERO_OBJ_ID, commit_id, retrieval_model)
+        repo_file_index.add(repo_id, ZERO_OBJ_ID, commit_id, embedding_api)
         repo_status_index.finish_update_repo(repo_id, commit_id)
 
         logger.info('library: %s, save library file to SeaSearch success', repo_id)
 
-    def search_children_in_library(self, query, repo, retrieval_model, repo_file_index, count=20):
-        return repo_file_index.search_files(repo, config.RETRIEVAL_NUM, retrieval_model, query)[:count]
+    def search_children_in_library(self, query, repo, embedding_api, repo_file_index, count=20):
+        return repo_file_index.search_files(repo, config.RETRIEVAL_NUM, embedding_api, query)[:count]
 
-    def update_library_sdoc_index(self, repo_id, retrieval_model, repo_file_index, repo_status_index, new_commit_id):
+    def update_library_sdoc_index(self, repo_id, embedding_api, repo_file_index, repo_status_index, new_commit_id):
         try:
             repo_status = repo_status_index.get_repo_status_by_id(repo_id)
 
@@ -90,14 +90,14 @@ class IndexManager(object):
                 if not is_exist:
                     repo_file_index.create_index(repo_id)
 
-                repo_file_index.update(repo_id, from_commit, to_commit, retrieval_model)
+                repo_file_index.update(repo_id, from_commit, to_commit, embedding_api)
 
                 # time sleep for SeaSearch save data
                 time.sleep(1)
 
                 commit_id = to_commit
             repo_status_index.begin_update_repo(repo_id, commit_id, new_commit_id)
-            repo_file_index.update(repo_id, commit_id, new_commit_id, retrieval_model)
+            repo_file_index.update(repo_id, commit_id, new_commit_id, embedding_api)
             repo_status_index.finish_update_repo(repo_id, new_commit_id)
 
             self.update_index_repo_db(repo_id)
@@ -156,9 +156,9 @@ class IndexManager(object):
         repo_filename_index.delete_index_by_index_name(repo_filename_index_name)
         repo_status_filename_index.delete_documents_by_repo(repo_id)
 
-    def hybrid_search(self, query, repo, repo_filename_index, retrieval_model, repo_file_index, count):
+    def hybrid_search(self, query, repo, repo_filename_index, embedding_api, repo_file_index, count):
         keyword_files = self.keyword_search(query, [repo], repo_filename_index, count)
-        similar_files = self.search_children_in_library(query, repo, retrieval_model, repo_file_index, count)
+        similar_files = self.search_children_in_library(query, repo, embedding_api, repo_file_index, count)
         fused_files = rank_fusion([keyword_files, similar_files])
 
         return filter_hybrid_searched_files(fused_files)[:count]

@@ -49,15 +49,14 @@ class RepoFileIndex(object):
     def check_index(self, index_name):
         return self.seasearch_api.check_index_mapping(index_name).get('is_exist')
 
-    def search_files(self, repo, k, model, query):
+    def search_files(self, repo, k, embedding_api, query):
         repo_id = repo[0]
         origin_repo_id = repo[1]
         origin_path = repo[2]
 
         if origin_repo_id:
             repo_id = origin_repo_id
-
-        vector = model.encode([query])[0].tolist()
+        vector = embedding_api.embeddings(query)['data'][0]['embedding']
         data = {
             "query_field": "vec",
             "k": k,
@@ -108,10 +107,10 @@ class RepoFileIndex(object):
     def delete_index_by_index_name(self, index_name):
         self.seasearch_api.delete_index_by_name(index_name)
 
-    def add(self, index_name, old_commit_id, new_commit_id, retrieval_model):
-        self.update(index_name, old_commit_id, new_commit_id, retrieval_model)
+    def add(self, index_name, old_commit_id, new_commit_id, embedding_api):
+        self.update(index_name, old_commit_id, new_commit_id, embedding_api)
 
-    def update(self, index_name, old_commit_id, new_commit_id, retrieval_model):
+    def update(self, index_name, old_commit_id, new_commit_id, embedding_api):
         """
         old_commit_id is ZERO_OBJ_ID that means create repo file index
         """
@@ -123,7 +122,7 @@ class RepoFileIndex(object):
         self.delete_files_by_deleted_dirs(index_name, deleted_dirs)
 
         need_added_files = added_files + modified_files
-        self.add_files(index_name, need_added_files, retrieval_model, new_commit_id)
+        self.add_files(index_name, need_added_files, embedding_api, new_commit_id)
 
     def query_data_by_paths(self, index_name, path_list, start, size):
         dsl = {
@@ -200,13 +199,13 @@ class RepoFileIndex(object):
                 if len(hits) < per_size:
                     break
 
-    def add_files(self, index_name, files, retrieval_model, commit_id):
+    def add_files(self, index_name, files, embedding_api, commit_id):
         bulk_add_params = []
         for file_info in files:
             path = file_info[0]
             if is_sys_dir_or_file(path):
                 continue
-            add_params = parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id)
+            add_params = parse_file_to_add_params(index_name, file_info, embedding_api, commit_id)
             bulk_add_params.extend(add_params)
 
             # bulk add every 2000 params

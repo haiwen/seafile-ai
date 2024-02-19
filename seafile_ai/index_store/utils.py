@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 import logging
-import numpy as np
 from seafile_ai.index_store.extract import ExtractorFactory
 from seafile_ai.config import SUPPORT_INDEX_FILE_TYPES
 
@@ -13,27 +12,22 @@ logger = logging.getLogger(__name__)
 REPO_FILE_INDEX_CONTENT_LIMIT = 200
 
 
-def retrieval_encode(retrieval_model, string_list, per_limit=1000):
-    step = per_limit
-    embeddings = np.empty((0, retrieval_model.dimension))
-    for pos in range(0, len(string_list), step):
-        texts = string_list[pos: pos + step]
-        embeddings = np.vstack((embeddings, retrieval_model.encode(texts)))
-    return embeddings
-
-
-def get_document_add_params(retrieval_model, sentences, index_name, path):
+def get_document_add_params(embedding_api, sentences, index_name, path):
     add_params = []
-    embeddings = retrieval_encode(retrieval_model, sentences)
-    for i, sentence in enumerate(sentences):
+    embeddings = embedding_api.embeddings(sentences)
+    for item in embeddings['data']:
         index_info = {"index": {"_index": index_name}}
-        vector_info = {"path": path, "vec": embeddings[i].tolist(), "content": sentence[:REPO_FILE_INDEX_CONTENT_LIMIT]}
+        vector_info = {
+            "path": path,
+            "vec": item['embedding'],
+            "content": sentences[item['index']][:REPO_FILE_INDEX_CONTENT_LIMIT]
+        }
         add_params.append(index_info)
         add_params.append(vector_info)
     return add_params
 
 
-def parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id):
+def parse_file_to_add_params(index_name, file_info, embedding_api, commit_id):
     path = file_info[0]
     obj_id = file_info[1]
     mtime = file_info[2]
@@ -43,7 +37,7 @@ def parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id):
     path_string, ext = os.path.splitext(path)
     if ext.lower() not in SUPPORT_INDEX_FILE_TYPES:
         return []
-    add_params = get_document_add_params(retrieval_model, [path_string], index_name, path)
+    add_params = get_document_add_params(embedding_api, [path_string], index_name, path)
     bulk_add_params.extend(add_params)
 
     if size:
@@ -55,7 +49,7 @@ def parse_file_to_add_params(index_name, file_info, retrieval_model, commit_id):
 
         if not sentences:
             return []
-        add_params = get_document_add_params(retrieval_model, sentences, index_name, path)
+        add_params = get_document_add_params(embedding_api, sentences, index_name, path)
         if add_params:
             bulk_add_params.extend(add_params)
 

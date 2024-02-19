@@ -95,7 +95,7 @@ class IndexTaskManager:
 
             task_id = str(uuid.uuid4())
             task = IndexTask(task_id, readable_id, self.app.index_manager.create_library_sdoc_index,
-                             (repo_id, self.app.retrieval_model, self.app.repo_file_index, self.app.repo_status_index, commit_id)
+                             (repo_id, self.app.embedding_api, self.app.repo_file_index, self.app.repo_status_index, commit_id)
                              )
             self.tasks_map[task_id] = task
             self.readable_id2task_map[task.readable_id] = task
@@ -108,7 +108,7 @@ class IndexTaskManager:
 
     def hybrid_search(self, query, repo, count):
         return self.app.index_manager.hybrid_search(query, repo, self.app.repo_filename_index,
-                                                    self.app.retrieval_model, self.app.repo_file_index, count)
+                                                    self.app.embedding_api, self.app.repo_file_index, count)
 
     def add_update_a_library_sdoc_index_task(self, repo_id, commit_id):
         readable_id = repo_id
@@ -119,7 +119,7 @@ class IndexTaskManager:
 
             task_id = str(uuid.uuid4())
             task = IndexTask(task_id, readable_id, self.app.index_manager.update_library_sdoc_index,
-                             (repo_id, self.app.retrieval_model, self.app.repo_file_index, self.app.repo_status_index,
+                             (repo_id, self.app.embedding_api, self.app.repo_file_index, self.app.repo_status_index,
                               commit_id)
                              )
             self.tasks_map[task_id] = task
