@@ -161,12 +161,22 @@ def question_answering_search_in_library():
         content_mds.append(content_md)
 
     if origin_path:
-        sdocs_path = [path.split(origin_path)[-1] for path in sdoc_path]
+        sdocs_path = [path.split(origin_path)[-1] for path in sdocs_path]
 
     try:
         sys_input = open("static/prompts/question_answering_search.txt").read().format(
             context="\n\n".join([f"[[citation:{i+1}]] {c}" for i, c in enumerate(content_mds)]))
-        answering_result = flask_app.app.openai_api.chat_completions(sys_input, query, 0.9)
+        messages = [
+                {
+                    "role": "system",
+                    "content": sys_input,
+                },
+                {
+                    "role": "user",
+                    "content": query
+                }
+            ]
+        answering_result = flask_app.app.openai_api.chat_completions(messages, 0.9)
     except json.JSONDecodeError:
         logger.error('Error decoding JSON.')
         answering_result = 'false'
