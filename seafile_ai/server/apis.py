@@ -94,6 +94,7 @@ def search():
     query = data.get('query').strip()
     repos = data.get('repos')
     suffixes = data.get('suffixes')
+    cur_path = data.get('cur_path')
     search_filename_only = data.get('search_filename_only')
 
     if not query:
@@ -110,7 +111,7 @@ def search():
     if search_filename_only:
         results = index_task_manager.keyword_search(query, repos, count, suffixes)
     else:
-        results = index_task_manager.hybrid_search(query, repos[0], count)
+        results = index_task_manager.hybrid_search(query, repos[0], count, cur_path)
 
     return {'results': results}, 200
 

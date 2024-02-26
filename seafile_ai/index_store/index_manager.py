@@ -156,9 +156,15 @@ class IndexManager(object):
         repo_filename_index.delete_index_by_index_name(repo_filename_index_name)
         repo_status_filename_index.delete_documents_by_repo(repo_id)
 
-    def hybrid_search(self, query, repo, repo_filename_index, embedding_api, repo_file_index, count):
-        keyword_files = self.keyword_search(query, [repo], repo_filename_index, count)
-        similar_files = self.search_children_in_library(query, repo, embedding_api, repo_file_index, count)
+    def hybrid_search(self, query, repo, repo_filename_index, embedding_api, repo_file_index, count, cur_path):
+        keyword_files = self.keyword_search(query, [repo], repo_filename_index, count)           
+        # Extract files that are only in the current directory
+        if cur_path:
+            keyword_files = [file for file in keyword_files if file['fullpath'].startswith(cur_path)]
+            similar_files = self.search_children_in_library(query, repo, embedding_api, repo_file_index, count=100)
+            similar_files = [file for file in similar_files if file['fullpath'].startswith(cur_path)]
+        else:
+            similar_files = self.search_children_in_library(query, repo, embedding_api, repo_file_index, count)
         fused_files = rank_fusion([keyword_files, similar_files])
 
         return filter_hybrid_searched_files(fused_files)[:count]

@@ -106,9 +106,9 @@ class IndexTaskManager:
     def keyword_search(self, query, repos, count, suffixes):
         return self.app.index_manager.keyword_search(query, repos, self.app.repo_filename_index, count, suffixes)
 
-    def hybrid_search(self, query, repo, count):
+    def hybrid_search(self, query, repo, count, cur_path):
         return self.app.index_manager.hybrid_search(query, repo, self.app.repo_filename_index,
-                                                    self.app.embedding_api, self.app.repo_file_index, count)
+                                                    self.app.embedding_api, self.app.repo_file_index, count, cur_path)
 
     def add_update_a_library_sdoc_index_task(self, repo_id, commit_id):
         readable_id = repo_id
