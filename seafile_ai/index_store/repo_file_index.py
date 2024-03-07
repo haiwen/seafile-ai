@@ -21,7 +21,8 @@ class RepoFileIndex(object):
             "vec": {
                 "type": "vector",
                 "dims": config.DIMENSION,
-                "vec_index_type": "flat",
+                "vec_index_type": "ivf_pq",
+                "nbits": 4,
                 "m": config.VECTOR_M
             },
             "path": {
@@ -122,6 +123,8 @@ class RepoFileIndex(object):
         self.delete_files_by_deleted_dirs(index_name, deleted_dirs)
 
         need_added_files = added_files + modified_files
+        # deleting files is to prevent duplicate insertions
+        self.delete_files(index_name, added_files)
         self.add_files(index_name, need_added_files, embedding_api, new_commit_id)
 
     def query_data_by_paths(self, index_name, path_list, start, size):
@@ -212,5 +215,7 @@ class RepoFileIndex(object):
             if len(bulk_add_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
                 self.seasearch_api.bulk(bulk_add_params)
                 bulk_add_params = []
+
+            logger.info('add file: %s , to index: %s .', path, index_name)
         if bulk_add_params:
             self.seasearch_api.bulk(bulk_add_params)
