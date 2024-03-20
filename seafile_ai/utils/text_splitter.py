@@ -1,7 +1,12 @@
 import re
 import logging
+from transformers import AutoTokenizer
+from config import MODEL_VOCAB_PATH
 
 logger = logging.getLogger(__name__)
+
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_VOCAB_PATH)
 
 
 class MarkdownHeaderTextSplitter:
@@ -139,6 +144,11 @@ def _split_text_with_regex(text, separator, keep_separator):
     else:
         splits = list(text)
     return [s for s in splits if s != ""]
+
+
+def tokenizer_length(text):
+    tokens = tokenizer.tokenize(text)
+    return len(tokens)
 
 
 class RecursiveCharacterTextSplitter(object):

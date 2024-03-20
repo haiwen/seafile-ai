@@ -27,33 +27,27 @@ def get_document_add_params(embedding_api, sentences, index_name, path):
     return add_params
 
 
-def parse_file_to_add_params(index_name, file_info, embedding_api, commit_id):
+def parse_file_to_sentences(index_name, file_info, commit_id):
     path = file_info[0]
     obj_id = file_info[1]
     mtime = file_info[2]
     size = file_info[3]
     repo_id = index_name
-    bulk_add_params = []
+
     path_string, ext = os.path.splitext(path)
     if ext.lower() not in SUPPORT_INDEX_FILE_TYPES:
         return []
-    add_params = get_document_add_params(embedding_api, [path_string], index_name, path)
-    bulk_add_params.extend(add_params)
 
+    sentences = [path_string]
     if size:
         new_commit = commit_mgr.load_commit(repo_id, 0, commit_id)
         version = new_commit.get_version()
 
         extractor = ExtractorFactory.get_extractor(os.path.basename(path))
-        sentences = extractor.extract(repo_id, version, obj_id, path) if extractor else []
+        file_sentences = extractor.extract(repo_id, version, obj_id, path) if extractor else []
+        sentences.extend(file_sentences)
 
-        if not sentences:
-            return []
-        add_params = get_document_add_params(embedding_api, sentences, index_name, path)
-        if add_params:
-            bulk_add_params.extend(add_params)
-
-    return bulk_add_params
+    return sentences
 
 
 def rank_fusion(doc_lists, weights=None, c=60):
@@ -126,3 +120,14 @@ def filter_hybrid_searched_files(files):
         file.pop('max_score', None)
         filtered_files.append(file)
     return filtered_files
+
+
+def bulk_add_sentences_to_index(seasearch_api, embedding_api, index_name, path, sentences, limit=1000):
+    step = limit
+    start = 0
+    while True:
+        if not sentences[start: start + step]:
+            break
+        params = get_document_add_params(embedding_api, sentences[start: start + step], index_name, path)
+        seasearch_api.bulk(params)
+        start += step

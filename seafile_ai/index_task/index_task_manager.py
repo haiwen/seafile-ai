@@ -170,7 +170,7 @@ class IndexTaskManager:
                 logger.info('Run task success: %s cost %ds \n' % (task_info, task.get_cost_time()))
             except Exception as e:
                 task.set_error(e)
-                logger.exception('Failed to handle task %s, error: %s \n' % (task.id, e))
+                logger.exception('Failed to handle task %s, error: %s \n' % (task.get_info(), e))
             finally:
                 with self.check_task_lock:
                     self.readable_id2task_map.pop(task.readable_id, None)
