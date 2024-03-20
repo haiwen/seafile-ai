@@ -29,6 +29,9 @@ RETRIEVAL_NUM = 20
 # embedding dimension
 DIMENSION = 768
 
+MODEL_VOCAB_PATH = ''
+FILE_SENTENCE_LIMIT = 1000
+
 THRESHOLD = 0.01
 
 ## seasearch

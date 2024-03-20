@@ -2,13 +2,13 @@ import os
 import logging
 
 from seafile_ai import config
-from seafile_ai.index_store.utils import parse_file_to_add_params
+from seafile_ai.index_store.utils import parse_file_to_sentences, bulk_add_sentences_to_index
 from seafile_ai.utils import get_library_diff_files, is_sys_dir_or_file
 
 logger = logging.getLogger(__name__)
 
 
-SEASEARCH_BULK_OPETATE_LIMIT = 2000
+SEASEARCH_BULK_OPETATE_LIMIT = 1000
 SEASEARCH_QUERY_PATH_DOC_STEP = 20
 
 
@@ -203,19 +203,15 @@ class RepoFileIndex(object):
                     break
 
     def add_files(self, index_name, files, embedding_api, commit_id):
-        bulk_add_params = []
         for file_info in files:
             path = file_info[0]
             if is_sys_dir_or_file(path):
                 continue
-            add_params = parse_file_to_add_params(index_name, file_info, embedding_api, commit_id)
-            bulk_add_params.extend(add_params)
-
-            # bulk add every 2000 params
-            if len(bulk_add_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
-                self.seasearch_api.bulk(bulk_add_params)
-                bulk_add_params = []
-
+            self.add_file(index_name, file_info, commit_id, embedding_api, path)
             logger.info('add file: %s , to index: %s .', path, index_name)
-        if bulk_add_params:
-            self.seasearch_api.bulk(bulk_add_params)
+
+    def add_file(self, index_name, file_info, commit_id, embedding_api, path):
+        sentences = parse_file_to_sentences(index_name, file_info, commit_id)
+        sentences = sentences[0: config.FILE_SENTENCE_LIMIT]
+        limit = int(SEASEARCH_BULK_OPETATE_LIMIT / 2)
+        bulk_add_sentences_to_index(self.seasearch_api, embedding_api, index_name, path, sentences, limit)

@@ -11,7 +11,7 @@ from unstructured.partition.ppt import partition_ppt
 from unstructured.staging.base import convert_to_text
 
 from seafile_ai.utils.constants import ZERO_OBJ_ID
-from seafile_ai.utils.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from seafile_ai.utils.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter, tokenizer_length
 
 from seafobj import fs_mgr
 
@@ -73,7 +73,7 @@ def parse_md_to_spilt_sentences(content):
     text_splitter = MarkdownHeaderTextSplitter(headers_to_split_on)
     md_header_splits = text_splitter.split_text(content)
 
-    recursive_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=0)
+    recursive_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=0, length_function=tokenizer_length)
 
     sentences = []
     for data in md_header_splits:
@@ -88,7 +88,7 @@ def parse_md_to_spilt_sentences(content):
 
 
 def recursive_split_text_to_sentences(text, chunk_size=100):
-    recursive_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=0)
+    recursive_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=0, length_function=tokenizer_length)
     if len(text) > chunk_size:
         sentences = recursive_splitter.split_text(text)
     else:
