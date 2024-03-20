@@ -45,7 +45,8 @@ def parse_file_to_sentences(index_name, file_info, commit_id):
 
         extractor = ExtractorFactory.get_extractor(os.path.basename(path))
         file_sentences = extractor.extract(repo_id, version, obj_id, path) if extractor else []
-        sentences.extend(file_sentences)
+        if file_sentences:
+            sentences.extend(file_sentences)
 
     return sentences
 
