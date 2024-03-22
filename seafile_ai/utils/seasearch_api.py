@@ -32,6 +32,8 @@ class SeaSearchAPI(object):
     def create_index(self, data):
         url = self.server + '/api/index'
         response = requests.post(url, headers=self.headers, json=data, timeout=self.timeout)
+        if response.status_code == 400:
+            raise Exception('Index exist error.')
         data = parse_response(response)
 
         return data
