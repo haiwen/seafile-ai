@@ -51,10 +51,9 @@ class RepoStatusIndex(object):
     def create_index_if_missing(self):
         if not self.seasearch_api.check_index_mapping(self.index_name).get('is_exist'):
             data = {
-                'name': self.index_name,
                 'mappings': self.mapping,
             }
-            self.seasearch_api.create_index(data)
+            self.seasearch_api.create_index(self.index_name, data)
 
     def check_repo_status(self, repo_id):
         return self.seasearch_api.check_document_by_id(self.index_name, repo_id).get('is_exist')
