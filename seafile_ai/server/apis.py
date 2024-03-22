@@ -260,7 +260,7 @@ def query_library_index_state():
         return {'error_msg': 'repo_id invalid'}, 400
 
     try:
-        is_exist = flask_app.app.repo_status_index.check_repo_status(repo_id)
+        is_exist = flask_app.app.index_manager.get_index_repo_by_repo_id(repo_id)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
