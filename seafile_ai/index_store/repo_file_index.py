@@ -41,11 +41,10 @@ class RepoFileIndex(object):
 
     def create_index(self, index_name):
         data = {
-            'name': index_name,
             'shard_num': self.shard_num,
             'mappings': self.mapping,
         }
-        self.seasearch_api.create_index(data)
+        self.seasearch_api.create_index(index_name, data)
 
     def check_index(self, index_name):
         return self.seasearch_api.check_index_mapping(index_name).get('is_exist')

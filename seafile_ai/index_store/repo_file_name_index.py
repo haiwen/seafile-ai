@@ -69,12 +69,11 @@ class RepoFileNameIndex(object):
     def create_index_if_missing(self, index_name):
         if not self.seasearch_api.check_index_mapping(index_name).get('is_exist'):
             data = {
-                'name': index_name,
                 'shard_num': self.shard_num,
                 'mappings': self.mapping,
                 'settings': self.index_settings
             }
-            self.seasearch_api.create_index(data)
+            self.seasearch_api.create_index(index_name, data)
 
     def check_index(self, index_name):
         return self.seasearch_api.check_index_mapping(index_name).get('is_exist')
