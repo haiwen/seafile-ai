@@ -130,5 +130,5 @@ def bulk_add_sentences_to_index(seasearch_api, embedding_api, index_name, path, 
         if not sentences[start: start + step]:
             break
         params = get_document_add_params(embedding_api, sentences[start: start + step], index_name, path)
-        seasearch_api.bulk(params)
+        seasearch_api.bulk(index_name, params)
         start += step

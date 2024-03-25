@@ -43,11 +43,11 @@ class SeaSearchAPI(object):
 
         return data
 
-    def bulk(self, data):
+    def bulk(self, index_name, data):
         """
         this option includes add, update and delete index or document
         """
-        url = self.server + '/es/_bulk'
+        url = self.server + '/es/' + index_name + '/_bulk'
         data = ndjson.dumps(data)
         response = requests.post(url, headers=self.headers, data=data, timeout=self.timeout)
 
