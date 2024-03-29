@@ -179,7 +179,7 @@ class RepoFileIndex(object):
                     delete_params.append({'delete': {'_id': _id, '_index': index_name}})
 
                 if delete_params:
-                    self.seasearch_api.bulk(delete_params)
+                    self.seasearch_api.bulk(index_name, delete_params)
                 if len(hits) < per_size:
                     break
 
@@ -197,7 +197,7 @@ class RepoFileIndex(object):
                     delete_params.append({'delete': {'_id': _id, '_index': index_name}})
 
                 if delete_params:
-                    self.seasearch_api.bulk(delete_params)
+                    self.seasearch_api.bulk(index_name, delete_params)
                 if len(hits) < per_size:
                     break
 

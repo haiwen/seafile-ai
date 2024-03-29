@@ -215,10 +215,10 @@ class RepoFileNameIndex(object):
 
             # bulk add every 2000 params
             if len(bulk_add_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
-                self.seasearch_api.bulk(bulk_add_params)
+                self.seasearch_api.bulk(index_name, bulk_add_params)
                 bulk_add_params = []
         if bulk_add_params:
-            self.seasearch_api.bulk(bulk_add_params)
+            self.seasearch_api.bulk(index_name, bulk_add_params)
 
     def add_dirs(self, index_name, repo_id, dirs):
         bulk_add_params = []
@@ -254,10 +254,10 @@ class RepoFileNameIndex(object):
 
             # bulk add every 2000 params
             if len(bulk_add_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
-                self.seasearch_api.bulk(bulk_add_params)
+                self.seasearch_api.bulk(index_name, bulk_add_params)
                 bulk_add_params = []
         if bulk_add_params:
-            self.seasearch_api.bulk(bulk_add_params)
+            self.seasearch_api.bulk(index_name, bulk_add_params)
 
     def delete_files(self, index_name, files):
         delete_params = []
@@ -268,10 +268,10 @@ class RepoFileNameIndex(object):
             delete_params.append({'delete': {'_id': md5(path), '_index': index_name}})
             # bulk add every 2000 params
             if len(delete_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
-                self.seasearch_api.bulk(delete_params)
+                self.seasearch_api.bulk(index_name, delete_params)
                 delete_params = []
         if delete_params:
-            self.seasearch_api.bulk(delete_params)
+            self.seasearch_api.bulk(index_name, delete_params)
 
     def delete_dirs(self, index_name, dirs):
         delete_params = []
@@ -283,10 +283,10 @@ class RepoFileNameIndex(object):
             delete_params.append({'delete': {'_id': md5(path), '_index': index_name}})
             # bulk add every 2000 params
             if len(delete_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
-                self.seasearch_api.bulk(delete_params)
+                self.seasearch_api.bulk(index_name, delete_params)
                 delete_params = []
         if delete_params:
-            self.seasearch_api.bulk(delete_params)
+            self.seasearch_api.bulk(index_name, delete_params)
 
     def query_data_by_dir(self, index_name, directory, start, size):
         dsl = {
@@ -326,7 +326,7 @@ class RepoFileNameIndex(object):
                     delete_params.append({'delete': {'_id': _id, '_index': index_name}})
 
                 if delete_params:
-                    self.seasearch_api.bulk(delete_params)
+                    self.seasearch_api.bulk(index_name, delete_params)
                 if len(hits) < per_size:
                     break
 
