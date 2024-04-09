@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_response(response):
-    if response.status_code > 400:
+    if response.status_code >= 400:
         raise ConnectionError(response.status_code, response.text)
     else:
         try:
@@ -113,7 +113,11 @@ class SeaSearchAPI(object):
     def delete_index_by_name(self, index_name):
         url = self.server + '/api/index/' + index_name
         response = requests.delete(url, headers=self.headers, timeout=self.timeout)
-        return parse_response(response)
+        if response.status_code == 400:
+            logger.warning('index: %s not exist error: %s' % (index_name, response.text))
+        elif response.status_code > 400:
+            raise ConnectionError(response.status_code, response.text)
+        return json.loads(response.text)
 
     def update_document_by_id(self, index_name, doc_id, data):
         url = self.server + '/api/' + index_name + '/_doc/' + doc_id
