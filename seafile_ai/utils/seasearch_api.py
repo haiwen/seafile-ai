@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_response(response):
-    if response.status_code > 400:
+    if response.status_code >= 400:
         raise ConnectionError(response.status_code, response.text)
     else:
         try:
@@ -50,8 +50,11 @@ class SeaSearchAPI(object):
         url = self.server + '/es/' + index_name + '/_bulk'
         data = ndjson.dumps(data)
         response = requests.post(url, headers=self.headers, data=data, timeout=self.timeout)
-
-        return parse_response(response)
+        data = parse_response(response)
+        error = data.get('error')
+        if error:
+            raise Exception(error)
+        return data
 
     def vector_search(self, index_name, data):
         url = self.server + '/api/' + index_name + '/_search/vector'
@@ -101,14 +104,26 @@ class SeaSearchAPI(object):
     def delete_document_by_id(self, index_name, doc_id):
         url = self.server + '/api/' + index_name + '/_doc/' + doc_id
         response = requests.delete(url, headers=self.headers, timeout=self.timeout)
-        return parse_response(response)
+        data = parse_response(response)
+        error = data.get('error')
+        if error:
+            logger.warning('delete_document_by_id error: %s', error)
+        return data
 
     def delete_index_by_name(self, index_name):
         url = self.server + '/api/index/' + index_name
         response = requests.delete(url, headers=self.headers, timeout=self.timeout)
-        return parse_response(response)
+        if response.status_code == 400:
+            logger.warning('index: %s not exist error: %s' % (index_name, response.text))
+        elif response.status_code > 400:
+            raise ConnectionError(response.status_code, response.text)
+        return json.loads(response.text)
 
     def update_document_by_id(self, index_name, doc_id, data):
         url = self.server + '/api/' + index_name + '/_doc/' + doc_id
         response = requests.put(url, headers=self.headers, json=data, timeout=self.timeout)
-        return parse_response(response)
+        data = parse_response(response)
+        error = data.get('error')
+        if error:
+            raise Exception(error)
+        return data
