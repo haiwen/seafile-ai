@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_response(response):
-    if response.status_code >= 400:
+    if response.status_code > 400:
         raise ConnectionError(response.status_code, response.text)
     else:
         try:
@@ -32,6 +32,8 @@ class SeaSearchAPI(object):
     def create_index(self, index_name, data):
         url = self.server + '/api/index/' + index_name
         response = requests.put(url, headers=self.headers, json=data, timeout=self.timeout)
+        if response.status_code == 400:
+            raise Exception('create index: %s, error: %s' % (index_name, response.text))
         data = parse_response(response)
 
         return data
@@ -39,6 +41,8 @@ class SeaSearchAPI(object):
     def create_document_by_id(self, index_name, doc_id, date):
         url = self.server + '/api/' + index_name + '/_doc/' + doc_id
         response = requests.put(url, headers=self.headers, json=date, timeout=self.timeout)
+        if response.status_code == 400:
+            raise Exception('index: %s, add document: %s, error: %s' % (index_name, doc_id, response.text))
         data = parse_response(response)
 
         return data
