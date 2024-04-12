@@ -280,6 +280,7 @@ class RepoFileNameIndex(object):
 
             if is_sys_dir_or_file(path):
                 continue
+            path = path + '/' if path != '/' else path
             delete_params.append({'delete': {'_id': md5(path), '_index': index_name}})
             # bulk add every 2000 params
             if len(delete_params) >= SEASEARCH_BULK_OPETATE_LIMIT:
