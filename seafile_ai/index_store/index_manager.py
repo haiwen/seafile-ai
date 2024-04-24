@@ -105,7 +105,7 @@ class IndexManager(object):
             logger.info('repo: %s, update repo file index success', repo_id)
 
         except Exception as e:
-            logger.exception(e)
+            logger.exception('repo_id: %s, update repo file index error: %s.', repo_id, e)
 
     def delete_library_sdoc_index_by_repo_id(self, repo_id, repo_file_index, repo_status_index):
         # first delete repo_file_index
@@ -148,7 +148,7 @@ class IndexManager(object):
             logger.info('repo: %s, update repo filename index success', repo_id)
 
         except Exception as e:
-            logger.exception(e)
+            logger.exception('repo_id: %s, update repo filename index error: %s.', repo_id, e)
 
     def delete_repo_filename_index(self, repo_id, repo_filename_index, repo_status_filename_index):
         # first delete repo_file_index
