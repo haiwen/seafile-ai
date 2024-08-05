@@ -10,3 +10,4 @@
 __pycache__
 *log
 local_settings.py
+seafile_ai_settings.py

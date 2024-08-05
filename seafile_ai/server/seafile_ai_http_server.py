@@ -1,5 +1,4 @@
 from threading import Thread
-
 from gevent.pywsgi import WSGIServer
 
 from seafile_ai.server.apis import flask_app

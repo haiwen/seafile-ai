@@ -1,5 +1,4 @@
 from gevent import monkey; monkey.patch_all()
-import pymysql; pymysql.install_as_MySQLdb()
 
 import config
 from seafile_ai.app.log import LogConfigurator
