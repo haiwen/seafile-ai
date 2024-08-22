@@ -1,6 +1,8 @@
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
 from seafile_ai.utils.metadata_server_api import MetadataServerAPI
-from seafile_ai.metadata_ai_services.metadata_ai_services import MetadataAIServices
+from seafile_ai.metadata_ai_services.metadata_ai_manager import MetadataAIManager
+
+
 class SeafileAIApp(object):
     def __init__(self, config):
         self.config = config
@@ -14,7 +16,7 @@ class SeafileAIApp(object):
             config.METADATA_SERVER_URL,
             config.METADATA_SERVER_SECRET_KEY,
         )
-        self.metadata_ai_server = MetadataAIServices(self, config.LLM_TYPE)
+        self.metadata_ai_manager = MetadataAIManager(self, config.LLM_TYPE)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
 
     def serve_forever(self):

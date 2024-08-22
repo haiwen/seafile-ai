@@ -12,7 +12,7 @@ def gen_file_get_url(token, filename):
 
 def get_file_by_token(token, filename):
     url = gen_file_get_url(token, filename)
-    content =requests.get(url, timeout=10).content.decode()
+    content = requests.get(url, timeout=10).content.decode()
 
     if content:
         content = json.loads(content)

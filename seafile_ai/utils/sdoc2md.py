@@ -10,6 +10,7 @@ HEADER_LABEL = [
     'header6',
 ]
 
+
 def _handle_text_style(json_data_text, return_null=False):
     text = json_data_text.get('text', '')
     pure_text = text
@@ -24,6 +25,7 @@ def _handle_text_style(json_data_text, return_null=False):
     if (not text) and return_null:
         text = '.'
     return text, pure_text
+
 
 # sdoc 2 html dom
 # 1. header
@@ -47,6 +49,7 @@ def _handle_header_dom(header_json, header_type):
 
     }.get(header_type)
     return tag % output
+
 
 # 3 list including ordered / unordered list
 def _handle_list_dom(list_json, tag='', ordered=False):
@@ -77,6 +80,7 @@ def _handle_list_dom(list_json, tag='', ordered=False):
         res = "<ul>%s</ul>" % tag
     return res
 
+
 # 4 checkbox
 def _handle_check_list_dom(check_list_json):
     output = ""
@@ -96,6 +100,7 @@ def _handle_check_list_dom(check_list_json):
 
     return output
 
+
 # 5 blockquote
 def _handle_blockquote_dom(blockquote_json):
     output = ""
@@ -110,11 +115,10 @@ def _handle_blockquote_dom(blockquote_json):
             output += "<a href='%s'><span>%s</span></a>" % (text_url, text_name)
 
         if child_type == 'paragraph':
-            output += '%s' % _handle_pagragh_dom(child)
+            output += '%s' % _handle_paragraph_dom(child)
 
         if child_type == 'check_list_item':
             output += '%s' % _handle_check_list_dom(child)
-
 
         if 'text' in child:
             text = child.get('text')
@@ -123,6 +127,7 @@ def _handle_blockquote_dom(blockquote_json):
 
     tag = "<blockquote>%s</blockquote>" % output
     return tag
+
 
 # 6 url link
 def _handle_link_dom(link_json):
@@ -133,17 +138,16 @@ def _handle_link_dom(link_json):
     return res
 
 
-# 7 pagragh
-def _handle_pagragh_dom(pagragh_json):
+# 7 paragraph
+def _handle_paragraph_dom(paragraph_json):
     output = ''
-    for child in pagragh_json['children']:
+    for child in paragraph_json['children']:
         if 'text' in child:
             output += _handle_text_style(child)[0]
         else:
             child_type = child.get('type')
             if child_type == 'link':
                 output += _handle_link_dom(child)
-
 
     result = "<p><span>%s</span></p>" % output
     return result.replace("\n", "")
@@ -164,26 +168,26 @@ def _handle_table_cell_dom(table_cell_json):
 
 #  html2markdown
 def handle_header(header_json, header_type):
-    md_hander = HTML2Text(bodywidth=0) # no wrapping length
+    md_handler = HTML2Text(bodywidth=0) # no wrapping length
     dom = _handle_header_dom(header_json, header_type)
-    return md_hander.handle(dom)
+    return md_handler.handle(dom)
 
 
 def handle_check_list(check_list_json):
-    md_hander = HTML2Text(bodywidth=0) # no wrapping length
-    return md_hander.handle(_handle_check_list_dom(check_list_json))
+    md_handler = HTML2Text(bodywidth=0) # no wrapping length
+    return md_handler.handle(_handle_check_list_dom(check_list_json))
 
 
 def handle_paragraph(paragraph_json):
-    md_hander = HTML2Text(bodywidth=0) # no wrapping length
-    dom = _handle_pagragh_dom(paragraph_json)
-    return md_hander.handle(dom)
+    md_handler = HTML2Text(bodywidth=0) # no wrapping length
+    dom = _handle_paragraph_dom(paragraph_json)
+    return md_handler.handle(dom)
 
 
 def handle_list(json_data, ordered=False):
-    md_hander = HTML2Text(bodywidth=0) # no wrapping length
+    md_handler = HTML2Text(bodywidth=0) # no wrapping length
     html = _handle_list_dom(json_data, '', ordered)
-    md = md_hander.handle(html)
+    md = md_handler.handle(html)
     return md
 
 
@@ -197,21 +201,21 @@ def handle_codeblock(code_bloc_json):
 
 
 def handle_blockquote(json_data):
-    md_hander = HTML2Text(bodywidth=0) # no wrapping length
+    md_handler = HTML2Text(bodywidth=0) # no wrapping length
     html = _handle_blockquote_dom(json_data)
-    md = md_hander.handle(html)
+    md = md_handler.handle(html)
     return md
 
 
 def handle_table(table_json):
-    md_hander = HTML2Text(bodywidth=0) # no wrapping length
+    md_handler = HTML2Text(bodywidth=0) # no wrapping length
     th_headers = ''
     th_body = ''
     first_table_row = table_json['children'][0]
     other_table_rows = table_json['children'][1:]
 
     for first_table_cell in first_table_row['children']:
-        th_headers +=  "<th>%s</th>" % _handle_table_cell_dom(first_table_cell)
+        th_headers += "<th>%s</th>" % _handle_table_cell_dom(first_table_cell)
 
     for table_row in other_table_rows:
         td = ''
@@ -220,10 +224,9 @@ def handle_table(table_json):
         th_body += "<tr>%s</tr>" % td
 
     html = "<figure><table><thead><tr>%s</tr></thead><tbody>%s</tbody></table></figure>" % (th_headers, th_body)
-    return md_hander.handle(html)
+    return md_handler.handle(html)
 
 
-#
 def json2md(json_data):
     doc_type = json_data.get('type')
     markdown_output = ''
@@ -263,6 +266,7 @@ def json2md(json_data):
         output = handle_blockquote(json_data)
         markdown_output += output
     return markdown_output
+
 
 def sdoc2md(json_tree):
     results = []

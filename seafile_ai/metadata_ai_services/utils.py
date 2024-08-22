@@ -14,6 +14,7 @@ class MetadataColumns(object):
         self.file_name = MetadataColumn('_name', '_name', 'text')
         self.parent_dir = MetadataColumn('_parent_dir', '_parent_dir', 'text')
         self.summary = MetadataColumn('_summary', '_summary', 'long-text')
+        self.obj_id = MetadataColumn('_obj_id', '_obj_id', 'text')
 
 
 class MetadataColumn(object):

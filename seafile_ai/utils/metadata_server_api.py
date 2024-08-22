@@ -33,7 +33,7 @@ class MetadataServerAPI:
         data = {
                 'table_id': table_id,
                 'rows': rows
-            }
+        }
         response = requests.put(url, json=data, headers=headers, timeout=self.timeout)
         return parse_response(response)
 
