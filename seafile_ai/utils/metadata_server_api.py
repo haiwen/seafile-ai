@@ -27,16 +27,6 @@ class MetadataServerAPI:
         token = jwt.encode(payload, self.secret_key, algorithm='HS256')
         return {"Authorization": "Bearer %s" % token}
 
-    def update_rows(self, base_id, table_id, rows):
-        headers = self.gen_headers(base_id)
-        url = f'{self.server_url}/api/v1/base/{base_id}/rows'
-        data = {
-                'table_id': table_id,
-                'rows': rows
-        }
-        response = requests.put(url, json=data, headers=headers, timeout=self.timeout)
-        return parse_response(response)
-
     def query_rows(self, base_id, sql, params=[]):
         headers = self.gen_headers(base_id)
         post_data = {

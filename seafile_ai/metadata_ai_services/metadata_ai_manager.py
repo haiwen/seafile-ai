@@ -81,9 +81,6 @@ class MetadataAIManager:
                 }
                 updated_summary_rows.append(updated_row)
 
-        if updated_summary_rows:
-            self.app.metadata_server_api.update_rows(repo_id, METADATA_TABLE.id, updated_summary_rows)
-
         return updated_summary_rows
 
     def _gen_doc_summary(self, content):
