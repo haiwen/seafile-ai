@@ -3,7 +3,10 @@ import jwt
 import json
 
 from flask import Flask, request
+from pathlib import Path
+
 from seafile_ai import config
+from seafile_ai.utils.constants import SUMMARY_SUPPORTED_FILES
 
 
 logger = logging.getLogger(__name__)
@@ -44,9 +47,11 @@ def generate_summary():
     download_token = data.get('download_token')
 
     if not path:
-        return {'error_msg': 'repo_id invalid.'}, 400
+        return {'error_msg': 'path invalid.'}, 400
     if not download_token:
         return {'error_msg': 'download_token invalid.'}, 400
+    if Path(path).suffix not in SUMMARY_SUPPORTED_FILES:
+        return {'error_msg': 'unsupported file format.'}, 400
 
     try:
         summary = flask_app.app.text_processing_manager.generate_summary(path, download_token)

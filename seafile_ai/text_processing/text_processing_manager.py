@@ -1,9 +1,10 @@
 import os
 import logging
 
-from seafile_ai.utils.sdoc2md import sdoc2md
-from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT
-from seafile_ai.utils import get_file_by_token
+from pathlib import Path
+
+from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_SUPPORTED_FILES
+from seafile_ai.utils import convert_file_to_md
 
 
 logger = logging.getLogger(__name__)
@@ -16,11 +17,14 @@ class TextProcessingManager:
 
     def generate_summary(self, path, download_token):
         file_name = os.path.basename(path)
-        sdoc_content = get_file_by_token(download_token, file_name)
-        md_content = sdoc2md(sdoc_content)[0:LLM_INPUT_CHARACTERS_LIMIT]
-        summary_text = self._gen_doc_summary(md_content)
+
+        if md_content := convert_file_to_md(file_name, download_token):
+            summary_text = self._gen_doc_summary(md_content[0:LLM_INPUT_CHARACTERS_LIMIT])
+        else:
+            summary_text = None
+
         if summary_text in ['None', 'none', None]:
-            summary_text = ''
+            return ''
 
         return summary_text
 
