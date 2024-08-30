@@ -28,8 +28,8 @@ def check_auth_token(req):
     return True
 
 
-@flask_app.route('/api/v1/update-docs-summary', methods=['POST'])
-def update_docs_summary():
+@flask_app.route('/api/v1/generate-summary', methods=['POST'])
+def generate_summary():
     is_valid = check_auth_token(request)
     if not is_valid:
         return {'error_msg': 'Permission denied'}, 403
@@ -40,25 +40,21 @@ def update_docs_summary():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    repo_id = data.get('repo_id')
-    files_info_list = data.get('files_info_list')
+    path = data.get('path')
+    download_token = data.get('download_token')
 
-    if not repo_id:
+    if not path:
         return {'error_msg': 'repo_id invalid.'}, 400
-    if not files_info_list or not isinstance(files_info_list, list):
-        return {'error_msg': 'files_info_list should be a non-empty list.'}, 400
-    for file_info in files_info_list:
-        if not isinstance(file_info, dict):
-            return {'error_msg': 'Each item in files_info_list should be a dictionary.'}, 400
-        if 'file_path' not in file_info or 'download_token' not in file_info:
-            return {'error_msg': 'Each dictionary in files_info_list must contain "file_path" and "download_token".'}, 400
+    if not download_token:
+        return {'error_msg': 'download_token invalid.'}, 400
+
     try:
-        rows = flask_app.app.metadata_ai_manager.update_docs_summary(repo_id, files_info_list)
+        summary = flask_app.app.text_processing_manager.generate_summary(path, download_token)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    return {'rows': rows}, 200
+    return {'summary': summary}, 200
 
 
 @flask_app.route('/api/v1/image-caption/', methods=['POST'])
