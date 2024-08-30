@@ -27,7 +27,6 @@ FILE_SERVER = ''
 METADATA_SERVER_SECRET_KEY = ''
 METADATA_SERVER_URL = ''
 
-
 CONF_DIR = '/opt/seafile/conf/'
 
 try:
