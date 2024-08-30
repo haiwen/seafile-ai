@@ -1,3 +1,4 @@
+from seafile_ai.image_processing.image_processing_manager import ImageProcessingManager
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
 from seafile_ai.utils.metadata_server_api import MetadataServerAPI
 from seafile_ai.metadata_ai_services.metadata_ai_manager import MetadataAIManager
@@ -17,6 +18,7 @@ class SeafileAIApp(object):
             config.METADATA_SERVER_SECRET_KEY,
         )
         self.metadata_ai_manager = MetadataAIManager(self, config.LLM_TYPE)
+        self.image_processing_manager = ImageProcessingManager(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
 
     def serve_forever(self):

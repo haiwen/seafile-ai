@@ -59,3 +59,35 @@ def update_docs_summary():
         return {'error_msg': 'Internet server error.'}, 500
 
     return {'rows': rows}, 200
+
+
+@flask_app.route('/api/v1/image-caption/', methods=['POST'])
+def image_caption():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    path = data.get('path')
+    lang = data.get('lang')
+    download_token = data.get('download_token')
+
+    if not path:
+        return {'error_msg': 'repo_id invalid.'}, 400
+    if not lang:
+        return {'error_msg': 'lang invalid.'}, 400
+    if not download_token:
+        return {'error_msg': 'download_token invalid.'}, 400
+
+    try:
+        desc = flask_app.app.image_processing_manager.image_caption(path, download_token, lang)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'desc': desc}, 200
