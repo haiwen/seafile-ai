@@ -16,16 +16,13 @@ LOG_LEVEL = 'info'
 ENABLE_SYS_LOG = False
 
 APP_NAME = 'seafile-ai'
+
 # LLM
 LLM_URL = ''
 LLM_TYPE = 'open-ai-proxy'
 LLM_KEY = ''
 
 FILE_SERVER = ''
-
-# Metadata server
-METADATA_SERVER_SECRET_KEY = ''
-METADATA_SERVER_URL = ''
 
 CONF_DIR = '/opt/seafile/conf/'
 

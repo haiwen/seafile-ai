@@ -1,7 +1,6 @@
 from seafile_ai.image_processing.image_processing_manager import ImageProcessingManager
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
-from seafile_ai.utils.metadata_server_api import MetadataServerAPI
-from seafile_ai.metadata_ai_services.metadata_ai_manager import MetadataAIManager
+from seafile_ai.text_processing.text_processing_manager import TextProcessingManager
 
 
 class SeafileAIApp(object):
@@ -12,12 +11,8 @@ class SeafileAIApp(object):
             self.openai_api = OpenAIAPI(config.LLM_URL)
         else:
             raise Exception('unknown llm type')
-        self.metadata_server_api = MetadataServerAPI(
-            config.APP_NAME,
-            config.METADATA_SERVER_URL,
-            config.METADATA_SERVER_SECRET_KEY,
-        )
-        self.metadata_ai_manager = MetadataAIManager(self, config.LLM_TYPE)
+
+        self.text_processing_manager = TextProcessingManager(self, config.LLM_TYPE)
         self.image_processing_manager = ImageProcessingManager(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
 
