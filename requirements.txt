@@ -2,3 +2,4 @@ Flask
 gevent
 html2text
 pillow
+mammoth==1.8.0
