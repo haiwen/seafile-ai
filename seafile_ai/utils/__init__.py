@@ -3,6 +3,8 @@ import json
 import logging
 
 import mammoth
+import pymupdf
+import pymupdf4llm
 
 from urllib.parse import quote as urlquote
 from pathlib import Path
@@ -46,6 +48,8 @@ def convert_file_to_md(file_name, download_token):
         return doc_content.decode()
     elif file_ext == '.docx':
         return docx2md(doc_content)
+    elif file_ext == '.pdf':
+        return pdf2md(doc_content)
     else:
         return ''
 
@@ -54,3 +58,9 @@ def docx2md(file):
     ignore_images = lambda _: []
     result = mammoth.convert_to_markdown(BytesIO(file), convert_image=ignore_images)
     return result.value.replace('\\', '')
+
+
+def pdf2md(file):
+    doc = pymupdf.Document(stream=file)
+    md = pymupdf4llm.to_markdown(doc, margins=0, show_progress=False)
+    return md
