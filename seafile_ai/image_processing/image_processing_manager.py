@@ -1,6 +1,7 @@
 import base64
 import os
 
+from seafile_ai.image_processing.utils import resize_image_binary
 from seafile_ai.utils import get_image_by_token
 from seafile_ai.utils.constants import LANGUAGE
 
@@ -13,6 +14,8 @@ class ImageProcessingManager:
     def image_caption(self, path, download_token, lang):
         file_name = os.path.basename(path)
         content = get_image_by_token(download_token, file_name)
+        ext = file_name.split('.')[-1]
+        content = resize_image_binary(content, ext)
         base64_image = base64.b64encode(content).decode('utf-8')
         messages = [
             {
@@ -20,7 +23,7 @@ class ImageProcessingManager:
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Please describe this image in {LANGUAGE[lang]} with a sentence of no more than 20 words."
+                        "text": f"Please describe this image in {LANGUAGE[lang]} with a sentence of about 100 words."
                     },
                     {
                         "type": "image_url",
