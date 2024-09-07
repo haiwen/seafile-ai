@@ -4,6 +4,7 @@ from PIL import Image
 
 
 def resize_image_binary(image_binary, ext):
+    ext = ext.lower()
     ext = 'jpeg' if ext == 'jpg' else ext
     with BytesIO(image_binary) as f:
         with Image.open(f) as img:
