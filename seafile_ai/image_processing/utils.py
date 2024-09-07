@@ -10,9 +10,9 @@ def resize_image_binary(image_binary, ext):
             width, height = img.size
 
             if width <= height:
-                ratio = 600 / width
+                ratio = 512 / width
             else:
-                ratio = 600 / height
+                ratio = 512 / height
 
             new_width = int(width * ratio)
             new_height = int(height * ratio)
