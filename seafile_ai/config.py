@@ -17,6 +17,9 @@ ENABLE_SYS_LOG = False
 
 APP_NAME = 'seafile-ai'
 
+# CLIP model
+CLIP_MODEL_PATH = ''
+
 # LLM
 LLM_URL = ''
 LLM_TYPE = 'open-ai-proxy'

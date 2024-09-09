@@ -13,7 +13,7 @@ class SeafileAIApp(object):
             raise Exception('unknown llm type')
 
         self.text_processing_manager = TextProcessingManager(self, config.LLM_TYPE)
-        self.image_processing_manager = ImageProcessingManager(self)
+        self.image_processing_manager = ImageProcessingManager(self, config)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
 
     def serve_forever(self):

@@ -1,6 +1,11 @@
 import base64
+import io
 import os
 
+from PIL import Image
+from seafobj import fs_mgr
+
+from seafile_ai.image_processing.CLIP_model import CLIPModel
 from seafile_ai.image_processing.utils import resize_image_binary
 from seafile_ai.utils import get_image_by_token
 from seafile_ai.utils.constants import LANGUAGE
@@ -8,8 +13,23 @@ from seafile_ai.utils.constants import LANGUAGE
 
 class ImageProcessingManager:
 
-    def __init__(self, app):
+    def __init__(self, app, config):
         self.app = app
+        self.clip_model = CLIPModel(config.CLIP_MODEL_PATH)
+
+    def images_embedding(self, repo_id, obj_ids):
+        embeddings = []
+        for obj_id in obj_ids:
+            f = fs_mgr.load_seafile(repo_id, 1, obj_id)
+            content = f.get_content()
+            image = Image.open(io.BytesIO(content))
+            embedding = self.clip_model.embedding(image)
+            embeddings.append({
+                'obj_id': obj_id,
+                'embedding': embedding.tolist()[0]
+            })
+
+        return embeddings
 
     def image_caption(self, path, download_token, lang):
         file_name = os.path.basename(path)

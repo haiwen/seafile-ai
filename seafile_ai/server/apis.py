@@ -92,3 +92,32 @@ def image_caption():
         return {'error_msg': 'Internet server error.'}, 500
 
     return {'desc': desc}, 200
+
+
+@flask_app.route('/api/v1/images-embedding/', methods=['POST'])
+def images_embedding():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+    obj_ids = data.get('obj_ids')
+
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
+    if not obj_ids or not isinstance(obj_ids, list):
+        return {'error_msg': 'obj_ids invalid.'}, 400
+
+    try:
+        embeddings = flask_app.app.image_processing_manager.images_embedding(repo_id, obj_ids)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'data': embeddings}, 200
