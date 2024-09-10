@@ -2,8 +2,13 @@ import requests
 import json
 import logging
 
+import mammoth
+import pymupdf
+import pymupdf4llm
+
 from urllib.parse import quote as urlquote
 from pathlib import Path
+from io import BytesIO
 
 from seafile_ai.config import FILE_SERVER
 from seafile_ai.utils.sdoc2md import sdoc2md
@@ -22,7 +27,7 @@ def get_file_by_token(token, filename):
     if response.status_code != 200:
         raise ConnectionError(response.status_code, response.text)
 
-    return response.content.decode()
+    return response.content
 
 
 def get_image_by_token(token, filename):
@@ -38,8 +43,24 @@ def convert_file_to_md(file_name, download_token):
     doc_content = get_file_by_token(download_token, file_name)
     file_ext = Path(file_name).suffix
     if file_ext == '.sdoc':
-        return sdoc2md(json.loads(doc_content))
-    elif file_ext == '.md' or '.markdown':
-        return doc_content
+        return sdoc2md(json.loads(doc_content.decode()))
+    elif file_ext in ['.md', '.markdown']:
+        return doc_content.decode()
+    elif file_ext == '.docx':
+        return docx2md(doc_content)
+    elif file_ext == '.pdf':
+        return pdf2md(doc_content)
     else:
         return ''
+
+
+def docx2md(file):
+    ignore_images = lambda _: []
+    result = mammoth.convert_to_markdown(BytesIO(file), convert_image=ignore_images)
+    return result.value.replace('\\', '')
+
+
+def pdf2md(file):
+    doc = pymupdf.Document(stream=file)
+    md = pymupdf4llm.to_markdown(doc, margins=0, show_progress=False)
+    return md
