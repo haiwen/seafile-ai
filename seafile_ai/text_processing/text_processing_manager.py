@@ -30,7 +30,7 @@ class TextProcessingManager:
 
     def _gen_doc_summary(self, content):
         if self.llm_type == 'open-ai-proxy':
-            system_content = 'You are a document summarization expert. I need you to generate a concise summary of a document that is no longer than 40 words. The summary should capture the main points and themes of the document clearly and effectively.The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
+            system_content = 'You are a document summarization expert. I need you to generate a concise summary of a document that is about 100 words. The summary should capture the main points and themes of the document clearly and effectively.The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
             system_prompt = {"role": "system", "content": system_content}
             user_prompt = {"role": "user", "content": content}
             messages = [system_prompt, user_prompt]
