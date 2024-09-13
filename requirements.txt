@@ -2,5 +2,6 @@ Flask
 gevent
 html2text
 pillow
+flask-caching
 mammoth==1.8.0
 pymupdf4llm==0.0.14

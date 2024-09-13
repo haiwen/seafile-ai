@@ -34,5 +34,5 @@ class ImageProcessingManager:
                 ]
             }
         ]
-        desc = self.app.openai_api.chat_completions(messages)
+        desc = self.app.image_llm_api.chat_completions(messages)
         return desc

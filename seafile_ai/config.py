@@ -17,10 +17,16 @@ ENABLE_SYS_LOG = False
 
 APP_NAME = 'seafile-ai'
 
-# LLM
-LLM_URL = ''
-LLM_TYPE = 'open-ai-proxy'
-LLM_KEY = ''
+# text LLM
+TEXT_LLM_URL = ''
+TEXT_LLM_TYPE = 'open-ai-proxy'
+TEXT_LLM_KEY = ''
+TEXT_LLM_SECRET_KEY = ''
+
+# image LLM
+IMAGE_LLM_URL = ''
+IMAGE_LLM_TYPE = 'open-ai-proxy'
+IMAGE_LLM_KEY = ''
 
 FILE_SERVER = ''
 

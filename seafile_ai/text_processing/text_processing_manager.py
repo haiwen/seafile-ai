@@ -29,13 +29,29 @@ class TextProcessingManager:
         return summary_text
 
     def _gen_doc_summary(self, content):
-        if self.llm_type == 'open-ai-proxy':
+        if self.llm_type in ['open-ai-proxy', 'aliyun']:
             system_content = 'You are a document summarization expert. I need you to generate a concise summary of a document that is about 100 words. The summary should capture the main points and themes of the document clearly and effectively.The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
             system_prompt = {"role": "system", "content": system_content}
             user_prompt = {"role": "user", "content": content}
             messages = [system_prompt, user_prompt]
-            summary = self.app.openai_api.chat_completions(messages)
+            summary = self.app.text_llm_api.chat_completions(messages)
+            return summary
+        elif self.llm_type == 'baidu':
+            messages = [
+                {
+                    "role": "user",
+                    "content": "You are a document summarization expert. I need you to generate a concise summary of a document that is about 100 words. The summary should capture the main points and themes of the document clearly and effectively.The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None"
+                },
+                {
+                    "role": "assistant",
+                    "content": "OK"
+                },
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ]
+            summary = self.app.text_llm_api.chat_completions(messages)
             return summary
         else:
-            logger.error('llm_type is not set correctly in config')
-            return None
+            raise Exception('unknown llm type')

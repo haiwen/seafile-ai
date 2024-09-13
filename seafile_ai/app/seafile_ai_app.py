@@ -6,13 +6,25 @@ from seafile_ai.text_processing.text_processing_manager import TextProcessingMan
 class SeafileAIApp(object):
     def __init__(self, config):
         self.config = config
-        if config.LLM_TYPE == 'open-ai-proxy':
+        if config.TEXT_LLM_TYPE == 'open-ai-proxy':
             from seafile_ai.utils.openai_api import OpenAIAPI
-            self.openai_api = OpenAIAPI(config.LLM_URL)
+            self.text_llm_api = OpenAIAPI(config.TEXT_LLM_URL)
+        elif config.TEXT_LLM_TYPE == 'aliyun':
+            from seafile_ai.utils.aliyun_llm_api import AliyunLLMAPI
+            self.text_llm_api = AliyunLLMAPI(config.TEXT_LLM_URL, config.TEXT_LLM_KEY)
+        elif config.TEXT_LLM_TYPE == 'baidu':
+            from seafile_ai.utils.baidu_llm_api import BaiduLLMAPI
+            self.text_llm_api = BaiduLLMAPI(config.TEXT_LLM_URL, config.TEXT_LLM_KEY, config.TEXT_LLM_SECRET_KET)
         else:
-            raise Exception('unknown llm type')
+            raise Exception('unknown text llm type')
 
-        self.text_processing_manager = TextProcessingManager(self, config.LLM_TYPE)
+        if config.IMAGE_LLM_TYPE == 'open-ai-proxy':
+            from seafile_ai.utils.openai_api import OpenAIAPI
+            self.image_llm_api = OpenAIAPI(config.IMAGE_LLM_URL)
+        else:
+            raise Exception('unknown image llm type')
+
+        self.text_processing_manager = TextProcessingManager(self, config.TEXT_LLM_TYPE)
         self.image_processing_manager = ImageProcessingManager(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
 

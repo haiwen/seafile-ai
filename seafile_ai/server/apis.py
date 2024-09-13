@@ -4,6 +4,7 @@ import json
 
 from flask import Flask, request
 from pathlib import Path
+from flask_caching import Cache
 
 from seafile_ai import config
 from seafile_ai.utils.constants import SUMMARY_SUPPORTED_FILES
@@ -11,6 +12,7 @@ from seafile_ai.utils.constants import SUMMARY_SUPPORTED_FILES
 
 logger = logging.getLogger(__name__)
 flask_app = Flask(__name__)
+cache = Cache(flask_app, config={'CACHE_TYPE': 'SimpleCache'})
 
 
 def check_auth_token(req):
