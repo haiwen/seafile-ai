@@ -4,3 +4,6 @@ html2text
 pillow
 mammoth==1.8.0
 pymupdf4llm==0.0.14
+opencv-python
+insightface
+onnxruntime
