@@ -16,8 +16,12 @@ class InsightfaceModel:
     def embedding(self, content):
         embeddings = []
         input_image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), 1)
+        input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB)
         faces = self.model.get(input_image)
         for face in faces:
+            det_score = face.det_score
+            if det_score < 0.6:
+                continue
             embedding = np.array(face.embedding).reshape((1, -1))
             embedding = preprocessing.normalize(embedding)
             embeddings.append(embedding.tolist()[0])
