@@ -12,6 +12,7 @@ from io import BytesIO
 
 from seafile_ai.config import FILE_SERVER
 from seafile_ai.utils.sdoc2md import sdoc2md
+from seafile_ai.utils.parse_pptx import get_pptx_text
 
 
 logger = logging.getLogger(__name__)
@@ -39,19 +40,20 @@ def get_image_by_token(token, filename):
     return response.content
 
 
-def convert_file_to_md(file_name, download_token):
-    doc_content = get_file_by_token(download_token, file_name)
-    file_ext = Path(file_name).suffix
-    if file_ext == '.sdoc':
-        return sdoc2md(json.loads(doc_content.decode()))
-    elif file_ext in ['.md', '.markdown']:
-        return doc_content.decode()
-    elif file_ext == '.docx':
-        return docx2md(doc_content)
-    elif file_ext == '.pdf':
-        return pdf2md(doc_content)
-    else:
-        return ''
+def parse_file(file_name, download_token):
+    doc = get_file_by_token(download_token, file_name)
+    file_ext = Path(file_name).suffix.lower()
+
+    parser_mapping = {
+        '.sdoc': lambda x: sdoc2md(json.loads(x.decode())),
+        '.md': lambda x: x.decode(),
+        '.markdown': lambda x: x.decode(),
+        '.docx': docx2md,
+        '.pdf': pdf2md,
+        '.pptx': get_pptx_text
+    }
+
+    return parser_mapping.get(file_ext, lambda x: '')(doc)
 
 
 def docx2md(file):
