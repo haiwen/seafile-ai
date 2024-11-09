@@ -14,7 +14,7 @@ class InsightfaceModel:
         self.model.prepare(ctx_id=self.gpu_id, det_thresh=self.det_thresh)
 
     def embedding(self, content):
-        embeddings = []
+        result = []
         input_image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), 1)
         input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB)
         faces = self.model.get(input_image)
@@ -24,5 +24,10 @@ class InsightfaceModel:
                 continue
             embedding = np.array(face.embedding).reshape((1, -1))
             embedding = preprocessing.normalize(embedding)
-            embeddings.append(embedding.tolist()[0])
-        return embeddings
+            embedding = embedding.tolist()[0]
+            box = face.bbox.astype(np.int64).tolist()
+            result.append({
+                'embedding': embedding,
+                'box': box
+            })
+        return result

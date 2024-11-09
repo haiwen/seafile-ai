@@ -16,7 +16,7 @@ class EmbeddingManager:
             result = self.insightface_model.embedding(content)
             embeddings.append({
                 'obj_id': obj_id,
-                'embeddings': result
+                'faces': result
             })
 
         return embeddings
