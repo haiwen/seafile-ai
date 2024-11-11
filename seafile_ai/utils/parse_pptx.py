@@ -21,12 +21,6 @@ def is_title(shape):
     return False
 
 
-def is_text_block(shape):
-    if shape.has_text_frame:
-        return True
-    return False
-
-
 def is_list_block(shape):
     levels = []
     for para in shape.text_frame.paragraphs:
@@ -50,11 +44,6 @@ def put_table(table):
     table_text += gen_table_row([':-:' for _ in table[0]]) + '\n'
     table_text += '\n'.join([gen_table_row(row) for row in table[1:]]) + '\n\n'
     return table_text
-
-
-def process_title(shape, slide_idx):
-    text = shape.text_frame.text.strip()
-    return text
 
 
 def process_text_block(shape):
