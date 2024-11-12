@@ -3,12 +3,12 @@ import json
 import logging
 
 import mammoth
-import pymupdf
-import pymupdf4llm
 
 from urllib.parse import quote as urlquote
 from pathlib import Path
 from io import BytesIO
+
+from pdfminer.high_level import extract_text
 
 from seafile_ai.config import FILE_SERVER
 from seafile_ai.utils.sdoc2md import sdoc2md
@@ -49,7 +49,7 @@ def parse_file(file_name, download_token):
         '.md': lambda x: x.decode(),
         '.markdown': lambda x: x.decode(),
         '.docx': docx2md,
-        '.pdf': pdf2md,
+        '.pdf': get_pdf_text,
         '.pptx': get_pptx_text
     }
 
@@ -62,7 +62,6 @@ def docx2md(file):
     return result.value.replace('\\', '')
 
 
-def pdf2md(file):
-    doc = pymupdf.Document(stream=file)
-    md = pymupdf4llm.to_markdown(doc, margins=0, show_progress=False)
-    return md
+def get_pdf_text(file):
+    text = extract_text(BytesIO(file))
+    return text
