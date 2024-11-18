@@ -1,12 +1,11 @@
 import base64
-import io
 
 import cv2
 import insightface
 import numpy as np
 from sklearn import preprocessing
 
-from image_embedding.app.utils import get_face_image
+from image_embedding.embedding.utils import get_face_image
 
 
 class InsightfaceModel:
