@@ -1,7 +1,12 @@
+import base64
+import io
+
 import cv2
 import insightface
 import numpy as np
 from sklearn import preprocessing
+
+from image_embedding.app.utils import get_face_image
 
 
 class InsightfaceModel:
@@ -13,21 +18,27 @@ class InsightfaceModel:
         self.model = insightface.app.FaceAnalysis(root=model_dir, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
         self.model.prepare(ctx_id=self.gpu_id, det_thresh=self.det_thresh)
 
-    def embedding(self, content):
+    def embedding(self, content, need_face):
         result = []
         input_image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), 1)
         input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB)
         faces = self.model.get(input_image)
         for face in faces:
             det_score = face.det_score
-            if det_score < 0.6:
+            if det_score < 0.7:
                 continue
+
+            face_info = {}
             embedding = np.array(face.embedding).reshape((1, -1))
             embedding = preprocessing.normalize(embedding)
             embedding = embedding.tolist()[0]
-            box = face.bbox.astype(np.int64).tolist()
-            result.append({
-                'embedding': embedding,
-                'box': box
-            })
+            face_info['embedding'] = embedding
+
+            if need_face:
+                box = face.bbox.astype(np.int64)
+                face_image = get_face_image(input_image, box)
+                face_info['face'] = base64.b64encode(face_image).decode('utf-8')
+
+            result.append(face_info)
+
         return result

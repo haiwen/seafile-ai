@@ -42,6 +42,7 @@ def face_embeddings():
 
     repo_id = data.get('repo_id')
     obj_ids = data.get('obj_ids')
+    need_face = data.get('need_face', False)
 
     if not repo_id:
         return {'error_msg': 'repo_id invalid.'}, 400
@@ -49,7 +50,7 @@ def face_embeddings():
         return {'error_msg': 'obj_ids invalid.'}, 400
 
     try:
-        embeddings = flask_app.app.face_embedding_manager.face_embedding(repo_id, obj_ids)
+        embeddings = flask_app.app.face_embedding_manager.face_embedding(repo_id, obj_ids, need_face)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
