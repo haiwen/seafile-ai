@@ -23,8 +23,11 @@ class EmbeddingManager:
             if content.strip():
                 result = self.insightface_model.embedding(content, need_face)
                 if result is None:
-                    image = Image.open(BytesIO(content))
-                    logger.warning('repo_id: %s, obj_id: %s, unsupported image format: %s', repo_id, obj_id, image.format)
+                    try:
+                        image = Image.open(BytesIO(content))
+                        logger.warning('repo_id: %s, obj_id: %s, unsupported image format: %s', repo_id, obj_id, image.format)
+                    except Exception as e:
+                        logger.warning('repo_id: %s, obj_id: %s, unable to read image', repo_id, obj_id)
                 else:
                     faces = result
 
