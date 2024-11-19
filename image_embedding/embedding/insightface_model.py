@@ -20,6 +20,9 @@ class InsightfaceModel:
     def embedding(self, content, need_face):
         result = []
         input_image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), 1)
+        if input_image is None:
+            return None
+
         input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB)
         faces = self.model.get(input_image)
         for face in faces:
