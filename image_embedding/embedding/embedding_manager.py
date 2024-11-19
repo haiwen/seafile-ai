@@ -11,12 +11,15 @@ class EmbeddingManager:
     def face_embedding(self, repo_id, obj_ids, need_face):
         embeddings = []
         for obj_id in obj_ids:
+            faces = []
             f = fs_mgr.load_seafile(repo_id, 1, obj_id)
             content = f.get_content()
-            result = self.insightface_model.embedding(content, need_face)
+            if content.strip():
+                faces = self.insightface_model.embedding(content, need_face)
+
             embeddings.append({
                 'obj_id': obj_id,
-                'faces': result
+                'faces': faces
             })
 
         return embeddings

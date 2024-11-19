@@ -1,11 +1,16 @@
 import base64
+import logging
+from io import BytesIO
 
 import cv2
 import insightface
 import numpy as np
+from PIL import Image
 from sklearn import preprocessing
 
 from image_embedding.embedding.utils import get_face_image
+
+logger = logging.getLogger(__name__)
 
 
 class InsightfaceModel:
@@ -20,6 +25,11 @@ class InsightfaceModel:
     def embedding(self, content, need_face):
         result = []
         input_image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), 1)
+        if input_image is None:
+            image = Image.open(BytesIO(content))
+            logger.warning('Unsupported image format: %s', image.format)
+            return result
+
         input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB)
         faces = self.model.get(input_image)
         for face in faces:
