@@ -14,8 +14,7 @@ class ImageProcessingManager:
     def image_caption(self, path, download_token, lang):
         file_name = os.path.basename(path)
         content = get_image_by_token(download_token, file_name)
-        ext = file_name.split('.')[-1]
-        content = resize_image_binary(content, ext)
+        content = resize_image_binary(content)
         base64_image = base64.b64encode(content).decode('utf-8')
         messages = [
             {

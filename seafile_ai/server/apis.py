@@ -2,6 +2,7 @@ import logging
 import jwt
 import json
 
+from PIL import UnidentifiedImageError
 from flask import Flask, request
 from pathlib import Path
 
@@ -79,7 +80,7 @@ def image_caption():
     download_token = data.get('download_token')
 
     if not path:
-        return {'error_msg': 'repo_id invalid.'}, 400
+        return {'error_msg': 'path invalid.'}, 400
     if not lang:
         return {'error_msg': 'lang invalid.'}, 400
     if not download_token:
@@ -87,6 +88,9 @@ def image_caption():
 
     try:
         desc = flask_app.app.image_processing_manager.image_caption(path, download_token, lang)
+    except UnidentifiedImageError as e:
+        logger.exception(e)
+        return {'error_msg': 'file format not supported.'}, 400
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
