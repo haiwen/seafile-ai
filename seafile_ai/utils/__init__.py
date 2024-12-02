@@ -18,6 +18,16 @@ from seafile_ai.utils.parse_pptx import get_pptx_text
 logger = logging.getLogger(__name__)
 
 
+def parse_response(response):
+    if response.status_code >= 400 or response.status_code < 200:
+        raise ConnectionError(response.status_code, response.text)
+    else:
+        try:
+            return response.json()
+        except:
+            pass
+
+
 def gen_file_get_url(token, filename):
     return '%s/files/%s/%s' % (FILE_SERVER, token, urlquote(filename))
 

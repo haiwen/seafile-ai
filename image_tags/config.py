@@ -7,38 +7,27 @@ logger = logging.getLogger(__name__)
 basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, basedir)
 
-
 SECRET_KEY = ''
+FILE_SERVER = ''
+
+IMAGE_TAGS_MODEL_DIR = ''
 
 # log
 LOG_FILE = None
 LOG_LEVEL = 'info'
 ENABLE_SYS_LOG = False
 
-APP_NAME = 'seafile-ai'
-
-# LLM
-LLM_URL = ''
-LLM_TYPE = 'open-ai-proxy'
-LLM_KEY = ''
-
-# Image tags
-IMAGE_TAGS_SERVICE_URL = ''
-IMAGE_TAGS_SERVICE_KEY = ''
-
-FILE_SERVER = ''
-
 CONF_DIR = '/opt/seafile/conf/'
 
 try:
-    if os.path.exists('seafile_ai_settings.py'):
-        from seafile_ai_settings import *
+    if os.path.exists('local_settings.py'):
+        from local_settings import *
 except:
     pass
 
 try:
     if os.path.exists(CONF_DIR):
         sys.path.insert(0, CONF_DIR)
-    from seafile_ai_settings import *
+    from image_tags_settings import *
 except ImportError as e:
     pass
