@@ -61,11 +61,10 @@ def init_tokenizer(tokenizer_path):
     return tokenizer
 
 
-def load_checkpoint(model, model_dir):
-    checkpoint_path = os.path.join(model_dir, 'tag2text_swin_14m_only_tags.pth')
-    state_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
+def load_checkpoint(model, model_path):
+    state_dict = torch.load(model_path, map_location='cpu', weights_only=True)
     model.load_state_dict(state_dict, strict=False)
-    logger.info('load checkpoint from %s' % checkpoint_path)
+    logger.info('load checkpoint from %s' % model_path)
     return model
 
 
