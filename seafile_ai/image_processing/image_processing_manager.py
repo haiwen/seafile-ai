@@ -36,6 +36,6 @@ class ImageProcessingManager:
         desc = self.app.openai_api.chat_completions(messages)
         return desc
 
-    def image_tags(self, path, download_token):
-        result = self.app.image_tags_api.image_tags(path, download_token)
+    def image_tags(self, path, download_token, lang):
+        result = self.app.image_tags_api.image_tags(path, download_token, lang)
         return result.get('tags')

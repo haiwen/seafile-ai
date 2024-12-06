@@ -21,17 +21,17 @@ class ImageTagsManager:
             self.model = Tag2Text(model_dir)
             self.model = load_checkpoint(self.model, os.path.join(model_dir, 'tag2text_swin_14m_only_tags.pth')).to(self.device)
         elif model_type == 'ram':
-            self.model = RAM(model_dir, delete_tag_index=[])
+            self.model = RAM(model_dir)
             self.model = load_checkpoint(self.model, os.path.join(model_dir, 'ram_swin_14m_only_tags.pth')).to(self.device)
         else:
             raise NotImplementedError
         self.model.eval()
 
-    def image_tags(self, path, download_token):
+    def image_tags(self, path, download_token, lang):
         file_name = os.path.basename(path.rstrip('/'))
         content = get_image_by_token(download_token, file_name)
         if not content:
             return None
 
         image = self.transform(Image.open(BytesIO(content))).unsqueeze(0).to(self.device)
-        return self.model.predict(image)
+        return self.model.predict(image, lang)
