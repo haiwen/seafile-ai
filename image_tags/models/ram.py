@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 
 class RAM(nn.Module):
-    def __init__(self, model_dir, threshold=0.68, delete_tag_index=None):
+    def __init__(self, model_dir, threshold=0.68):
         super().__init__()
 
         # create image encoder
@@ -38,14 +38,23 @@ class RAM(nn.Module):
         # create tokenzier
         self.tokenizer = init_tokenizer(os.path.join(model_dir, 'tokenizer'))
 
-        self.delete_tag_index = delete_tag_index
-
         # load tag list
-        self.tag_list = self.load_tag_list(os.path.join(model_dir, 'ram_tag_list.txt'))
+        self.tags_dir = os.path.join(model_dir, 'tags')
+        self.english_tag_list = self.load_tag_list(os.path.join(self.tags_dir, 'english_tags.txt'))
+        self.chinese_tag_list = self.load_tag_list(os.path.join(self.tags_dir, 'chinese_tags.txt'))
+        self.deleted_tags_index = self.load_deleted_tags_index(os.path.join(self.tags_dir, 'deleted_tags_index.txt'))
+
+        # adjust thresholds for some tags
+        self.num_class = len(self.english_tag_list)
+        self.threshold = threshold
+        self.class_threshold = torch.ones(self.num_class) * self.threshold
+        ram_class_threshold_path = os.path.join(self.tags_dir, 'tags_threshold.txt')
+        with open(ram_class_threshold_path, 'r', encoding='utf-8') as f:
+            ram_class_threshold = [float(s.strip()) for s in f]
+        for key, value in enumerate(ram_class_threshold):
+            self.class_threshold[key] = value
 
         # create image-tag recognition decoder
-        self.threshold = threshold
-        self.num_class = len(self.tag_list)
         q2l_config = BertConfig.from_json_file(os.path.join(model_dir, 'q2l_config.json'))
         q2l_config.encoder_width = 512
         self.tagging_head = BertModel(config=q2l_config,
@@ -63,19 +72,16 @@ class RAM(nn.Module):
 
         self.image_proj = nn.Linear(vision_width, 512)
 
-        # adjust thresholds for some tags
-        self.class_threshold = torch.ones(self.num_class) * self.threshold
-        ram_class_threshold_path = os.path.join(model_dir, 'ram_tag_list_threshold.txt')
-        with open(ram_class_threshold_path, 'r', encoding='utf-8') as f:
-            ram_class_threshold = [float(s.strip()) for s in f]
-        for key, value in enumerate(ram_class_threshold):
-            self.class_threshold[key] = value
-
     def load_tag_list(self, tag_list_file):
         with open(tag_list_file, 'r', encoding="utf-8") as f:
             tag_list = f.read().splitlines()
         tag_list = np.array(tag_list)
         return tag_list
+
+    def load_deleted_tags_index(self, index_file):
+        with open(index_file, 'r', encoding="utf-8") as f:
+            indexes = [int(i.strip()) for i in f.readlines() if i.strip()]
+        return indexes
 
     # delete self-attention layer of image-tag recognition decoder to reduce computation, follower Query2Label
     def del_selfattention(self):
@@ -83,7 +89,13 @@ class RAM(nn.Module):
         for layer in self.tagging_head.encoder.layer:
             del layer.attention
 
-    def predict(self, image):
+    def predict(self, image, lang):
+        if lang == 'en':
+            tag_list = self.english_tag_list
+        elif lang == 'zh-cn':
+            tag_list = self.chinese_tag_list
+        else:
+            raise Exception('not support language: {}'.format(lang))
         label_embed = torch.nn.functional.relu(self.wordvec_proj(self.label_embed))
 
         image_embeds = self.image_proj(self.visual_encoder(image))
@@ -111,11 +123,11 @@ class RAM(nn.Module):
             torch.zeros(self.num_class).to(image.device))
 
         tag = targets.cpu().numpy()
-        tag[:, self.delete_tag_index] = 0
+        tag[:, self.deleted_tags_index] = 0
         tags = []
         for b in range(bs):
             index = np.argwhere(tag[b] == 1)
-            token = self.tag_list[index].squeeze(axis=1)
+            token = tag_list[index].squeeze(axis=1)
             tags.append(token.tolist())
 
         return tags[0]

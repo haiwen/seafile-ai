@@ -112,6 +112,7 @@ def image_tags():
 
     path = data.get('path')
     download_token = data.get('download_token')
+    lang = data.get('lang', 'en')
 
     if not path:
         return {'error_msg': 'path invalid.'}, 400
@@ -119,7 +120,7 @@ def image_tags():
         return {'error_msg': 'download_token invalid.'}, 400
 
     try:
-        tags = flask_app.app.image_processing_manager.image_tags(path, download_token)
+        tags = flask_app.app.image_processing_manager.image_tags(path, download_token, lang)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500

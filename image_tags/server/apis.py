@@ -43,6 +43,7 @@ def image_tags():
 
     path = data.get('path')
     download_token = data.get('download_token')
+    lang = data.get('lang', 'en')
 
     if not path:
         return {'error_msg': 'path invalid.'}, 400
@@ -50,7 +51,7 @@ def image_tags():
         return {'error_msg': 'download_token invalid.'}, 400
 
     try:
-        tags = flask_app.app.image_tags_manager.image_tags(path, download_token)
+        tags = flask_app.app.image_tags_manager.image_tags(path, download_token, lang)
     except UnidentifiedImageError as e:
         logger.exception(e)
         return {'error_msg': 'file format not supported.'}, 400
