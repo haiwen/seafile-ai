@@ -72,6 +72,5 @@ class TextProcessingManager:
         messages = [system_prompt, user_prompt]
 
         res = self.app.openai_api.chat_completions(messages)
-        print(res)
         tags = re.split(r'[，,]', res)
         return [tag.strip() for tag in tags if tag.strip()]
