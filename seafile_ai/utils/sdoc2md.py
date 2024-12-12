@@ -270,7 +270,7 @@ def json2md(json_data):
 
 def sdoc2md(json_tree):
     results = []
-    version = json_tree.get('format_version', 3)
+    version = json_tree.get('format_version')
     elements = json_tree.get('elements', [])
     if version == 3:
         elements = json_tree.get('children', [])
