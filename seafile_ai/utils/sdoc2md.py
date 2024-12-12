@@ -270,7 +270,11 @@ def json2md(json_data):
 
 def sdoc2md(json_tree):
     results = []
-    for sub in json_tree.get('elements', []):
+    version = json_tree.get('format_version', 3)
+    elements = json_tree.get('elements', [])
+    if version == 3:
+        elements = json_tree.get('children', [])
+    for sub in elements:
         results.append(json2md(sub))
     markdown_text = "\n".join(results)
     return markdown_text

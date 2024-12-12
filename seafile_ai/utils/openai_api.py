@@ -28,10 +28,9 @@ class OpenAIAPI:
         }
         response = requests.post(self.openai_proxy_url, json=json_data, timeout=self.timeout)
         data = parse_response(response)
-        try:
-            result = data['choices'][0]['message']['content']
-        except KeyError as e:
-            logger.exception(e)
-            result = None
+        if 'error' in data.keys():
+            logger.error('OpenAI API error: %s', data['error']['message'])
+            return None
 
+        result = data['choices'][0]['message']['content']
         return result
