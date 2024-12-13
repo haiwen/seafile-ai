@@ -98,8 +98,8 @@ def image_caption():
     return {'desc': desc}, 200
 
 
-@flask_app.route('/api/v1/image-tags/', methods=['POST'])
-def image_tags():
+@flask_app.route('/api/v1/generate-file-tags/', methods=['POST'])
+def generate_file_tags():
     is_valid = check_auth_token(request)
     if not is_valid:
         return {'error_msg': 'Permission denied'}, 403
@@ -112,17 +112,32 @@ def image_tags():
 
     path = data.get('path')
     download_token = data.get('download_token')
-    lang = data.get('lang', 'en')
+    file_type = data.get('file_type')
 
     if not path:
         return {'error_msg': 'path invalid.'}, 400
     if not download_token:
         return {'error_msg': 'download_token invalid.'}, 400
+    if not file_type or file_type not in ['image', 'doc']:
+        return {'error_msg': 'file_type invalid.'}, 400
 
-    try:
-        tags = flask_app.app.image_processing_manager.image_tags(path, download_token, lang)
-    except Exception as e:
-        logger.exception(e)
-        return {'error_msg': 'Internet server error.'}, 500
+    if file_type == 'image':
+        lang = data.get('lang', 'en')
+        try:
+            tags = flask_app.app.image_processing_manager.image_tags(path, download_token, lang)
+        except Exception as e:
+            logger.exception(e)
+            return {'error_msg': 'Internet server error.'}, 500
+    else:
+        candidate_tags = data.get('candidate_tags', [])
+
+        if not isinstance(candidate_tags, list):
+            return {'error_msg': 'candidate_tags invalid.'}, 400
+
+        try:
+            tags = flask_app.app.text_processing_manager.doc_tags(path, download_token, candidate_tags)
+        except Exception as e:
+            logger.exception(e)
+            return {'error_msg': 'Internet server error.'}, 500
 
     return {'tags': tags}, 200
