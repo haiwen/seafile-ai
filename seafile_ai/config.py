@@ -26,6 +26,11 @@ LLM_KEY = ''
 IMAGE_TAGS_SERVICE_URL = ''
 IMAGE_TAGS_SERVICE_KEY = ''
 
+# OCR
+OCR_SERVICE_URL = ''
+OCR_SERVICE_KEY = ''
+OCR_SERVICE_TYPE = 'seafile-ocr'
+
 FILE_SERVER = ''
 
 CONF_DIR = '/opt/seafile/conf/'

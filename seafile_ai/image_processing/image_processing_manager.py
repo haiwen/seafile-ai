@@ -1,6 +1,7 @@
 import base64
 import os
 
+from seafile_ai import config
 from seafile_ai.image_processing.utils import resize_image_binary
 from seafile_ai.utils import get_image_by_token
 from seafile_ai.utils.constants import LANGUAGE
@@ -39,3 +40,10 @@ class ImageProcessingManager:
     def image_tags(self, path, download_token, lang):
         result = self.app.image_tags_api.image_tags(path, download_token, lang)
         return result.get('tags')
+
+    def ocr(self, path, download_token):
+        if config.OCR_SERVICE_TYPE == 'seafile-ocr':
+            result = self.app.ocr_api.ocr(path, download_token)
+            return result.get('ocr_result')
+        else:
+            raise Exception('unknown ocr service type')

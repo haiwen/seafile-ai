@@ -14,7 +14,6 @@ from seafile_ai.config import FILE_SERVER
 from seafile_ai.utils.sdoc2md import sdoc2md
 from seafile_ai.utils.parse_pptx import get_pptx_text
 
-
 logger = logging.getLogger(__name__)
 
 
