@@ -22,7 +22,7 @@ class ImageProcessingManager:
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Please describe the contents of this picture in {LANGUAGE[lang]} one by one. Be careful not to describe the feeling the picture gives people. The word count should be about 100 words."
+                        "text": f"Please describe the contents of this picture in Chinese. Focus solely on the objects and details depicted, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
                     },
                     {
                         "type": "image_url",
