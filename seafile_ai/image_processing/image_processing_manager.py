@@ -22,7 +22,7 @@ class ImageProcessingManager:
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Please describe this image in {LANGUAGE[lang]} with a sentence of about 100 words."
+                        "text": f"Please describe the contents of this picture in {LANGUAGE[lang]}. Focus solely on the objects and details depicted, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
                     },
                     {
                         "type": "image_url",
