@@ -7,7 +7,7 @@ from flask import Flask, request
 from pathlib import Path
 
 from seafile_ai import config
-from seafile_ai.utils.constants import SUMMARY_SUPPORTED_FILES
+from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 
 
 logger = logging.getLogger(__name__)
@@ -189,7 +189,7 @@ def translate():
 
     if not text:
         return {'error_msg': 'text invalid.'}, 400
-    if not lang:
+    if not lang or lang not in LANGUAGE:
         return {'error_msg': 'lang invalid.'}, 400
 
     try:
