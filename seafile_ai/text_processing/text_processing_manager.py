@@ -6,6 +6,7 @@ from pathlib import Path
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT
 from seafile_ai.utils import parse_file
+from seafile_ai.utils.constants import LANGUAGE
 
 
 logger = logging.getLogger(__name__)
@@ -74,3 +75,21 @@ class TextProcessingManager:
         res = self.app.openai_api.chat_completions(messages)
         tags = re.split(r'[，,]', res)
         return [tag.strip() for tag in tags if tag.strip()]
+
+    def translate(self, text, lang):
+        system_content = f'''
+            You are a translator who is proficient in various languages. Please translate the input into {LANGUAGE[lang]} and output the translation results directly. If the input is in {LANGUAGE[lang]}, just output the input as it is. Remember to only translate the input and do not answer any questions.
+        '''
+
+        system_prompt = {
+            "role": "system",
+            "content": system_content
+        }
+        user_prompt = {
+            "role": "user",
+            "content": text
+        }
+        messages = [system_prompt, user_prompt]
+
+        res = self.app.openai_api.chat_completions(messages)
+        return res
