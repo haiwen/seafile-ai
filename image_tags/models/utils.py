@@ -1,8 +1,10 @@
 import json
 import logging
+import sys
 from itertools import repeat
 import collections.abc
 
+import numpy as np
 import requests
 import torch
 import math
@@ -11,9 +13,11 @@ from urllib.parse import quote as urlquote
 
 from torch import nn
 from transformers import BertTokenizer
-from torchvision.transforms import Normalize, Compose, Resize, ToTensor
+# from torchvision.transforms import Normalize, Compose, Resize, ToTensor
 
 from image_tags.config import FILE_SERVER
+from image_tags.models.normalize import Normalize
+from image_tags.models.resize import Resize
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +71,47 @@ class DropPath(nn.Module):
 
     def extra_repr(self):
         return f'drop_prob={round(self.drop_prob,3):0.3f}'
+
+
+class Compose:
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, img):
+        for t in self.transforms:
+            img = t(img)
+        return img
+
+    def __repr__(self) -> str:
+        format_string = self.__class__.__name__ + "("
+        for t in self.transforms:
+            format_string += "\n"
+            format_string += f"    {t}"
+        format_string += "\n)"
+        return format_string
+
+
+def get_image_num_channels(img):
+    if hasattr(img, "getbands"):
+        return len(img.getbands())
+    else:
+        return img.channels
+
+
+def to_tensor(pic):
+    # handle PIL Image
+    mode_to_nptype = {"I": np.int32, "I;16" if sys.byteorder == "little" else "I;16B": np.int16, "F": np.float32}
+    img = torch.from_numpy(np.array(pic, mode_to_nptype.get(pic.mode, np.uint8), copy=True))
+
+    if pic.mode == "1":
+        img = 255 * img
+    img = img.view(pic.size[1], pic.size[0], get_image_num_channels(pic))
+    # put it from HWC to CHW format
+    img = img.permute((2, 0, 1)).contiguous()
+    if isinstance(img, torch.ByteTensor):
+        return img.to(dtype=torch.get_default_dtype()).div(255)
+    else:
+        return img
 
 
 def to_2tuple(x):
@@ -140,7 +185,7 @@ def get_transform(image_size=384):
     return Compose([
         convert_to_rgb,
         Resize((image_size, image_size)),
-        ToTensor(),
+        to_tensor,
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 

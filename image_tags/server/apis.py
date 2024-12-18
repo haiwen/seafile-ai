@@ -56,7 +56,7 @@ def image_tags():
         logger.exception(e)
         return {'error_msg': 'file format not supported.'}, 400
     except Exception as e:
-        logger.error(e)
+        logger.exception(e)
         return {'error_msg': 'Internet server error'}, 500
 
     return {'tags': tags}, 200
