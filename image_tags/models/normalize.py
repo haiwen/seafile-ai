@@ -3,38 +3,19 @@ import torch
 
 class Normalize(torch.nn.Module):
 
-    def __init__(self, mean, std, inplace=False):
+    def __init__(self, mean, std):
         super().__init__()
         self.mean = mean
         self.std = std
-        self.inplace = inplace
 
     def forward(self, tensor):
-        """
-        Args:
-            tensor (Tensor): Tensor image to be normalized.
-
-        Returns:
-            Tensor: Normalized Tensor image.
-        """
-        return normalize(tensor, self.mean, self.std, self.inplace)
+        return normalize(tensor, self.mean, self.std)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(mean={self.mean}, std={self.std})"
 
 
 def normalize(tensor, mean, std, inplace=False):
-    if not tensor.is_floating_point():
-        raise TypeError(f"Input tensor should be a float tensor. Got {tensor.dtype}.")
-
-    if tensor.ndim < 3:
-        raise ValueError(
-            f"Expected tensor to be a tensor image of size (..., C, H, W). Got tensor.size() = {tensor.size()}"
-        )
-
-    if not inplace:
-        tensor = tensor.clone()
-
     dtype = tensor.dtype
     mean = torch.as_tensor(mean, dtype=dtype, device=tensor.device)
     std = torch.as_tensor(std, dtype=dtype, device=tensor.device)

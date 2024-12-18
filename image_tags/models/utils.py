@@ -13,7 +13,6 @@ from urllib.parse import quote as urlquote
 
 from torch import nn
 from transformers import BertTokenizer
-# from torchvision.transforms import Normalize, Compose, Resize, ToTensor
 
 from image_tags.config import FILE_SERVER
 from image_tags.models.normalize import Normalize
@@ -73,6 +72,17 @@ class DropPath(nn.Module):
         return f'drop_prob={round(self.drop_prob,3):0.3f}'
 
 
+def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
+    if drop_prob == 0. or not training:
+        return x
+    keep_prob = 1 - drop_prob
+    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
+    random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
+    if keep_prob > 0.0 and scale_by_keep:
+        random_tensor.div_(keep_prob)
+    return x * random_tensor
+
+
 class Compose:
     def __init__(self, transforms):
         self.transforms = transforms
@@ -99,7 +109,6 @@ def get_image_num_channels(img):
 
 
 def to_tensor(pic):
-    # handle PIL Image
     mode_to_nptype = {"I": np.int32, "I;16" if sys.byteorder == "little" else "I;16B": np.int16, "F": np.float32}
     img = torch.from_numpy(np.array(pic, mode_to_nptype.get(pic.mode, np.uint8), copy=True))
 
@@ -120,46 +129,23 @@ def to_2tuple(x):
     return tuple(repeat(x, 2))
 
 
+def norm_cdf(x):
+    return (1. + math.erf(x / math.sqrt(2.))) / 2.
+
+
 def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     with torch.no_grad():
-        return _trunc_normal_(tensor, mean, std, a, b)
+        a = norm_cdf((a - mean) / std)
+        u = norm_cdf((b - mean) / std)
 
+        tensor.uniform_(2 * a - 1, 2 * u - 1)
+        tensor.erfinv_()
 
-def _trunc_normal_(tensor, mean, std, a, b):
-    def norm_cdf(x):
-        return (1. + math.erf(x / math.sqrt(2.))) / 2.
+        tensor.mul_(std * math.sqrt(2.))
+        tensor.add_(mean)
 
-    l = norm_cdf((a - mean) / std)
-    u = norm_cdf((b - mean) / std)
-
-    tensor.uniform_(2 * l - 1, 2 * u - 1)
-    tensor.erfinv_()
-
-    tensor.mul_(std * math.sqrt(2.))
-    tensor.add_(mean)
-
-    tensor.clamp_(min=a, max=b)
-    return tensor
-
-
-def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
-    """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
-
-    This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
-    the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
-    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ... I've opted for
-    changing the layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use
-    'survival rate' as the argument.
-
-    """
-    if drop_prob == 0. or not training:
-        return x
-    keep_prob = 1 - drop_prob
-    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
-    random_tensor = x.new_empty(shape).bernoulli_(keep_prob)
-    if keep_prob > 0.0 and scale_by_keep:
-        random_tensor.div_(keep_prob)
-    return x * random_tensor
+        tensor.clamp_(min=a, max=b)
+        return tensor
 
 
 def init_tokenizer(tokenizer_path):
