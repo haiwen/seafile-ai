@@ -7,7 +7,7 @@ from flask import Flask, request
 from pathlib import Path
 
 from seafile_ai import config
-from seafile_ai.utils.constants import SUMMARY_SUPPORTED_FILES
+from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 
 
 logger = logging.getLogger(__name__)
@@ -170,3 +170,32 @@ def ocr():
         return {'error_msg': 'Internet server error.'}, 500
 
     return {'ocr_result': ocr_result}, 200
+
+
+@flask_app.route('/api/v1/translate/', methods=['POST'])
+def translate():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    text = data.get('text')
+    lang = data.get('lang')
+
+    if not text:
+        return {'error_msg': 'text invalid.'}, 400
+    if not lang or lang not in LANGUAGE:
+        return {'error_msg': 'lang invalid.'}, 400
+
+    try:
+        translation = flask_app.app.text_processing_manager.translate(text, lang)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'translation': translation}, 200
