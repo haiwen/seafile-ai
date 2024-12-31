@@ -7,7 +7,8 @@ from flask import Flask, request
 from pathlib import Path
 
 from seafile_ai import config
-from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
+from seafile_ai.utils import InvalidWritingTypeException, OpenAIInvalidException
+from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES, WritingType
 
 
 logger = logging.getLogger(__name__)
@@ -199,3 +200,38 @@ def translate():
         return {'error_msg': 'Internet server error.'}, 500
 
     return {'translation': translation}, 200
+
+
+@flask_app.route('/api/v1/writing-assistant/', methods=['POST'])
+def writing_assistant():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    text = data.get('text')
+    writing_type = data.get('writing_type')
+
+    if not text:
+        return {'error_msg': 'text invalid.'}, 400
+    if not writing_type:
+        return {'error_msg': 'writing_type invalid.'}, 400
+
+    try:
+        translation = flask_app.app.text_processing_manager.writing_assistant(text, writing_type)
+    except InvalidWritingTypeException as e:
+        logger.warning(e)
+        return {'error_msg': 'writing type invalid.'}, 400
+    except OpenAIInvalidException as e:
+        logger.warning(e)
+        return {'error_msg': 'openai server error.'}, 500
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'content': translation}, 200

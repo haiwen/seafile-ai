@@ -5,3 +5,11 @@ LANGUAGE = {
     'en': 'English',
     'zh-cn': 'Chinese',
 }
+
+
+class WritingType:
+    ASK = 'ask'
+    CONTINUE_WRITING = 'continue_writing'
+    MORE_DETAILED = 'more_detailed'
+    MORE_CONCISE = 'more_concise'
+    MORE_LIVELY = 'more_lively'
