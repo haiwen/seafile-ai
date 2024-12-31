@@ -223,7 +223,7 @@ def writing_assistant():
         return {'error_msg': 'writing_type invalid.'}, 400
 
     try:
-        translation = flask_app.app.text_processing_manager.writing_assistant(text, writing_type)
+        content = flask_app.app.text_processing_manager.writing_assistant(text, writing_type)
     except InvalidWritingTypeException as e:
         logger.warning(e)
         return {'error_msg': 'writing type invalid.'}, 400
@@ -234,4 +234,4 @@ def writing_assistant():
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    return {'content': translation}, 200
+    return {'content': content}, 200
