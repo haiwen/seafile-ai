@@ -1,7 +1,8 @@
+import json
 import requests
 import logging
 
-from seafile_ai.utils import parse_response
+from seafile_ai.utils import OpenAIInvalidException, parse_response
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +20,10 @@ class OpenAIAPI:
         }
         response = requests.post(self.openai_proxy_url, json=json_data, timeout=self.timeout)
         data = parse_response(response)
-        if 'error' in data.keys():
-            logger.error('OpenAI API error: %s', data['error']['message'])
-            return None
 
-        result = data['choices'][0]['message']['content']
+        try:
+            result = data['choices'][0]['message']['content']
+        except Exception as e:
+            logger.warning('openai parse data:%s, error', json.dumps(data))
+            raise OpenAIInvalidException('openai parse data error: %s' % e)
         return result

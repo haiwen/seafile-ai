@@ -27,6 +27,14 @@ def parse_response(response):
             pass
 
 
+class OpenAIInvalidException(Exception):
+    pass
+
+
+class InvalidWritingTypeException(Exception):
+    pass
+
+
 def gen_file_get_url(token, filename):
     return '%s/files/%s/%s' % (FILE_SERVER, token, urlquote(filename))
 
