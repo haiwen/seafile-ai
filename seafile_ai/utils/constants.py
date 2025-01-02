@@ -10,6 +10,6 @@ LANGUAGE = {
 class WritingType:
     ASK = 'ask'
     CONTINUE_WRITING = 'continue_writing'
-    MORE_DETAILED = 'more_detailed'
+    MORE_DETAILS = 'more_details'
     MORE_CONCISE = 'more_concise'
-    MORE_LIVELY = 'more_lively'
+    MORE_VIVID = 'more_vivid'
