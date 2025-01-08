@@ -9,6 +9,7 @@ from pathlib import Path
 from seafile_ai import config
 from seafile_ai.utils import InvalidWritingTypeException, OpenAIInvalidException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES, WritingType
+from seafile_ai.pdf_manager import pdf_task_manager
 
 
 logger = logging.getLogger(__name__)
@@ -164,8 +165,12 @@ def ocr():
     if not download_token:
         return {'error_msg': 'download_token invalid.'}, 400
 
+    params = {
+        'path': path,
+        'download_token': download_token,
+    }
     try:
-        ocr_result = flask_app.app.image_processing_manager.ocr(path, download_token)
+        ocr_result = flask_app.app.image_processing_manager.ocr(params)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
@@ -235,3 +240,41 @@ def writing_assistant():
         return {'error_msg': 'Internet server error.'}, 500
 
     return {'content': content}, 200
+
+
+@flask_app.route('/api/v1/pdf/generate-text-layer/', methods=['POST'])
+def generate_dual_layer_pdf():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    path = data.get('path')
+    download_token = data.get('download_token')
+    upload_token = data.get('upload_token')
+    force = data.get('force')
+    repo_id = data.get('repo_id')
+
+    if not path:
+        return {'error_msg': 'path invalid.'}, 400
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid'}, 400
+    if not download_token:
+        return {'error_msg': 'download_token invalid.'}, 400
+    if not upload_token:
+        return {'error_msg': 'upload_token invalid.'}, 400
+    if Path(path).suffix not in {'.pdf'}:
+        return {'error_msg': 'unsupported file format.'}, 400
+
+    try:
+        task_id, task_status = pdf_task_manager.add_ocr_task(repo_id, path, download_token, upload_token, force)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'task_id': task_id, 'task_status': task_status}, 200

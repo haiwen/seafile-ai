@@ -31,6 +31,14 @@ OCR_SERVICE_URL = ''
 OCR_SERVICE_KEY = ''
 OCR_SERVICE_TYPE = 'seafile-ocr'
 
+# Gen PDF
+FONTS = [
+    {
+        'name': 'SourceHanSansCN',
+        'path': '',
+    }
+]
+
 FILE_SERVER = ''
 
 CONF_DIR = '/opt/seafile/conf/'

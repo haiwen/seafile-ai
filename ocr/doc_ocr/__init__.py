@@ -1,0 +1,1 @@
+from doc_ocr.doc_ocr_manager import DocOcrManager

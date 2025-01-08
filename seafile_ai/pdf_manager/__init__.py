@@ -1,0 +1,2 @@
+from seafile_ai.pdf_manager.pdf_manager import PDFManager
+from seafile_ai.pdf_manager.task_manager import task_manager as pdf_task_manager

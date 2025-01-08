@@ -41,9 +41,9 @@ class ImageProcessingManager:
         result = self.app.image_tags_api.image_tags(path, download_token, lang)
         return result.get('tags')
 
-    def ocr(self, path, download_token):
+    def ocr(self, params):
         if config.OCR_SERVICE_TYPE == 'seafile-ocr':
-            result = self.app.ocr_api.ocr(path, download_token)
+            result = self.app.ocr_api.ocr(params)
             return result.get('ocr_result')
         else:
             raise Exception('unknown ocr service type')

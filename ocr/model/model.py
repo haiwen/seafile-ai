@@ -12,7 +12,7 @@ class Model:
         self.detection_model = pipeline(Tasks.ocr_detection, model='damo/cv_resnet18_ocr-detection-db-line-level_damo')
         self.recognition_model = pipeline(Tasks.ocr_recognition, model='damo/cv_convnextTiny_ocr-recognition-document_damo')
 
-    def predict(self, content):
+    def doc_predict(self, content):
         results = []
         input_image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), 1)
         if input_image is None:

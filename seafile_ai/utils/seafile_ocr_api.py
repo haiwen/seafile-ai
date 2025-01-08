@@ -20,13 +20,15 @@ class SeafileOCRAPI:
         token = jwt.encode(payload, self.secret_key, algorithm='HS256')
         return {"Authorization": "Token %s" % token}
 
-    def ocr(self, path, download_token):
+    def ocr(self, params):
         url = self.server_url + '/api/v1/ocr/'
         headers = self.gen_headers()
         json_data = {
-            'path': path,
-            'download_token': download_token
+            'path': params.get('path'),
+            'download_token': params.get('download_token')
         }
-        response = requests.post(url, json=json_data, headers=headers, timeout=self.timeout)
+        img = params.get('img')
+        files = {'file': img} if img else None
+        response = requests.post(url, json=json_data, files=files, headers=headers, timeout=self.timeout)
         data = parse_response(response)
         return data

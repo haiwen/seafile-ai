@@ -39,6 +39,13 @@ def gen_file_get_url(token, filename):
     return '%s/files/%s/%s' % (FILE_SERVER, token, urlquote(filename))
 
 
+def gen_file_upload_url(token, op, replace=False):
+    url = '%s/%s/%s' % (FILE_SERVER, op, token)
+    if replace is True:
+        url += '?replace=1'
+    return url
+
+
 def get_file_by_token(token, filename):
     url = gen_file_get_url(token, filename)
     response = requests.get(url, timeout=10)
@@ -46,6 +53,20 @@ def get_file_by_token(token, filename):
         raise ConnectionError(response.status_code, response.text)
 
     return response.content
+
+
+def upload_file(upload_token, file, parent_dir, file_name):
+    upload_link = gen_file_upload_url(upload_token, 'upload-api')
+    
+    data = {
+        'parent_dir': parent_dir,
+        'replace': '0',
+    }
+    files = {
+        'file': (file_name, file, "application/pdf")
+    }
+    response = requests.post(upload_link, data=data, files=files)
+    return response.status_code
 
 
 def get_image_by_token(token, filename):

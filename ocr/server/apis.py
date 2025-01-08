@@ -34,22 +34,31 @@ def ocr():
     if not is_valid:
         return {'error_msg': 'Permission denied'}, 403
 
-    try:
-        data = json.loads(request.data)
-    except Exception as e:
-        logger.exception(e)
-        return {'error_msg': 'Bad request'}, 400
+    if not request.data:
+        data = {}
+    else:
+        try:
+            data = json.loads(request.data)
+        except Exception as e:
+            logger.exception(e)
+            return {'error_msg': 'Bad request'}, 400
 
     path = data.get('path')
     download_token = data.get('download_token')
+    file = request.files.get('file')
 
-    if not path:
-        return {'error_msg': 'path invalid.'}, 400
-    if not download_token:
-        return {'error_msg': 'download_token invalid.'}, 400
+    if not (file or (path and download_token)):
+        missing_fields = []
+        if not file:
+            missing_fields.append('file')
+        if not path:
+            missing_fields.append('path')
+        if not download_token:
+            missing_fields.append('download_token')
+        return {'error_msg': f"Invalid or missing parameters: {', '.join(missing_fields)}"}, 400
 
     try:
-        ocr_result = flask_app.app.doc_ocr_manager.doc_ocr(path, download_token)
+        ocr_result = flask_app.app.doc_ocr_manager.doc_ocr(path, download_token, file)
     except Exception as e:
         logger.error(e)
         return {'error_msg': 'Internet server error'}, 500

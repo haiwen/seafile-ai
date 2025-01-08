@@ -2,6 +2,7 @@ from seafile_ai.image_processing.image_processing_manager import ImageProcessing
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
 from seafile_ai.text_processing.text_processing_manager import TextProcessingManager
 from seafile_ai.utils.image_tags_api import ImageTagsAPI
+from seafile_ai.pdf_manager import PDFManager, pdf_task_manager
 
 
 class SeafileAIApp(object):
@@ -24,6 +25,10 @@ class SeafileAIApp(object):
         self.text_processing_manager = TextProcessingManager(self, config.LLM_TYPE)
         self.image_processing_manager = ImageProcessingManager(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
+        self.pdf_manager = PDFManager(self)
 
+        pdf_task_manager.init(self)
+        
     def serve_forever(self):
+        pdf_task_manager.start_ocr_workers()
         self.seafile_ai_http_server.start()
