@@ -9,9 +9,8 @@ from image_embedding.models.model import Model
 
 
 class FaceEmbeddingModel:
-    def __init__(self, model_dir, gpu_id=0, det_thresh=0.50):
+    def __init__(self, model_dir, gpu_id=0):
         self.gpu_id = gpu_id
-        self.det_thresh = det_thresh
         self.model = Model(model_dir, self.gpu_id)
 
     def embedding(self, content, need_face):
