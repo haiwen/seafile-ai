@@ -4,7 +4,7 @@ from io import BytesIO
 from PIL import Image
 from seafobj import fs_mgr
 
-from image_embedding.embedding.insightface_model import InsightfaceModel
+from image_embedding.embedding.face_embedding_model import FaceEmbeddingModel
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class EmbeddingManager:
 
     def __init__(self, model_dir):
-        self.insightface_model = InsightfaceModel(model_dir)
+        self.face_embedding_model = FaceEmbeddingModel(model_dir)
 
     def face_embedding(self, repo_id, obj_ids, need_face):
         embeddings = []
@@ -21,7 +21,7 @@ class EmbeddingManager:
             f = fs_mgr.load_seafile(repo_id, 1, obj_id)
             content = f.get_content()
             if content.strip():
-                result = self.insightface_model.embedding(content, need_face)
+                result = self.face_embedding_model.embedding(content, need_face)
                 if result is None:
                     try:
                         image = Image.open(BytesIO(content))
