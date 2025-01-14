@@ -1,21 +1,17 @@
 import base64
 
 import cv2
-import insightface
 import numpy as np
 from sklearn import preprocessing
 
 from image_embedding.embedding.utils import get_face_image
+from image_embedding.models.model import Model
 
 
-class InsightfaceModel:
-    def __init__(self, model_dir, gpu_id=0, threshold=1.24, det_thresh=0.50):
+class FaceEmbeddingModel:
+    def __init__(self, model_dir, gpu_id=0):
         self.gpu_id = gpu_id
-        self.threshold = threshold
-        self.det_thresh = det_thresh
-
-        self.model = insightface.app.FaceAnalysis(root=model_dir, providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
-        self.model.prepare(ctx_id=self.gpu_id, det_thresh=self.det_thresh)
+        self.model = Model(model_dir, self.gpu_id)
 
     def embedding(self, content, need_face):
         result = []
