@@ -156,7 +156,11 @@ def init_tokenizer(tokenizer_path):
     return tokenizer
 
 
-def load_checkpoint(model, model_path):
+def load_checkpoint(model, model_path, embedding_path=None):
+    if embedding_path:
+        state_dict = torch.load(embedding_path, map_location='cpu', weights_only=True)
+        model.load_state_dict(state_dict, strict=False)
+        logger.info('load embedding checkpoint from %s' % embedding_path)
     state_dict = torch.load(model_path, map_location='cpu', weights_only=True)
     model.load_state_dict(state_dict, strict=False)
     logger.info('load checkpoint from %s' % model_path)
