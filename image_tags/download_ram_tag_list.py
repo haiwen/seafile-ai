@@ -5,7 +5,7 @@ import os
 
 def query_rows():
     server_url = 'https://dev.seatable.cn'
-    api_token = 'c46828653a237c54e335fe9f08828081cf6cbc84'
+    api_token = 'e50cb810023bd54efd6285bbb3c6aef4105777f3'
 
     base = Base(api_token, server_url)
     base.auth()

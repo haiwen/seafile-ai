@@ -3,13 +3,14 @@ import os
 import numpy as np
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from .bert import BertConfig, BertModel
 from .swin_transformer import SwinTransformer
 from .utils import read_json, init_tokenizer
 
 
-class RAM(nn.Module):
+class RAM_plus(nn.Module):
     def __init__(self, model_dir, threshold=0.68):
         super().__init__()
 
@@ -41,27 +42,16 @@ class RAM(nn.Module):
         self.tags_dir = os.path.join(model_dir, 'tags')
         self.english_tag_list = self.load_tag_list(os.path.join(self.tags_dir, 'english_tags.txt'))
         self.chinese_tag_list = self.load_tag_list(os.path.join(self.tags_dir, 'chinese_tags.txt'))
-        self.deleted_tags_index = self.load_deleted_tags_index(os.path.join(self.tags_dir, 'deleted_tags_index.txt'))
-
-        # adjust thresholds for some tags
-        self.num_class = len(self.english_tag_list)
-        self.threshold = threshold
-        self.class_threshold = torch.ones(self.num_class) * self.threshold
-        ram_class_threshold_path = os.path.join(self.tags_dir, 'tags_threshold.txt')
-        with open(ram_class_threshold_path, 'r', encoding='utf-8') as f:
-            ram_class_threshold = [float(s.strip()) for s in f]
-        for key, value in enumerate(ram_class_threshold):
-            self.class_threshold[key] = value
 
         # create image-tag recognition decoder
+        self.threshold = threshold
+        self.num_class = len(self.english_tag_list)
         q2l_config = BertConfig.from_json_file(os.path.join(model_dir, 'q2l_config.json'))
         q2l_config.encoder_width = 512
         self.tagging_head = BertModel(config=q2l_config,
                                       add_pooling_layer=False)
         self.tagging_head.resize_token_embeddings(len(self.tokenizer))
-
-        # when eval with pretrained RAM model, directly load from ram_swin_large_14m.pth
-        self.label_embed = nn.Parameter(torch.zeros(self.num_class, q2l_config.encoder_width))
+        self.label_embed = nn.Parameter(torch.zeros(self.num_class * 51, q2l_config.encoder_width))
 
         self.wordvec_proj = nn.Linear(512, q2l_config.hidden_size)
 
@@ -71,16 +61,21 @@ class RAM(nn.Module):
 
         self.image_proj = nn.Linear(vision_width, 512)
 
+        # adjust thresholds for some tags
+        self.class_threshold = torch.ones(self.num_class) * self.threshold
+        ram_class_threshold_path = os.path.join(self.tags_dir, 'tags_threshold.txt')
+        with open(ram_class_threshold_path, 'r', encoding='utf-8') as f:
+            ram_class_threshold = [float(s.strip()) for s in f]
+        for key, value in enumerate(ram_class_threshold):
+            self.class_threshold[key] = value
+
+        self.reweight_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+
     def load_tag_list(self, tag_list_file):
         with open(tag_list_file, 'r', encoding="utf-8") as f:
             tag_list = f.read().splitlines()
         tag_list = np.array(tag_list)
         return tag_list
-
-    def load_deleted_tags_index(self, index_file):
-        with open(index_file, 'r', encoding="utf-8") as f:
-            indexes = [int(i.strip()) for i in f.readlines() if i.strip()]
-        return indexes
 
     # delete self-attention layer of image-tag recognition decoder to reduce computation, follower Query2Label
     def del_selfattention(self):
@@ -95,17 +90,34 @@ class RAM(nn.Module):
             tag_list = self.chinese_tag_list
         else:
             raise Exception('not support language: {}'.format(lang))
-        label_embed = torch.nn.functional.relu(self.wordvec_proj(self.label_embed))
 
         image_embeds = self.image_proj(self.visual_encoder(image))
         image_atts = torch.ones(image_embeds.size()[:-1],
                                 dtype=torch.long).to(image.device)
 
-        # recognized image tags using image-tag recogntiion decoder
+        image_cls_embeds = image_embeds[:, 0, :]
         image_spatial_embeds = image_embeds[:, 1:, :]
 
         bs = image_spatial_embeds.shape[0]
-        label_embed = label_embed.unsqueeze(0).repeat(bs, 1, 1)
+
+        des_per_class = int(self.label_embed.shape[0] / self.num_class)
+
+        image_cls_embeds = image_cls_embeds / image_cls_embeds.norm(dim=-1, keepdim=True)
+        reweight_scale = self.reweight_scale.exp()
+        logits_per_image = (reweight_scale * image_cls_embeds @ self.label_embed.t())
+        logits_per_image = logits_per_image.view(bs, -1, des_per_class)
+
+        weight_normalized = F.softmax(logits_per_image, dim=2)
+        label_embed_reweight = torch.empty(bs, self.num_class, 512).to(image.device).to(image.dtype)
+
+        for i in range(bs):
+            reshaped_value = self.label_embed.view(-1, des_per_class, 512)
+            product = weight_normalized[i].unsqueeze(-1) * reshaped_value
+            label_embed_reweight[i] = product.sum(dim=1)
+
+        label_embed = torch.nn.functional.relu(self.wordvec_proj(label_embed_reweight))
+
+        # recognized image tags using alignment decoder
         tagging_embed = self.tagging_head(
             encoder_embeds=label_embed,
             encoder_hidden_states=image_embeds,
@@ -122,7 +134,6 @@ class RAM(nn.Module):
             torch.zeros(self.num_class).to(image.device))
 
         tag = targets.cpu().numpy()
-        tag[:, self.deleted_tags_index] = 0
         tags = []
         for b in range(bs):
             index = np.argwhere(tag[b] == 1)

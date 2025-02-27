@@ -5,6 +5,7 @@ from io import BytesIO
 import torch
 from PIL import Image
 
+from image_tags.models.ram_plus import RAM_plus
 from image_tags.models.tag2text import Tag2Text
 from image_tags.models.ram import RAM
 from image_tags.models.utils import load_checkpoint, get_image_by_token, get_transform
@@ -23,6 +24,12 @@ class ImageTagsManager:
         elif model_type == 'ram':
             self.model = RAM(model_dir)
             self.model = load_checkpoint(self.model, os.path.join(model_dir, 'ram_swin_14m_only_tags.pth')).to(self.device)
+        elif model_type == 'ram_plus':
+            self.model = RAM_plus(model_dir)
+            self.model = load_checkpoint(self.model,
+                                         os.path.join(model_dir, 'ram_plus_swin_large_14m_body.pth'),
+                                         os.path.join(model_dir, 'ram_plus_swin_large_14m_label_embed.pth')
+                                         ).to(self.device)
         else:
             raise NotImplementedError
         self.model.eval()
