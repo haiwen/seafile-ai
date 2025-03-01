@@ -8,7 +8,6 @@ basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, basedir)
 
 SECRET_KEY = ''
-FILE_SERVER = ''
 
 IMAGE_TAGS_MODEL_DIR = ''
 IMAGE_TAGS_MODEL_TYPE = ''

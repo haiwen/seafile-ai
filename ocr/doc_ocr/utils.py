@@ -2,10 +2,6 @@ import math
 
 import cv2
 import numpy as np
-import requests
-
-from urllib.parse import quote as urlquote
-from ocr.config import FILE_SERVER
 
 
 def crop_image(img, position):
@@ -43,16 +39,3 @@ def order_points(points):
     if sorted_points[0, 0] > centroid[0]:
         sorted_points = np.roll(sorted_points, shift=1, axis=0)
     return sorted_points
-
-
-def gen_file_get_url(token, filename):
-    return '%s/files/%s/%s' % (FILE_SERVER, token, urlquote(filename))
-
-
-def get_image_by_token(token, filename):
-    url = gen_file_get_url(token, filename)
-    response = requests.get(url, timeout=10)
-    if response.status_code != 200:
-        raise ConnectionError(response.status_code, response.text)
-
-    return response.content

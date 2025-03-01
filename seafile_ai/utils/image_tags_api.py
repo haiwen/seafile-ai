@@ -20,14 +20,12 @@ class ImageTagsAPI:
         token = jwt.encode(payload, self.secret_key, algorithm='HS256')
         return {"Authorization": "Token %s" % token}
 
-    def image_tags(self, path, download_token, lang):
+    def image_tags(self, file, lang):
         url = self.server_url + '/api/v1/image-tags/'
         headers = self.gen_headers()
         json_data = {
-            'path': path,
-            'download_token': download_token,
             'lang': lang
         }
-        response = requests.post(url, json=json_data, headers=headers, timeout=self.timeout)
+        response = requests.post(url, files={'file': file}, data=json_data, headers=headers, timeout=self.timeout)
         data = parse_response(response)
         return data

@@ -36,22 +36,19 @@ def image_tags():
         return {'error_msg': 'Permission denied'}, 403
 
     try:
-        data = json.loads(request.data)
+        data = request.form
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Bad request'}, 400
 
-    path = data.get('path')
-    download_token = data.get('download_token')
-    lang = data.get('lang', 'en')
+    file = request.files.get('file')
+    lang = data.get('lang') or 'en'
 
-    if not path:
-        return {'error_msg': 'path invalid.'}, 400
-    if not download_token:
-        return {'error_msg': 'download_token invalid.'}, 400
+    if not file:
+        return {'error_msg': 'file invalid.'}, 400
 
     try:
-        tags = flask_app.app.image_tags_manager.image_tags(path, download_token, lang)
+        tags = flask_app.app.image_tags_manager.image_tags(file.read(), lang)
     except UnidentifiedImageError as e:
         logger.exception(e)
         return {'error_msg': 'file format not supported.'}, 400

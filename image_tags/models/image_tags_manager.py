@@ -8,7 +8,7 @@ from PIL import Image
 from image_tags.models.ram_plus import RAM_plus
 from image_tags.models.tag2text import Tag2Text
 from image_tags.models.ram import RAM
-from image_tags.models.utils import load_checkpoint, get_image_by_token, get_transform
+from image_tags.models.utils import load_checkpoint, get_transform
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +34,6 @@ class ImageTagsManager:
             raise NotImplementedError
         self.model.eval()
 
-    def image_tags(self, path, download_token, lang):
-        file_name = os.path.basename(path.rstrip('/'))
-        content = get_image_by_token(download_token, file_name)
-        if not content:
-            return None
-
-        image = self.transform(Image.open(BytesIO(content))).unsqueeze(0).to(self.device)
+    def image_tags(self, file, lang):
+        image = self.transform(Image.open(BytesIO(file))).unsqueeze(0).to(self.device)
         return self.model.predict(image, lang)
