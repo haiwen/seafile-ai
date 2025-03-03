@@ -28,31 +28,28 @@ def check_auth_token(req):
     return True
 
 
-@flask_app.route('/api/v1/face-embeddings', methods=['POST'])
+@flask_app.route('/api/v1/face-embeddings/', methods=['POST'])
 def face_embeddings():
     is_valid = check_auth_token(request)
     if not is_valid:
         return {'error_msg': 'Permission denied'}, 403
 
     try:
-        data = json.loads(request.data)
+        data = request.form
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    repo_id = data.get('repo_id')
-    obj_ids = data.get('obj_ids')
     need_face = data.get('need_face', False)
+    file = request.files.get('file')
 
-    if not repo_id:
-        return {'error_msg': 'repo_id invalid.'}, 400
-    if not obj_ids or not isinstance(obj_ids, list):
-        return {'error_msg': 'obj_ids invalid.'}, 400
+    if not file:
+        return {'error_msg': 'file invalid.'}, 400
 
     try:
-        embeddings = flask_app.app.face_embedding_manager.face_embedding(repo_id, obj_ids, need_face)
+        faces = flask_app.app.face_embedding_manager.face_embedding(file.read(), need_face)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
 
-    return {'data': embeddings}, 200
+    return {'faces': faces}, 200

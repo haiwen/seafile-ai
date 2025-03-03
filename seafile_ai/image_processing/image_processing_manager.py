@@ -15,6 +15,8 @@ class ImageProcessingManager:
     def image_caption(self, path, download_token, lang):
         file_name = os.path.basename(path)
         content = get_image_by_token(download_token, file_name)
+        if not content:
+            return None
         content = resize_image_binary(content)
         base64_image = base64.b64encode(content).decode('utf-8')
         messages = [
@@ -38,12 +40,31 @@ class ImageProcessingManager:
         return desc
 
     def image_tags(self, path, download_token, lang):
-        result = self.app.image_tags_api.image_tags(path, download_token, lang)
+        file_name = os.path.basename(path.rstrip('/'))
+        file = get_image_by_token(download_token, file_name)
+        if not file:
+            return None
+
+        result = self.app.image_tags_api.image_tags(file, lang)
         return result.get('tags')
 
     def ocr(self, path, download_token):
         if config.OCR_SERVICE_TYPE == 'seafile-ocr':
-            result = self.app.ocr_api.ocr(path, download_token)
+            file_name = os.path.basename(path.rstrip('/'))
+            file = get_image_by_token(download_token, file_name)
+            if not file:
+                return None
+
+            result = self.app.ocr_api.ocr(file)
             return result.get('ocr_result')
         else:
             raise Exception('unknown ocr service type')
+
+    def face_embeddings(self, path, download_token, need_face):
+        file_name = os.path.basename(path.rstrip('/'))
+        file = get_image_by_token(download_token, file_name)
+        if not file:
+            return None
+
+        result = self.app.image_embedding_api.face_embeddings(file, need_face)
+        return result.get('faces')

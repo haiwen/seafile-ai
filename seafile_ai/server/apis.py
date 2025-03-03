@@ -8,7 +8,7 @@ from pathlib import Path
 
 from seafile_ai import config
 from seafile_ai.utils import InvalidWritingTypeException, OpenAIInvalidException
-from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES, WritingType
+from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 
 
 logger = logging.getLogger(__name__)
@@ -171,6 +171,36 @@ def ocr():
         return {'error_msg': 'Internet server error.'}, 500
 
     return {'ocr_result': ocr_result}, 200
+
+
+@flask_app.route('/api/v1/face-embeddings/', methods=['POST'])
+def face_embeddings():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    path = data.get('path')
+    download_token = data.get('download_token')
+    need_face = data.get('need_face', False)
+
+    if not path:
+        return {'error_msg': 'path invalid.'}, 400
+    if not download_token:
+        return {'error_msg': 'download_token invalid.'}, 400
+
+    try:
+        faces = flask_app.app.image_processing_manager.face_embeddings(path, download_token, need_face)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'faces': faces}, 200
 
 
 @flask_app.route('/api/v1/translate/', methods=['POST'])

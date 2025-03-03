@@ -5,16 +5,13 @@ from itertools import repeat
 import collections.abc
 
 import numpy as np
-import requests
 import torch
 import math
 
-from urllib.parse import quote as urlquote
 
 from torch import nn
 from transformers import BertTokenizer
 
-from image_tags.config import FILE_SERVER
 from image_tags.models.normalize import Normalize
 from image_tags.models.resize import Resize
 
@@ -178,16 +175,3 @@ def get_transform(image_size=384):
         to_tensor,
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-
-
-def gen_file_get_url(token, filename):
-    return '%s/files/%s/%s' % (FILE_SERVER, token, urlquote(filename))
-
-
-def get_image_by_token(token, filename):
-    url = gen_file_get_url(token, filename)
-    response = requests.get(url, timeout=10)
-    if response.status_code != 200:
-        raise ConnectionError(response.status_code, response.text)
-
-    return response.content
