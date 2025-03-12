@@ -94,24 +94,27 @@ class TextProcessingManager:
         res = self.app.openai_api.chat_completions(messages)
         return res
 
-    def writing_assistant(self, text, writing_type):
+    def writing_assistant(self, text, instruction, writing_type):
         system_content = 'You are an sdoc editor assistant.'
-        if writing_type == WritingType.ASK:
-            system_content += 'Please briefly answer the questions asked.'
+        if instruction:
+            system_content += instruction
         else:
-            system_content += 'You are good at completing various writing auxiliary tasks. Your task is as follows:'
-            if writing_type == WritingType.CONTINUE_WRITING:
-                system_content = 'Please continue writing the input sentence. If the input is a complete sentence, please continue writing a sentence based on semantics. If not, please complete the writing of the sentence. The output sentence must start with the input sentence.'
-            elif writing_type == WritingType.MORE_DETAILS:
-                system_content = 'I give you a sentence. Please understand its meaning deeply and expand its content. This expansion cannot change the meaning and tone of the input sentence.'
-            elif writing_type == WritingType.MORE_CONCISE:
-                system_content = 'Please refine the input sentence to make it more concise and shorter.'
-            elif writing_type == WritingType.MORE_VIVID:
-                system_content = 'Please optimize the input sentence to make it more lively. This optimization cannot change the meaning and tone of the sentence.'
+            if writing_type == WritingType.ASK:
+                system_content += 'Please briefly answer the questions asked.'
             else:
-                raise InvalidWritingTypeException(f'Invalid writing_type: {writing_type}')
+                system_content += 'You are good at completing various writing auxiliary tasks. Your task is as follows:'
+                if writing_type == WritingType.CONTINUE_WRITING:
+                    system_content = 'Please continue writing the input sentence. If the input is a complete sentence, please continue writing a sentence based on semantics. If not, please complete the writing of the sentence. The output sentence must start with the input sentence.'
+                elif writing_type == WritingType.MORE_DETAILS:
+                    system_content = 'I give you a sentence. Please understand its meaning deeply and expand its content. This expansion cannot change the meaning and tone of the input sentence.'
+                elif writing_type == WritingType.MORE_CONCISE:
+                    system_content = 'Please refine the input sentence to make it more concise and shorter.'
+                elif writing_type == WritingType.MORE_VIVID:
+                    system_content = 'Please optimize the input sentence to make it more lively. This optimization cannot change the meaning and tone of the sentence.'
+                else:
+                    raise InvalidWritingTypeException(f'Invalid writing_type: {writing_type}')
 
-            system_content += 'All input is your writing material, please do not output any answers or responses to the input.'
+                system_content += 'All input is your writing material, please do not output any answers or responses to the input.'
 
         system_content += 'No need to interact with the user, just output the results directly.'
 

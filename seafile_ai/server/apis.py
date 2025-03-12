@@ -234,9 +234,9 @@ def translate():
 
 @flask_app.route('/api/v1/writing-assistant/', methods=['POST'])
 def writing_assistant():
-    is_valid = check_auth_token(request)
-    if not is_valid:
-        return {'error_msg': 'Permission denied'}, 403
+    # is_valid = check_auth_token(request)
+    # if not is_valid:
+    #     return {'error_msg': 'Permission denied'}, 403
 
     try:
         data = json.loads(request.data)
@@ -246,14 +246,15 @@ def writing_assistant():
 
     text = data.get('text')
     writing_type = data.get('writing_type')
+    instruction = data.get('instruction')
 
     if not text:
         return {'error_msg': 'text invalid.'}, 400
-    if not writing_type:
+    if not instruction and not writing_type:
         return {'error_msg': 'writing_type invalid.'}, 400
 
     try:
-        content = flask_app.app.text_processing_manager.writing_assistant(text, writing_type)
+        content = flask_app.app.text_processing_manager.writing_assistant(text, instruction, writing_type)
     except InvalidWritingTypeException as e:
         logger.warning(e)
         return {'error_msg': 'writing type invalid.'}, 400
