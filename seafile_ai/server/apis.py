@@ -234,9 +234,9 @@ def translate():
 
 @flask_app.route('/api/v1/writing-assistant/', methods=['POST'])
 def writing_assistant():
-    # is_valid = check_auth_token(request)
-    # if not is_valid:
-    #     return {'error_msg': 'Permission denied'}, 403
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
 
     try:
         data = json.loads(request.data)
