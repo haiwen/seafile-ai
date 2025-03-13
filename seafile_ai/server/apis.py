@@ -246,14 +246,15 @@ def writing_assistant():
 
     text = data.get('text')
     writing_type = data.get('writing_type')
+    custom_prompt = data.get('custom_prompt')
 
     if not text:
         return {'error_msg': 'text invalid.'}, 400
-    if not writing_type:
+    if not custom_prompt and not writing_type:
         return {'error_msg': 'writing_type invalid.'}, 400
 
     try:
-        content = flask_app.app.text_processing_manager.writing_assistant(text, writing_type)
+        content = flask_app.app.text_processing_manager.writing_assistant(text, custom_prompt, writing_type)
     except InvalidWritingTypeException as e:
         logger.warning(e)
         return {'error_msg': 'writing type invalid.'}, 400
