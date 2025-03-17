@@ -78,7 +78,7 @@ class TextProcessingManager:
 
     def translate(self, text, lang):
         system_content = f'''
-            You are a translator who is proficient in various languages. Please translate the input into {LANGUAGE[lang]} and output the translation results directly. If the input is in {LANGUAGE[lang]}, just output the input as it is. Remember to only translate the input and do not answer any questions.
+            You are a translator who is proficient in various languages. Please translate the input into {LANGUAGE[lang]} and output the translation results directly. The format of the translation result must be exactly the same as the input. If the input is in {LANGUAGE[lang]}, just output the input as it is. Remember to only translate the input and do not answer any questions.
         '''
 
         system_prompt = {
