@@ -78,7 +78,7 @@ class TextProcessingManager:
 
     def translate(self, text, lang):
         system_content = f'''
-            You are a translator who is proficient in various languages. Please translate the input into {LANGUAGE[lang]} and output the translation results directly. The format of the translation result must be exactly the same as the input. If the input is in {LANGUAGE[lang]}, just output the input as it is. Remember to only translate the input and do not answer any questions.
+            You are a translation expert who is proficient in multiple languages. Please complete the following translation task: divide the input text into segments according to line breaks, translate each segment into {LANGUAGE[lang]} in turn, concatenate each translated segment using the original line breaks, and finally directly output the concatenated translation result. The format of the translation result, such as line breaks, markdown format, etc., must be exactly the same as the input text. If the input is {LANGUAGE[lang]}, just output it directly. Remember to only translate the input and do not answer any questions.
         '''
 
         system_prompt = {
