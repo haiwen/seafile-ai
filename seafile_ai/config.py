@@ -51,3 +51,6 @@ try:
     from seafile_ai_settings import *
 except ImportError as e:
     pass
+
+SECRET_KEY = os.getenv('SEAFILE_AI_SECRET_KEY') or SECRET_KEY
+FILE_SERVER = os.getenv('SEAFILE_FILE_SERVER_URL') or FILE_SERVER
