@@ -2,8 +2,8 @@ from gevent import monkey; monkey.patch_all()
 
 import config
 
-from image_embedding.app.log import LogConfigurator
-from image_embedding.app.image_embedding_app import ImageEmbeddingApp
+from face_embedding.app.log import LogConfigurator
+from face_embedding.app.face_embedding_app import FaceEmbeddingApp
 
 
 def main():
@@ -12,7 +12,7 @@ def main():
     if config.ENABLE_SYS_LOG:
         app_logger.add_syslog_handler()
 
-    app = ImageEmbeddingApp(config)
+    app = FaceEmbeddingApp(config)
     app.serve_forever()
 
 

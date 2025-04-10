@@ -1,10 +1,9 @@
 import logging
 import jwt
-import json
 
 from flask import Flask, request
 
-from image_embedding import config
+from face_embedding import config
 
 logger = logging.getLogger(__name__)
 flask_app = Flask(__name__)

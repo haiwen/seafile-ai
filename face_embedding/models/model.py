@@ -2,11 +2,11 @@ import glob
 import os
 
 import onnxruntime
-from image_embedding.models.arcface_onnx import ArcFaceONNX
-from image_embedding.models.retinaface import RetinaFace
-from image_embedding.models.landmark import Landmark
-from image_embedding.models.attribute import Attribute
-from image_embedding.models.utils import Face
+from face_embedding.models.arcface_onnx import ArcFaceONNX
+from face_embedding.models.retinaface import RetinaFace
+from face_embedding.models.landmark import Landmark
+from face_embedding.models.attribute import Attribute
+from face_embedding.models.utils import Face
 
 
 class Model:

@@ -4,8 +4,8 @@ import cv2
 import numpy as np
 from sklearn import preprocessing
 
-from image_embedding.embedding.utils import get_face_image
-from image_embedding.models.model import Model
+from face_embedding.embedding.utils import get_face_image
+from face_embedding.models.model import Model
 
 
 class FaceEmbeddingModel:
