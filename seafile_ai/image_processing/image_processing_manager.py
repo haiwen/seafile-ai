@@ -66,5 +66,5 @@ class ImageProcessingManager:
         if not file:
             return None
 
-        result = self.app.image_embedding_api.face_embeddings(file, need_face)
+        result = self.app.face_embedding_api.face_embeddings(file, need_face)
         return result.get('faces')

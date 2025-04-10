@@ -1,7 +1,7 @@
 from seafile_ai.image_processing.image_processing_manager import ImageProcessingManager
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
 from seafile_ai.text_processing.text_processing_manager import TextProcessingManager
-from seafile_ai.utils.image_embedding_api import ImageEmbeddingAPI
+from seafile_ai.utils.face_embedding_api import FaceEmbeddingAPI
 from seafile_ai.utils.image_tags_api import ImageTagsAPI
 
 
@@ -15,7 +15,7 @@ class SeafileAIApp(object):
             raise Exception('unknown llm type')
 
         self.image_tags_api = ImageTagsAPI(config.IMAGE_TAGS_SERVICE_URL, config.IMAGE_TAGS_SERVICE_KEY)
-        self.image_embedding_api = ImageEmbeddingAPI(config.IMAGE_EMBEDDING_SERVICE_URL, config.IMAGE_EMBEDDING_SERVICE_KEY)
+        self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
 
         if config.OCR_SERVICE_TYPE == 'seafile-ocr':
             from seafile_ai.utils.seafile_ocr_api import SeafileOCRAPI

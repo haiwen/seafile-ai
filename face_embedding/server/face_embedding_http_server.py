@@ -1,10 +1,10 @@
 from threading import Thread
 from gevent.pywsgi import WSGIServer
 
-from image_embedding.server.apis import flask_app
+from face_embedding.server.apis import flask_app
 
 
-class ImageEmbeddingHttpServer(Thread):
+class FaceEmbeddingHttpServer(Thread):
 
     def __init__(self, app):
         Thread.__init__(self)

@@ -28,6 +28,6 @@ except:
 try:
     if os.path.exists(CONF_DIR):
         sys.path.insert(0, CONF_DIR)
-    from image_embedding_settings import *
+    from face_embedding_settings import *
 except ImportError as e:
     pass

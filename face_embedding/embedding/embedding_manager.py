@@ -1,6 +1,6 @@
 import logging
 
-from image_embedding.embedding.face_embedding_model import FaceEmbeddingModel
+from face_embedding.embedding.face_embedding_model import FaceEmbeddingModel
 
 logger = logging.getLogger(__name__)
 

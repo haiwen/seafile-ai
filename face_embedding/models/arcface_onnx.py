@@ -1,7 +1,7 @@
 import cv2
 import onnx
 
-from image_embedding.models.utils import norm_crop
+from face_embedding.models.utils import norm_crop
 
 
 class ArcFaceONNX:

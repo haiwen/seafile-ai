@@ -9,7 +9,7 @@ from seafile_ai.utils import parse_response
 logger = logging.getLogger(__name__)
 
 
-class ImageEmbeddingAPI:
+class FaceEmbeddingAPI:
     def __init__(self, server_url, secret_key, timeout=60):
         self.server_url = server_url.rstrip('/')
         self.secret_key = secret_key
