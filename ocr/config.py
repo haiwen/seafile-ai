@@ -30,3 +30,5 @@ try:
     from ocr_settings import *
 except ImportError as e:
     pass
+
+SECRET_KEY = os.getenv('OCR_SERVICE_KEY') or SECRET_KEY

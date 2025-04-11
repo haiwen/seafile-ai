@@ -31,3 +31,5 @@ try:
     from face_embedding_settings import *
 except ImportError as e:
     pass
+
+SECRET_KEY = os.getenv('FACE_EMBEDDING_SERVICE_KEY') or SECRET_KEY

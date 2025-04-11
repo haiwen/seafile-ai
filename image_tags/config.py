@@ -31,3 +31,5 @@ try:
     from image_tags_settings import *
 except ImportError as e:
     pass
+
+SECRET_KEY = os.getenv('IMAGE_TAGS_SERVICE_KEY') or SECRET_KEY
