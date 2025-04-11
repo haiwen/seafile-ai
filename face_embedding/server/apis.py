@@ -1,6 +1,5 @@
 import logging
 import jwt
-import json
 
 from flask import Flask, request
 
