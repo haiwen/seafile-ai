@@ -10,7 +10,7 @@ from io import BytesIO
 
 from pdfminer.high_level import extract_text
 
-from seafile_ai.config import FILE_SERVER
+from seafile_ai.config import SEAFILE_SERVER_URL
 from seafile_ai.utils.sdoc2md import sdoc2md
 from seafile_ai.utils.parse_pptx import get_pptx_text
 
@@ -36,7 +36,7 @@ class InvalidWritingTypeException(Exception):
 
 
 def gen_file_get_url(token, filename):
-    return '%s/files/%s/%s' % (FILE_SERVER, token, urlquote(filename))
+    return '%s/files/%s/%s' % (SEAFILE_SERVER_URL.rstrip('/') + '/seafhttp', token, urlquote(filename))
 
 
 def get_file_by_token(token, filename):
