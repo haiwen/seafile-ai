@@ -16,12 +16,12 @@ class SeafileAIApp(object):
         else:
             raise Exception('unknown llm type')
 
-        self.image_tags_api = ImageTagsAPI(config.IMAGE_TAGS_SERVICE_URL, os.getenv('IMAGE_TAGS_SERVICE_KEY') or config.IMAGE_TAGS_SERVICE_KEY)
-        self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, os.getenv('FACE_EMBEDDING_SERVICE_KEY') or config.FACE_EMBEDDING_SERVICE_KEY)
+        self.image_tags_api = ImageTagsAPI(config.IMAGE_TAGS_SERVICE_URL, config.IMAGE_TAGS_SERVICE_KEY)
+        self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
 
         if config.OCR_SERVICE_TYPE == 'seafile-ocr':
             from seafile_ai.utils.seafile_ocr_api import SeafileOCRAPI
-            self.ocr_api = SeafileOCRAPI(config.OCR_SERVICE_URL, os.getenv('OCR_SERVICE_KEY') or config.OCR_SERVICE_KEY)
+            self.ocr_api = SeafileOCRAPI(config.OCR_SERVICE_URL, config.OCR_SERVICE_KEY)
         else:
             raise Exception('unknown ocr service type')
 

@@ -1,6 +1,6 @@
 import logging
 import jwt
-import os
+import json
 
 from flask import Flask, request
 
@@ -19,7 +19,7 @@ def check_auth_token(req):
     if not token:
         return False
 
-    private_key = os.getenv('FACE_EMBEDDING_SERVICE_KEY') or config.SECRET_KEY
+    private_key = config.SECRET_KEY
     try:
         jwt.decode(token, private_key, algorithms=['HS256'])
     except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError) as e:

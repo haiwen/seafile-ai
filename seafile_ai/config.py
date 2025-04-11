@@ -51,3 +51,7 @@ try:
     from seafile_ai_settings import *
 except ImportError as e:
     pass
+
+FACE_EMBEDDING_SERVICE_KEY = os.getenv('FACE_EMBEDDING_SERVICE_KEY') or FACE_EMBEDDING_SERVICE_KEY
+IMAGE_TAGS_SERVICE_KEY = os.getenv('IMAGE_TAGS_SERVICE_KEY') or IMAGE_TAGS_SERVICE_KEY
+OCR_SERVICE_KEY = os.getenv('OCR_SERVICE_KEY') or OCR_SERVICE_KEY
