@@ -17,7 +17,7 @@ class FaceEmbeddingModel:
         result = []
         input_image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), 1)
         if input_image is None:
-            return None
+            return []
 
         input_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2RGB)
         faces = self.model.get(input_image)
