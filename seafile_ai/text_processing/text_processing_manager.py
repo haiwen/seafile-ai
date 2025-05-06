@@ -123,6 +123,8 @@ class TextProcessingManager:
             predefined_prompt = prefix + 'You are good at completing various writing auxiliary tasks. Your task is as follows:'
             if writing_type == WritingType.CONTINUE_WRITING:
                 predefined_prompt += 'Please continue writing the input sentence. If the input is a complete sentence, please continue writing a sentence based on semantics. If not, please complete the writing of the sentence. The output sentence must start with the input sentence.'
+            elif writing_type == WritingType.MORE_FLUENT:
+                predefined_prompt += 'Please improve the input sentence to make it more fluent. This improvement cannot change the meaning and tone of the input sentence.'
             elif writing_type == WritingType.MORE_DETAILS:
                 predefined_prompt += 'I give you a sentence. Please understand its meaning deeply and expand its content. This expansion cannot change the meaning and tone of the input sentence.'
             elif writing_type == WritingType.MORE_CONCISE:
