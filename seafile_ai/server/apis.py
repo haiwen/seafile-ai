@@ -322,3 +322,36 @@ def writing_assistant():
 
     return {'content': content}, 200
 
+
+@flask_app.route('/api/v1/sdoc-general-assistant/', methods=['POST'])
+def sdoc_general_assistant():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+    
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    file_path = data.get('file_path')
+    download_token = data.get('download_token')
+    custom_prompt = data.get('custom_prompt')
+
+    if not file_path:
+        return {'error_msg': 'path invalid.'}, 400
+    if not download_token:
+        return {'error_msg': 'download_token invalid.'}, 400
+    if not custom_prompt:
+        return {'error_msg': 'custom_prompt invalid.'}, 400
+    if Path(file_path).suffix not in '.sdoc':
+        return {'error_msg': 'unsupported file format.'}, 400
+
+    try:
+        llm_response_content = flask_app.app.text_processing_manager.sdoc_general_assistant(file_path, download_token, custom_prompt)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'content': llm_response_content}, 200
