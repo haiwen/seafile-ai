@@ -1,12 +1,12 @@
 import requests
 import json
 import logging
-
 import mammoth
 
 from urllib.parse import quote as urlquote
 from pathlib import Path
 from io import BytesIO
+from PIL import Image
 
 from pdfminer.high_level import extract_text
 
@@ -32,6 +32,10 @@ class OpenAIInvalidException(Exception):
 
 
 class InvalidWritingTypeException(Exception):
+    pass
+
+
+class FormatNotSupportedException(Exception):
     pass
 
 
@@ -82,3 +86,36 @@ def docx2md(file):
 def get_pdf_text(file):
     text = extract_text(BytesIO(file))
     return text
+
+
+def get_file_ext(file_name):
+    return Path(file_name).suffix.lower()
+
+
+def resize_image_binary(image_binary, ext, size):
+    ext = 'jpeg' if ext == 'jpg' else ext
+    with Image.open(BytesIO(image_binary)) as img:
+        img = img.convert('RGB')
+        width, height = img.size
+
+        if width <= size or height <= size:
+            return image_binary
+
+        if width <= height:
+            ratio = size / width
+        else:
+            ratio = size / height
+
+        new_width = int(width * ratio)
+        new_height = int(height * ratio)
+        resized_img = img.resize((new_width, new_height), Image.LANCZOS)
+
+        output_buffer = BytesIO()
+        resized_img.save(output_buffer, format=ext)
+        output_buffer.seek(0)
+
+        return output_buffer.getvalue()
+
+
+def is_pdf(file_path):
+    return file_path.lower().endswith('.pdf')

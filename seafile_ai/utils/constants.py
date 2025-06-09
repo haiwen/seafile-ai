@@ -1,6 +1,8 @@
 LLM_INPUT_CHARACTERS_LIMIT = 4000
 SUMMARY_SUPPORTED_FILES = ['.sdoc', '.md', '.markdown', '.docx', '.pdf', '.pptx']
 
+EXTRACT_TEXT_SUPPORTED_IMAGES = ('.gif', '.jpeg', '.jpg', '.png', '.heic', '.ico', '.bmp', '.tif', '.tiff', '.psd', '.webp', '.jfif')
+
 LANGUAGE = {
     'en': 'English',
     'zh-cn': 'Chinese',
