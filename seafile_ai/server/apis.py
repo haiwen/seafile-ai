@@ -7,7 +7,7 @@ from flask import Flask, request
 from pathlib import Path
 
 from seafile_ai import config
-from seafile_ai.utils import InvalidWritingTypeException, OpenAIInvalidException
+from seafile_ai.utils import InvalidWritingTypeException, OpenAIInvalidException, FormatNotSupportedException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 
 
@@ -156,16 +156,19 @@ def ocr():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    path = data.get('path')
+    file_name = data.get('file_name')
     download_token = data.get('download_token')
 
-    if not path:
-        return {'error_msg': 'path invalid.'}, 400
+    if not file_name:
+        return {'error_msg': 'file_name invalid.'}, 400
     if not download_token:
         return {'error_msg': 'download_token invalid.'}, 400
 
     try:
-        ocr_result = flask_app.app.image_processing_manager.ocr(path, download_token)
+        ocr_result = flask_app.app.text_processing_manager.extract_text(file_name, download_token)
+    except FormatNotSupportedException as e:
+        logger.exception(e)
+        return {'error_msg': 'file format not supported.'}, 400
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
@@ -266,3 +269,4 @@ def writing_assistant():
         return {'error_msg': 'Internet server error.'}, 500
 
     return {'content': content}, 200
+

@@ -15,12 +15,6 @@ class SeafileAIApp(object):
 
         self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
 
-        if config.OCR_SERVICE_TYPE == 'seafile-ocr':
-            from seafile_ai.utils.seafile_ocr_api import SeafileOCRAPI
-            self.ocr_api = SeafileOCRAPI(config.OCR_SERVICE_URL, config.OCR_SERVICE_KEY)
-        else:
-            raise Exception('unknown ocr service type')
-
         self.text_processing_manager = TextProcessingManager(self, config.LLM_TYPE)
         self.image_processing_manager = ImageProcessingManager(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)

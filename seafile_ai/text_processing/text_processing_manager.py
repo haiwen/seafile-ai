@@ -1,13 +1,12 @@
 import os
 import logging
 import re
-
-from pathlib import Path
+import base64
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, WritingType
-from seafile_ai.utils import InvalidWritingTypeException, parse_file
-from seafile_ai.utils.constants import LANGUAGE
-
+from seafile_ai.utils import InvalidWritingTypeException, parse_file, FormatNotSupportedException, get_file_ext, \
+    resize_image_binary, is_pdf, get_file_by_token
+from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ class TextProcessingManager:
         self.llm_type = llm_type
 
     def _generate_summary_text(self, file_name, content):
-        file_ext = Path(file_name).suffix.lower()
+        file_ext = get_file_ext(file_name)
         if file_ext == '.pptx':
             prompt = 'You are a PowerPoint summarizer. You will receive a text version of the PowerPoint slides. Your task is to extract the main points and generate a summary that is concise, clear, and focused on the key elements of the content. - Requirement: **Attention The output language is the same as the input PPT main contentlanguage.(If there are Chinese characters, then it is Chinese.)**'
         else:
@@ -137,3 +136,38 @@ class TextProcessingManager:
             predefined_prompt += 'All input is your writing material, please do not output any answers or responses to the input.'
 
         return predefined_prompt
+
+    def extract_text(self, file_name, download_token):
+        if not is_pdf(file_name) and get_file_ext(file_name) not in EXTRACT_TEXT_SUPPORTED_IMAGES:
+            raise FormatNotSupportedException
+
+        if is_pdf(file_name):
+            return parse_file(file_name, download_token)
+
+        file_content = get_file_by_token(download_token, file_name)
+        image = resize_image_binary(file_content, 'jpeg', 512)
+        encode_img = base64.b64encode(image).decode('utf-8')
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Extract the text information in the image. If there is text information, "
+                                "only return the text information. If there is no text information, return an empty string."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{encode_img}"
+                        }
+                    }
+                ],
+            }
+        ]
+
+        extracted_text = self.app.openai_api.chat_completions(messages)
+        if not extracted_text:
+            return ''
+
+        return extracted_text.strip()

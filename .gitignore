@@ -11,3 +11,5 @@ __pycache__
 *log
 local_settings.py
 seafile_ai_settings.py
+./face_embedding/face_embedding_settings.py
+
