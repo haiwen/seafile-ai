@@ -1,5 +1,3 @@
-from gevent import monkey; monkey.patch_all()
-
 import config
 from seafile_ai.app.log import LogConfigurator
 from seafile_ai.app.seafile_ai_app import SeafileAIApp

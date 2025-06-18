@@ -1,5 +1,5 @@
 Flask
-gevent
+waitress==3.0.2
 html2text
 pillow
 mammoth==1.8.0
