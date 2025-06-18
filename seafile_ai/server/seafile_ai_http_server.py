@@ -1,6 +1,5 @@
 from threading import Thread
-from gevent.pywsgi import WSGIServer
-
+from waitress import create_server
 from seafile_ai.server.apis import flask_app
 
 
@@ -10,7 +9,7 @@ class SeafileAIHttpServer(Thread):
         Thread.__init__(self)
         flask_app.app = app
 
-        self.server = WSGIServer(('0.0.0.0', 8888), flask_app)
+        self.server = create_server(flask_app, host='0.0.0.0', port=8888)
 
     def run(self):
-        self.server.serve_forever()
+        self.server.run()

@@ -1,5 +1,5 @@
 from threading import Thread
-from gevent.pywsgi import WSGIServer
+from waitress import create_server
 
 from face_embedding.server.apis import flask_app
 
@@ -10,7 +10,7 @@ class FaceEmbeddingHttpServer(Thread):
         Thread.__init__(self)
         flask_app.app = app
 
-        self.server = WSGIServer(('0.0.0.0', 8886), flask_app)
+        self.server = create_server(flask_app, host='0.0.0.0', port=8886)
 
     def run(self):
-        self.server.serve_forever()
+        self.server.run()
