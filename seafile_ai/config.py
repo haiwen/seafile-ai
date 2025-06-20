@@ -46,6 +46,7 @@ except ImportError as e:
 SEAFILE_SERVER_URL = os.getenv('SEAFILE_SERVER_URL') or SEAFILE_SERVER_URL
 SECRET_KEY = os.getenv('JWT_PRIVATE_KEY') or SECRET_KEY
 
+LLM_TYPE = os.getenv('SEAFILE_AI_LLM_TYPE') or LLM_TYPE
 LLM_URL = os.getenv('SEAFILE_AI_LLM_URL') or LLM_URL
 LLM_KEY = os.getenv('SEAFILE_AI_LLM_KEY') or LLM_KEY
 
