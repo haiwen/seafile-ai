@@ -36,7 +36,7 @@ class TextProcessingManager:
         return summary_text if summary_text not in ['None', 'none', None] else ''
 
     def _gen_doc_summary(self, content, prompt):
-        if self.llm_type == 'open-ai-proxy':
+        if self.llm_type == 'openai-proxy':
             system_prompt = {"role": "system", "content": prompt}
             user_prompt = {"role": "user", "content": 'Summarize the following content' + content}
             messages = [system_prompt, user_prompt]
