@@ -7,9 +7,12 @@ from seafile_ai.utils.face_embedding_api import FaceEmbeddingAPI
 class SeafileAIApp(object):
     def __init__(self, config):
         self.config = config
-        if config.LLM_TYPE == 'open-ai-proxy':
+        if config.LLM_TYPE == 'openai-proxy':
             from seafile_ai.utils.openai_api import OpenAIAPI
             self.openai_api = OpenAIAPI(config.LLM_URL)
+        elif config.LLM_TYPE == 'openai':
+            from seafile_ai.utils.openai_api import OpenAIAPI
+            self.openai_api = OpenAIAPI(api_key=config.LLM_KEY)
         else:
             raise Exception('unknown llm type')
 

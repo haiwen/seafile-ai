@@ -19,7 +19,7 @@ APP_NAME = 'seafile-ai'
 
 # LLM
 LLM_URL = ''
-LLM_TYPE = 'open-ai-proxy'
+LLM_TYPE = 'openai-proxy'
 LLM_KEY = ''
 
 # Face embedding
