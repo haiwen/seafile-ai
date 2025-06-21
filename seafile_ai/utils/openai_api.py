@@ -19,7 +19,8 @@ class OpenAIAPI:
             # OpenAI SDK mode
             self.mode = 'sdk'
             import openai
-            self.client = openai.OpenAI(api_key=api_key, timeout=timeout)
+            client = openai.OpenAI(api_key=api_key, timeout=timeout)
+            self.chat = client.chat
         else:
             raise ValueError("Either openai_proxy_url or api_key must be provided")
 
@@ -44,7 +45,7 @@ class OpenAIAPI:
         elif self.mode == 'sdk':
             # Use OpenAI SDK mode
             try:
-                response = self.client.chat.completions.create(
+                response = self.chat.completions.create(
                     model=model,
                     messages=messages,
                     temperature=temperature
