@@ -20,6 +20,8 @@ class OpenAIAPI:
             self.mode = 'sdk'
             import openai
             client = openai.OpenAI(api_key=api_key, timeout=timeout)
+
+            # Cache `OpenAI.chat` properties in `__init__` to avoid registering atexit Apps after shutdown in the Docker environment when first-time calling `OpenAI.chat.competion` on function `chat_completions`.
             self.chat = client.chat
         else:
             raise ValueError("Either openai_proxy_url or api_key must be provided")
