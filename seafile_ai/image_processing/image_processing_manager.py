@@ -12,7 +12,7 @@ class ImageProcessingManager:
     def __init__(self, app):
         self.app = app
 
-    def image_caption(self, path, download_token, lang):
+    def image_caption(self, path, download_token, lang, context):
         file_name = os.path.basename(path)
         content = get_image_by_token(download_token, file_name)
         if not content:
@@ -36,10 +36,10 @@ class ImageProcessingManager:
                 ]
             }
         ]
-        desc = self.app.openai_api.chat_completions(messages)
+        desc = self.app.openai_api.chat_completions(messages, context)
         return desc
 
-    def image_tags(self, path, download_token, lang):
+    def image_tags(self, path, download_token, lang, context):
         file_name = os.path.basename(path.rstrip('/'))
         file = get_image_by_token(download_token, file_name)
         if not file:
@@ -87,7 +87,7 @@ class ImageProcessingManager:
             }
         ]
         
-        result = self.app.openai_api.chat_completions(messages)
+        result = self.app.openai_api.chat_completions(messages, context)
         tags = [tag.strip() for tag in result.split(',')]
         return tags
 

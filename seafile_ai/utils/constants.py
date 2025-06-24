@@ -8,6 +8,7 @@ LANGUAGE = {
     'zh-cn': 'Chinese',
 }
 
+MODEL_USAGE_STATISTIC_CHANNEL_NAME = 'log_ai_model_usage'
 
 class WritingType:
     ASK = 'ask'
