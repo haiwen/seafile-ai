@@ -1,5 +1,6 @@
 import glob
 import os
+import logging
 
 import onnxruntime
 from face_embedding.models.arcface_onnx import ArcFaceONNX
@@ -7,6 +8,8 @@ from face_embedding.models.retinaface import RetinaFace
 from face_embedding.models.landmark import Landmark
 from face_embedding.models.attribute import Attribute
 from face_embedding.models.utils import Face
+
+logger = logging.getLogger(__name__)
 
 
 class Model:
@@ -30,7 +33,12 @@ class Model:
                 model.prepare(ctx_id)
 
     def get_model(self, onnx_file):
-        session = onnxruntime.InferenceSession(onnx_file)
+        providers = ['CPUExecutionProvider']
+        if onnxruntime.get_device() == 'GPU' and self.ctx_id >= 0:
+            providers.insert(0, 'CUDAExecutionProvider')
+
+        logger.info('onnxruntime providers: %s', providers)
+        session = onnxruntime.InferenceSession(onnx_file, providers=providers)
         inputs = session.get_inputs()
         input_cfg = inputs[0]
         input_shape = input_cfg.shape
