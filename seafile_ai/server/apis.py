@@ -47,6 +47,13 @@ def generate_summary():
 
     path = data.get('path')
     download_token = data.get('download_token')
+    username = data.get('username')
+    org_id = data.get('org_id')
+
+    context = {
+        'username': username,
+        'org_id': org_id
+    }
 
     if not path:
         return {'error_msg': 'path invalid.'}, 400
@@ -54,9 +61,10 @@ def generate_summary():
         return {'error_msg': 'download_token invalid.'}, 400
     if Path(path).suffix not in SUMMARY_SUPPORTED_FILES:
         return {'error_msg': 'unsupported file format.'}, 400
-
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
     try:
-        summary = flask_app.app.text_processing_manager.generate_summary(path, download_token)
+        summary = flask_app.app.text_processing_manager.generate_summary(path, download_token, context)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
@@ -78,6 +86,8 @@ def image_caption():
 
     path = data.get('path')
     lang = data.get('lang')
+    username = data.get('username')
+    org_id = data.get('org_id')
     download_token = data.get('download_token')
 
     if not path:
@@ -86,9 +96,16 @@ def image_caption():
         return {'error_msg': 'lang invalid.'}, 400
     if not download_token:
         return {'error_msg': 'download_token invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    context = {
+        'username': username,
+        'org_id': org_id
+    }
 
     try:
-        desc = flask_app.app.image_processing_manager.image_caption(path, download_token, lang)
+        desc = flask_app.app.image_processing_manager.image_caption(path, download_token, lang, context)
     except UnidentifiedImageError as e:
         logger.exception(e)
         return {'error_msg': 'file format not supported.'}, 400
@@ -114,18 +131,26 @@ def generate_file_tags():
     path = data.get('path')
     download_token = data.get('download_token')
     file_type = data.get('file_type')
+    username = data.get('username')
+    org_id = data.get('org_id')
 
+    context = {
+        'username': username,
+        'org_id': org_id
+    }
     if not path:
         return {'error_msg': 'path invalid.'}, 400
     if not download_token:
         return {'error_msg': 'download_token invalid.'}, 400
     if not file_type or file_type not in ['image', 'doc']:
         return {'error_msg': 'file_type invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
 
     if file_type == 'image':
         lang = data.get('lang', 'en')
         try:
-            tags = flask_app.app.image_processing_manager.image_tags(path, download_token, lang)
+            tags = flask_app.app.image_processing_manager.image_tags(path, download_token, lang, context)
         except Exception as e:
             logger.exception(e)
             return {'error_msg': 'Internet server error.'}, 500
@@ -136,7 +161,7 @@ def generate_file_tags():
             return {'error_msg': 'candidate_tags invalid.'}, 400
 
         try:
-            tags = flask_app.app.text_processing_manager.doc_tags(path, download_token, candidate_tags)
+            tags = flask_app.app.text_processing_manager.doc_tags(path, download_token, candidate_tags, context)
         except Exception as e:
             logger.exception(e)
             return {'error_msg': 'Internet server error.'}, 500
@@ -158,14 +183,23 @@ def ocr():
 
     file_name = data.get('file_name')
     download_token = data.get('download_token')
+    username = data.get('username')
+    org_id = data.get('org_id')
+
+    context = {
+        'username': username,
+        'org_id': org_id
+    }
 
     if not file_name:
         return {'error_msg': 'file_name invalid.'}, 400
     if not download_token:
         return {'error_msg': 'download_token invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
 
     try:
-        ocr_result = flask_app.app.text_processing_manager.extract_text(file_name, download_token)
+        ocr_result = flask_app.app.text_processing_manager.extract_text(file_name, download_token, context)
     except FormatNotSupportedException as e:
         logger.exception(e)
         return {'error_msg': 'file format not supported.'}, 400
@@ -220,14 +254,23 @@ def translate():
 
     text = data.get('text')
     lang = data.get('lang')
+    username = data.get('username')
+    org_id = data.get('org_id')
 
     if not text:
         return {'error_msg': 'text invalid.'}, 400
     if not lang or lang not in LANGUAGE:
         return {'error_msg': 'lang invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+    
+    context = { 
+        'username': username,
+        'org_id': org_id
+    }
 
     try:
-        translation = flask_app.app.text_processing_manager.translate(text, lang)
+        translation = flask_app.app.text_processing_manager.translate(text, lang, context)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500
@@ -250,14 +293,23 @@ def writing_assistant():
     text = data.get('text')
     writing_type = data.get('writing_type')
     custom_prompt = data.get('custom_prompt')
+    username = data.get('username')
+    org_id = data.get('org_id')
 
     if not text:
         return {'error_msg': 'text invalid.'}, 400
     if not custom_prompt and not writing_type:
         return {'error_msg': 'writing_type invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    context = {
+        'username': username,
+        'org_id': org_id
+    }
 
     try:
-        content = flask_app.app.text_processing_manager.writing_assistant(text, custom_prompt, writing_type)
+        content = flask_app.app.text_processing_manager.writing_assistant(text, custom_prompt, writing_type, context)
     except InvalidWritingTypeException as e:
         logger.warning(e)
         return {'error_msg': 'writing type invalid.'}, 400
