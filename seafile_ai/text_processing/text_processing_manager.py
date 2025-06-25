@@ -189,7 +189,7 @@ class TextProcessingManager:
             The document content is as follows:
             {sdoc_content}
         '''
-        if self.llm_type == 'open-ai-proxy':
+        if self.llm_type == 'openai-proxy':
             system_prompt = {"role": "system", "content": system_content}
             user_prompt = {"role": "user", "content": custom_prompt}
             messages = [system_prompt, user_prompt]
