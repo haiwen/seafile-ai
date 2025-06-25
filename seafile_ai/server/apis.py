@@ -338,6 +338,8 @@ def sdoc_general_assistant():
     file_path = data.get('file_path')
     download_token = data.get('download_token')
     custom_prompt = data.get('custom_prompt')
+    username = data.get('username')
+    org_id = data.get('org_id')
 
     if not file_path:
         return {'error_msg': 'path invalid.'}, 400
@@ -347,9 +349,16 @@ def sdoc_general_assistant():
         return {'error_msg': 'custom_prompt invalid.'}, 400
     if Path(file_path).suffix not in '.sdoc':
         return {'error_msg': 'unsupported file format.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    context = {
+        'username': username,
+        'org_id': org_id
+    }
 
     try:
-        llm_response_content = flask_app.app.text_processing_manager.sdoc_general_assistant(file_path, download_token, custom_prompt)
+        llm_response_content = flask_app.app.text_processing_manager.sdoc_general_assistant(file_path, download_token, custom_prompt, context)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internet server error.'}, 500

@@ -171,18 +171,18 @@ class TextProcessingManager:
 
         return extracted_text.strip()
 
-    def sdoc_general_assistant(self, file_path, download_token, custom_prompt):
+    def sdoc_general_assistant(self, file_path, download_token, custom_prompt, context):
         file_name = os.path.basename(file_path)
         sdoc_content = parse_file(file_name, download_token)
 
         if not sdoc_content:
             return None
 
-        llm_response_content = self._generate_sdoc_general_assistant_text(sdoc_content[:LLM_INPUT_CHARACTERS_LIMIT], custom_prompt)
+        llm_response_content = self._generate_sdoc_general_assistant_text(sdoc_content[:LLM_INPUT_CHARACTERS_LIMIT], custom_prompt, context)
 
         return llm_response_content
     
-    def _generate_sdoc_general_assistant_text(self, sdoc_content, custom_prompt):
+    def _generate_sdoc_general_assistant_text(self, sdoc_content, custom_prompt, context):
         system_content = f'''
             You are now a document general assistant. Please provide accurate and targeted answers based on the document content.
             The output language is the same as the input language. 
@@ -193,7 +193,7 @@ class TextProcessingManager:
             system_prompt = {"role": "system", "content": system_content}
             user_prompt = {"role": "user", "content": custom_prompt}
             messages = [system_prompt, user_prompt]
-            llm_response_content = self.app.openai_api.chat_completions(messages)
+            llm_response_content = self.app.openai_api.chat_completions(messages, context)
             return llm_response_content
         else:
             logger.error('llm_type is not set correctly in config')
