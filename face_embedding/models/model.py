@@ -1,5 +1,6 @@
 import glob
 import os
+import logging
 
 import onnxruntime
 from face_embedding.models.arcface_onnx import ArcFaceONNX
@@ -8,7 +9,7 @@ from face_embedding.models.landmark import Landmark
 from face_embedding.models.attribute import Attribute
 from face_embedding.models.utils import Face
 
-
+logger = logging.getLogger(__name__)
 class Model:
     def __init__(self, model_dir, ctx_id):
         self.model_dir = model_dir
@@ -30,6 +31,15 @@ class Model:
                 model.prepare(ctx_id)
 
     def get_model(self, onnx_file):
+        if accer_arch := os.environ.get('ACCER_ARCH', 'cpu') in ('cuda', 'rocm'):
+            if onnxruntime.get_device() == 'GPU' and self.ctx_id >= 0:
+                logger.info(f'Face-embedding service is running on GPU mode (accelerator framework: {accer_arch})')
+            else:
+                logger.warning(f'Face-embedding service is tring to run on GPU mode with accelerator framework: {accer_arch}, but not GPU found')
+                logger.info('Face-embedding service is running on CPU mode')
+        else:
+            logger.info('Face-embedding service is running on CPU mode')
+            
         session = onnxruntime.InferenceSession(onnx_file)
         inputs = session.get_inputs()
         input_cfg = inputs[0]
