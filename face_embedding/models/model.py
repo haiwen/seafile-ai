@@ -32,12 +32,19 @@ class Model:
 
     def get_model(self, onnx_file):
         providers = ['CPUExecutionProvider']
-        if (accer_arch := os.environ.get('ACCER_ARCH', 'cpu')) in ('cuda', 'rocm'):
+        if (accer_arch := os.environ.get('ACCER_ARCH', 'cpu')) == 'cuda':
             if onnxruntime.get_device() == 'GPU' and self.ctx_id >= 0:
-                logger.info(f'Face-embedding service is running on GPU mode (accelerator framework: {accer_arch})')
+                logger.info(f'Face-embedding service is running on GPU mode (accelerator framework: CUDA)')
                 providers.insert(0, 'CUDAExecutionProvider')
             else:
-                logger.warning(f'Face-embedding service is tring to run on GPU mode with accelerator framework: {accer_arch}, but not GPU found')
+                logger.warning(f'Face-embedding service is tring to run on GPU mode with accelerator framework: CUDA, but not Nvidia GPU found')
+                logger.info('Face-embedding service is running on CPU mode')
+        elif accer_arch == 'rocm':
+            if onnxruntime.get_device() == 'ROCm':
+                logger.info(f'Face-embedding service is running on GPU mode (accelerator framework: ROCm)')
+                providers.insert(0, 'ROCMExecutionProvider')
+            else:
+                logger.warning(f'Face-embedding service is tring to run on GPU mode with accelerator framework: ROCm, but not AMD GPU found')
                 logger.info('Face-embedding service is running on CPU mode')
         else:
             logger.info('Face-embedding service is running on CPU mode')
