@@ -69,7 +69,6 @@ class OpenAIAPI:
                     'usage': usage,
                     'username': context.get('username'),
                     'org_id': context.get('org_id'),
-                    'assistant_uuid': context.get('assistant_uuid'),
                 }))
 
                 return content
