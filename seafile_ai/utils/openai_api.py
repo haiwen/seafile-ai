@@ -60,14 +60,19 @@ class OpenAIAPI:
                     messages=messages,
                     temperature=temperature
                 )
+                model = response.model
+                usage = response.usage.to_dict() if response.usage else None
+                content = response.choices[0].message.content
+
                 self.data_logger.log_data(MODEL_USAGE_STATISTIC_CHANNEL_NAME, json.dumps({
-                'model': response.get('model'),
-                'usage': response.get('usage'),
-                'username': context.get('username'),
-                'org_id': context.get('org_id'),
-                'assistant_uuid': context.get('assistant_uuid'),
-            }))
-                return response.choices[0].message.content
+                    'model': model,
+                    'usage': usage,
+                    'username': context.get('username'),
+                    'org_id': context.get('org_id'),
+                    'assistant_uuid': context.get('assistant_uuid'),
+                }))
+
+                return content
             except Exception as e:
                 logger.warning('openai sdk error: %s', str(e))
                 raise OpenAIInvalidException('openai sdk error: %s' % e)
