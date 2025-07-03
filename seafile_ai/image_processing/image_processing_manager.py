@@ -12,7 +12,7 @@ class ImageProcessingManager:
     def __init__(self, app):
         self.app = app
 
-    def image_caption(self, path, download_token, lang, context):
+    def image_caption(self, path, download_token, lang, context, capture_time, address):
         file_name = os.path.basename(path)
         content = get_image_by_token(download_token, file_name)
         if not content:
@@ -36,6 +36,13 @@ class ImageProcessingManager:
                 ]
             }
         ]
+
+        if capture_time and not address:
+            messages[0]["content"][0]["text"] = f"Please describe the contents of this picture in {LANGUAGE[lang]}. This picture was captured on {capture_time}.Focus solely on the objects and details depicted, and combine with the capture time.You can describe the time like morning but don't mention the specific date and time,without discussing the emotions the picture may evoke. The description should be approximately 100 words."
+        elif not capture_time and address:
+            messages[0]["content"][0]["text"] = f"Please describe the contents of this picture in {LANGUAGE[lang]}. This picture was taken at {address}.Focus solely on the objects, details depicted and combine with the address, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
+        elif capture_time and address:
+            messages[0]["content"][0]["text"] = f"Please describe the contents of this picture in {LANGUAGE[lang]}. This picture was taken at {address} on {capture_time}.Focus solely on the objects and details depicted,and combine with the capture time and location, and you can describe the time like morning but don't mention the specific date and time, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
         desc = self.app.openai_api.chat_completions(messages, context)
         return desc
 
