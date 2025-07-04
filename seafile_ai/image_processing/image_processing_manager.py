@@ -1,6 +1,6 @@
 import base64
 import os
-
+import re
 from seafile_ai import config
 from seafile_ai.image_processing.utils import resize_image_binary
 from seafile_ai.utils import get_image_by_token
@@ -87,8 +87,9 @@ class ImageProcessingManager:
             }
         ]
         
+
         result = self.app.openai_api.chat_completions(messages, context)
-        tags = [tag.strip() for tag in result.split(',')]
+        tags = re.split(r'[，,]', result)
         return tags
 
     def ocr(self, path, download_token):
