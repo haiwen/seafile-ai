@@ -36,15 +36,11 @@ class TextProcessingManager:
         return summary_text if summary_text not in ['None', 'none', None] else ''
 
     def _gen_doc_summary(self, content, prompt, context):
-        if self.llm_type == 'openai-proxy':
-            system_prompt = {"role": "system", "content": prompt}
-            user_prompt = {"role": "user", "content": 'Summarize the following content' + content}
-            messages = [system_prompt, user_prompt]
-            summary = self.app.openai_api.chat_completions(messages, context)
-            return summary
-        else:
-            logger.error('llm_type is not set correctly in config')
-            return None
+        system_prompt = {"role": "system", "content": prompt}
+        user_prompt = {"role": "user", "content": 'Summarize the following content' + content}
+        messages = [system_prompt, user_prompt]
+        summary = self.app.openai_api.chat_completions(messages, context)
+        return summary
 
     def doc_tags(self, path, download_token, candidate_tags, context):
         file_name = os.path.basename(path)
@@ -166,6 +162,7 @@ class TextProcessingManager:
             }
         ]
         extracted_text = self.app.openai_api.chat_completions(messages, context)
+
         if not extracted_text:
             return ''
 

@@ -1,45 +1,57 @@
 import json
 import requests
 import logging
-
+from openai import OpenAI
 from seafile_ai.utils import OpenAIInvalidException, parse_response
 from seafile_ai.utils.constants import MODEL_USAGE_STATISTIC_CHANNEL_NAME
 logger = logging.getLogger(__name__)
 
 
 class OpenAIAPI:
-    def __init__(self, openai_proxy_url=None, api_key=None, timeout=180):
-        self.timeout = timeout        
-        if openai_proxy_url:
+    def __init__(self, llm_type, base_url=None, api_key=None, model='gpt-4o-mini', timeout=180):
+        self.timeout = timeout
+        self.model = model
+        if llm_type == 'openai-proxy' and base_url:
             # Proxy mode
             self.mode = 'proxy'
-            self.openai_proxy_url = openai_proxy_url.rstrip('/') + '/api/v1/chat-completions/create'
-        elif api_key:
+            self.openai_proxy_url = base_url.rstrip('/') + '/api/v1/chat-completions/create'
+        elif llm_type == 'openai' and api_key:
             # OpenAI SDK mode
             self.mode = 'sdk'
-            import openai
-            client = openai.OpenAI(api_key=api_key, timeout=timeout)
-
-            # Cache `OpenAI.chat` properties in `__init__` to avoid registering atexit Apps after shutdown in the Docker environment when first-time calling `OpenAI.chat.competion` on function `chat_completions`.
+            client = OpenAI(
+                    api_key=api_key,
+                    timeout=timeout
+                )
+            self.model = model
+            self.chat = client.chat
+        elif llm_type == 'other' and api_key:
+            # Other OpenAI SDK mode
+            self.mode = 'sdk'
+            client = OpenAI(
+                    base_url=base_url,
+                    api_key=api_key,
+                    timeout=timeout
+                )
+            self.model = model
             self.chat = client.chat
         else:
-            raise ValueError("Either openai_proxy_url or api_key must be provided")
+            raise ValueError("Either LLM_URL or LLM_KEY must be provided")
 
     def init(self, data_logger):
         self.data_logger = data_logger
 
-    def chat_completions(self, messages, context, temperature=0, model='gpt-4o-mini'):
+    def chat_completions(self, messages, context, temperature=0):
         if self.mode == 'proxy':
             # Use proxy mode
             json_data = {
-                'model': model,
+                'model': self.model,
                 'messages': messages,
                 'temperature': temperature
             }
             response = requests.post(self.openai_proxy_url, json=json_data, timeout=self.timeout)
             data = parse_response(response)
             self.data_logger.log_data(MODEL_USAGE_STATISTIC_CHANNEL_NAME, json.dumps({
-            'model': data.get('model'),
+            'model': self.model,
             'usage': data.get('usage'),
             'username': context.get('username'),
             'org_id': context.get('org_id')
@@ -56,16 +68,15 @@ class OpenAIAPI:
             # Use OpenAI SDK mode
             try:
                 response = self.chat.completions.create(
-                    model=model,
+                    model=self.model,
                     messages=messages,
                     temperature=temperature
                 )
-                model = response.model
                 usage = response.usage.to_dict() if response.usage else None
                 content = response.choices[0].message.content
 
                 self.data_logger.log_data(MODEL_USAGE_STATISTIC_CHANNEL_NAME, json.dumps({
-                    'model': model,
+                    'model': self.model,
                     'usage': usage,
                     'username': context.get('username'),
                     'org_id': context.get('org_id'),
@@ -74,4 +85,5 @@ class OpenAIAPI:
                 return content
             except Exception as e:
                 logger.warning('openai sdk error: %s', str(e))
+                logger.warning('Please check if LLM_URL, LLM_KEY and LLM_MODEL match')
                 raise OpenAIInvalidException('openai sdk error: %s' % e)
