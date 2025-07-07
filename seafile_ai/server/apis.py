@@ -89,6 +89,8 @@ def image_caption():
     username = data.get('username')
     org_id = data.get('org_id')
     download_token = data.get('download_token')
+    capture_time = data.get('capture_time')
+    address = data.get('address')
 
     if not path:
         return {'error_msg': 'path invalid.'}, 400
@@ -105,7 +107,7 @@ def image_caption():
     }
 
     try:
-        desc = flask_app.app.image_processing_manager.image_caption(path, download_token, lang, context)
+        desc = flask_app.app.image_processing_manager.image_caption(path, download_token, lang, context, capture_time, address)
     except UnidentifiedImageError as e:
         logger.exception(e)
         return {'error_msg': 'file format not supported.'}, 400
