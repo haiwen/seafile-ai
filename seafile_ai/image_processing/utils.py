@@ -1,9 +1,13 @@
 from io import BytesIO
 
 from PIL import Image
+import pillow_heif
+pillow_heif.register_heif_opener()
+
 
 
 def resize_image_binary(image_binary):
+    
     img = Image.open(BytesIO(image_binary))
     img = img.convert("RGB")
     width, height = img.size
