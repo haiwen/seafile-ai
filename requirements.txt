@@ -14,3 +14,4 @@ pdfminer.six==20240706
 requests~=2.31.0
 openai~=1.88.0
 redis~=5.0.0
+pillow-heif==0.18.*
