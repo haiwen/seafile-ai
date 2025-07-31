@@ -6,6 +6,9 @@ EXTRACT_TEXT_SUPPORTED_IMAGES = ('.gif', '.jpeg', '.jpg', '.png', '.heic', '.ico
 LANGUAGE = {
     'en': 'English',
     'zh-cn': 'Chinese',
+    'fr' : 'French',
+    'de' : 'German',
+    'it' : 'Italian',
 }
 
 MODEL_USAGE_STATISTIC_CHANNEL_NAME = 'log_ai_model_usage'
