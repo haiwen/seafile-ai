@@ -7,7 +7,7 @@ from flask import Flask, request
 from pathlib import Path
 
 from seafile_ai import config
-from seafile_ai.utils import InvalidWritingTypeException, OpenAIInvalidException, FormatNotSupportedException
+from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionException, FormatNotSupportedException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 
 
@@ -315,7 +315,7 @@ def writing_assistant():
     except InvalidWritingTypeException as e:
         logger.warning(e)
         return {'error_msg': 'writing type invalid.'}, 400
-    except OpenAIInvalidException as e:
+    except LLMChatCompletionException as e:
         logger.warning(e)
         return {'error_msg': 'openai server error.'}, 500
     except Exception as e:

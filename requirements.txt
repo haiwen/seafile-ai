@@ -12,6 +12,6 @@ python-pptx~=1.0.2
 pyjwt~=2.10.1
 pdfminer.six==20250506
 requests~=2.32.4
-openai~=1.99.1
+litellm~=1.76.0
 redis~=6.2.0
 pillow-heif==1.0.*

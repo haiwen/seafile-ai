@@ -3,7 +3,7 @@ from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
 from seafile_ai.text_processing.text_processing_manager import TextProcessingManager
 from seafile_ai.utils.face_embedding_api import FaceEmbeddingAPI
 from seafile_ai.data_logging.data_logging import DataLogging
-from seafile_ai.utils.openai_api import OpenAIAPI
+from seafile_ai.utils.llm_api import LLMAPI
 
 class SeafileAIApp(object):
     def __init__(self, config):
@@ -15,8 +15,7 @@ class SeafileAIApp(object):
         model = config.LLM_MODEL
         if llm_type not in ['openai-proxy', 'openai', 'other']:
             raise Exception('unknown llm type')
-        self.openai_api = OpenAIAPI(llm_type, base_url, api_key, model)
-        self.openai_api.init(self.data_logger)
+        self.llm_api = LLMAPI(self.data_logger, llm_type, base_url, api_key, model)
         
         self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
 
@@ -26,3 +25,4 @@ class SeafileAIApp(object):
 
     def serve_forever(self):
         self.seafile_ai_http_server.start()
+        self.seafile_ai_http_server.join()
