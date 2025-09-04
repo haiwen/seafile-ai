@@ -16,7 +16,8 @@ class LLMAPI:
             llm_type = 'openai'
         elif llm_type == 'proxy':
             llm_type = None
-            api_key = 'not-keys-needed'
+            if not api_key:
+                api_key = 'not-keys-needed'
         self.model = f'{llm_type}/{model}' if llm_type else model
         self.base_url = base_url
         self.api_key = api_key
