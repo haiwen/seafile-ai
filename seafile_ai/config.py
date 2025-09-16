@@ -18,9 +18,9 @@ ENABLE_SYS_LOG = False
 APP_NAME = 'seafile-ai'
 
 # LLM
-LLM_URL = ''
-LLM_TYPE = 'openai-proxy'
-LLM_KEY = ''
+LLM_URL = None
+LLM_TYPE = 'openai'
+LLM_KEY = None
 LLM_MODEL = 'gpt-4o-mini'
 
 # redis

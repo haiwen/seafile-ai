@@ -39,7 +39,7 @@ class TextProcessingManager:
         system_prompt = {"role": "system", "content": prompt}
         user_prompt = {"role": "user", "content": 'Summarize the following content' + content}
         messages = [system_prompt, user_prompt]
-        summary = self.app.openai_api.chat_completions(messages, context)
+        summary = self.app.llm_api.run(messages, context)
         return summary
 
     def doc_tags(self, path, download_token, candidate_tags, context):
@@ -67,7 +67,7 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.openai_api.chat_completions(messages, context)
+        res = self.app.llm_api.run(messages, context)
         tags = re.split(r'[，,]', res)
         return [tag.strip() for tag in tags if tag.strip()]
 
@@ -86,7 +86,7 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.openai_api.chat_completions(messages, context)
+        res = self.app.llm_api.run(messages, context)
         return res
 
     def writing_assistant(self, text, custom_prompt, writing_type, context):
@@ -108,7 +108,7 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.openai_api.chat_completions(messages, context)
+        res = self.app.llm_api.run(messages, context)
         return res
 
     def get_predefined_prompt(self, prefix, writing_type):
@@ -161,7 +161,7 @@ class TextProcessingManager:
                 ],
             }
         ]
-        extracted_text = self.app.openai_api.chat_completions(messages, context)
+        extracted_text = self.app.llm_api.run(messages, context)
 
         if not extracted_text:
             return ''

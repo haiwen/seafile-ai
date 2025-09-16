@@ -43,7 +43,7 @@ class ImageProcessingManager:
             messages[0]["content"][0]["text"] = f"Please describe the contents of this picture in {LANGUAGE[lang]}. This picture was taken at {address}.Focus solely on the objects, details depicted and combine with the address, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
         elif capture_time and address:
             messages[0]["content"][0]["text"] = f"Please describe the contents of this picture in {LANGUAGE[lang]}. This picture was taken at {address} on {capture_time}.Focus solely on the objects and details depicted,and combine with the capture time and location, and you can describe the time like morning but don't mention the specific date and time, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
-        desc = self.app.openai_api.chat_completions(messages, context)
+        desc = self.app.llm_api.run(messages, context)
         return desc
 
     def image_tags(self, path, download_token, lang, context):
@@ -95,7 +95,7 @@ class ImageProcessingManager:
         ]
         
 
-        result = self.app.openai_api.chat_completions(messages, context)
+        result = self.app.llm_api.run(messages, context)
         tags = re.split(r'[，,]', result)
         return tags
 
