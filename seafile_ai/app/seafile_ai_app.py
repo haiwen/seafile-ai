@@ -13,8 +13,6 @@ class SeafileAIApp(object):
         base_url = config.LLM_URL
         api_key = config.LLM_KEY
         model = config.LLM_MODEL
-        if llm_type not in ['openai-proxy', 'openai', 'other']:
-            raise Exception('unknown llm type')
         self.llm_api = LLMAPI(self.data_logger, llm_type, base_url, api_key, model)
         
         self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
