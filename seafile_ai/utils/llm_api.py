@@ -13,11 +13,13 @@ class LLMAPI:
         self.data_logger = data_logger
         self.timeout = timeout
         if llm_type == 'other':
-            llm_type = 'openai'
+            llm_type = 'hosted_vllm'
         elif llm_type == 'proxy':
             llm_type = None
             if not api_key:
                 api_key = 'not-keys-needed'
+        if llm_type in ('other', 'hosted_vllm', 'proxy') and not base_url:
+            raise ValueError(f'The llm_url has to set in llm_type = {llm_type}')
         self.model = f'{llm_type}/{model}' if llm_type else model
         self.base_url = base_url
         self.api_key = api_key
