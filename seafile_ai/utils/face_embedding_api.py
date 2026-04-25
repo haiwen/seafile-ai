@@ -4,7 +4,7 @@ import jwt
 import requests
 import logging
 
-from seafile_ai.utils import parse_response
+from seafile_ai.clients.http_client import parse_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -27,5 +27,5 @@ class FaceEmbeddingAPI:
             'need_face': need_face
         }
         response = requests.post(url, files={'file': file}, data=json_data, headers=headers, timeout=self.timeout)
-        data = parse_response(response)
+        data = parse_json_response(response)
         return data

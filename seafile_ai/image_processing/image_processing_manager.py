@@ -1,20 +1,20 @@
 import base64
 import os
 import re
-from seafile_ai import config
 from seafile_ai.image_processing.utils import resize_image_binary
-from seafile_ai.utils import get_image_by_token
 from seafile_ai.utils.constants import LANGUAGE
 
 
 class ImageProcessingManager:
 
-    def __init__(self, app):
-        self.app = app
+    def __init__(self, llm_api, seafile_file_client, face_embedding_api):
+        self.llm_api = llm_api
+        self.seafile_file_client = seafile_file_client
+        self.face_embedding_api = face_embedding_api
 
     def image_caption(self, path, download_token, lang, context, capture_time, address):
         file_name = os.path.basename(path)
-        content = get_image_by_token(download_token, file_name)
+        content = self.seafile_file_client.get_image_by_token(download_token, file_name)
         if not content:
             return None
         content = resize_image_binary(content)
@@ -43,12 +43,12 @@ class ImageProcessingManager:
             messages[0]["content"][0]["text"] = f"Please describe the contents of this picture in {LANGUAGE[lang]}. This picture was taken at {address}.Focus solely on the objects, details depicted and combine with the address, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
         elif capture_time and address:
             messages[0]["content"][0]["text"] = f"Please describe the contents of this picture in {LANGUAGE[lang]}. This picture was taken at {address} on {capture_time}.Focus solely on the objects and details depicted,and combine with the capture time and location, and you can describe the time like morning but don't mention the specific date and time, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
-        desc = self.app.llm_api.run(messages, context)
+        desc = self.llm_api.run(messages, context)
         return desc
 
     def image_tags(self, path, download_token, lang, context):
         file_name = os.path.basename(path.rstrip('/'))
-        file = get_image_by_token(download_token, file_name)
+        file = self.seafile_file_client.get_image_by_token(download_token, file_name)
         if not file:
             return None
         content = resize_image_binary(file)
@@ -95,27 +95,15 @@ class ImageProcessingManager:
         ]
         
 
-        result = self.app.llm_api.run(messages, context)
+        result = self.llm_api.run(messages, context)
         tags = re.split(r'[，,]', result)
-        return tags
-
-    def ocr(self, path, download_token):
-        if config.OCR_SERVICE_TYPE == 'seafile-ocr':
-            file_name = os.path.basename(path.rstrip('/'))
-            file = get_image_by_token(download_token, file_name)
-            if not file:
-                return None
-
-            result = self.app.ocr_api.ocr(file)
-            return result.get('ocr_result')
-        else:
-            raise Exception('unknown ocr service type')
+        return [tag.strip() for tag in tags if tag.strip()]
 
     def face_embeddings(self, path, download_token, need_face):
         file_name = os.path.basename(path.rstrip('/'))
-        file = get_image_by_token(download_token, file_name)
+        file = self.seafile_file_client.get_image_by_token(download_token, file_name)
         if not file:
             return None
 
-        result = self.app.face_embedding_api.face_embeddings(file, need_face)
+        result = self.face_embedding_api.face_embeddings(file, need_face)
         return result.get('faces')

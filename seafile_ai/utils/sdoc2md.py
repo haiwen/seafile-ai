@@ -75,7 +75,7 @@ def _handle_list_dom(list_json, tag='', ordered=False):
                             text += "<a href='%s'><span>%s</span></a>" % (text_url, text_name)
                 tag += "<li><p><span>%s</span></p></li>" % text
     if ordered:
-        res = "<ul>%s</ul>" % tag
+        res = "<ol>%s</ol>" % tag
     else:
         res = "<ul>%s</ul>" % tag
     return res

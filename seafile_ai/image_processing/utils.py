@@ -7,10 +7,12 @@ pillow_heif.register_heif_opener()
 
 
 def resize_image_binary(image_binary):
-    
     img = Image.open(BytesIO(image_binary))
     img = img.convert("RGB")
     width, height = img.size
+    if width <= 512 or height <= 512:
+        return image_binary
+
     if width <= height:
         ratio = 512 / width
     else:

@@ -2,7 +2,7 @@ import json
 import logging
 
 from litellm import completion
-from seafile_ai.utils import LLMChatCompletionException
+from seafile_ai.exceptions import LLMChatCompletionException
 from seafile_ai.utils.constants import MODEL_USAGE_STATISTIC_CHANNEL_NAME
 
 logger = logging.getLogger(__name__)

@@ -4,17 +4,17 @@ import re
 import base64
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, WritingType
-from seafile_ai.utils import InvalidWritingTypeException, parse_file, FormatNotSupportedException, get_file_ext, \
-    resize_image_binary, is_pdf, get_file_by_token
+from seafile_ai.exceptions import InvalidWritingTypeException, FormatNotSupportedException
+from seafile_ai.parsers.document import parse_file, get_file_ext, resize_image_binary, is_pdf
 from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
 
 logger = logging.getLogger(__name__)
 
 
 class TextProcessingManager:
-    def __init__(self, app, llm_type):
-        self.app = app
-        self.llm_type = llm_type
+    def __init__(self, llm_api, seafile_file_client):
+        self.llm_api = llm_api
+        self.seafile_file_client = seafile_file_client
 
     def _generate_summary_text(self, file_name, content, context):
         file_ext = get_file_ext(file_name)
@@ -26,7 +26,8 @@ class TextProcessingManager:
 
     def generate_summary(self, path, download_token, context):
         file_name = os.path.basename(path)
-        content = parse_file(file_name, download_token)
+        file_content = self.seafile_file_client.get_file_by_token(download_token, file_name)
+        content = parse_file(file_name, file_content)
 
         if content:
             summary_text = self._generate_summary_text(file_name, content[:LLM_INPUT_CHARACTERS_LIMIT], context)
@@ -39,12 +40,13 @@ class TextProcessingManager:
         system_prompt = {"role": "system", "content": prompt}
         user_prompt = {"role": "user", "content": 'Summarize the following content' + content}
         messages = [system_prompt, user_prompt]
-        summary = self.app.llm_api.run(messages, context)
+        summary = self.llm_api.run(messages, context)
         return summary
 
     def doc_tags(self, path, download_token, candidate_tags, context):
         file_name = os.path.basename(path)
-        doc_content = parse_file(file_name, download_token)
+        file_content = self.seafile_file_client.get_file_by_token(download_token, file_name)
+        doc_content = parse_file(file_name, file_content)
 
         if not doc_content:
             return None
@@ -67,7 +69,7 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.llm_api.run(messages, context)
+        res = self.llm_api.run(messages, context)
         tags = re.split(r'[，,]', res)
         return [tag.strip() for tag in tags if tag.strip()]
 
@@ -86,7 +88,7 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.llm_api.run(messages, context)
+        res = self.llm_api.run(messages, context)
         return res
 
     def writing_assistant(self, text, custom_prompt, writing_type, context):
@@ -108,7 +110,7 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.llm_api.run(messages, context)
+        res = self.llm_api.run(messages, context)
         return res
 
     def get_predefined_prompt(self, prefix, writing_type):
@@ -138,9 +140,10 @@ class TextProcessingManager:
             raise FormatNotSupportedException
 
         if is_pdf(file_name):
-            return parse_file(file_name, download_token)
+            file_content = self.seafile_file_client.get_file_by_token(download_token, file_name)
+            return parse_file(file_name, file_content)
 
-        file_content = get_file_by_token(download_token, file_name)
+        file_content = self.seafile_file_client.get_file_by_token(download_token, file_name)
         image = resize_image_binary(file_content, 'jpeg', 512)
         encode_img = base64.b64encode(image).decode('utf-8')
         messages = [
@@ -161,7 +164,7 @@ class TextProcessingManager:
                 ],
             }
         ]
-        extracted_text = self.app.llm_api.run(messages, context)
+        extracted_text = self.llm_api.run(messages, context)
 
         if not extracted_text:
             return ''
