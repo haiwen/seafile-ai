@@ -214,6 +214,7 @@ def ocr():
 
 @flask_app.route('/api/v1/face-embeddings/', methods=['POST'])
 def face_embeddings():
+    logger.info('face-embeddings API called')
     is_valid = check_auth_token(request)
     if not is_valid:
         return {'error_msg': 'Permission denied'}, 403
@@ -240,6 +241,110 @@ def face_embeddings():
         return {'error_msg': 'Internet server error.'}, 500
 
     return {'faces': faces}, 200
+
+@flask_app.route('/api/v1/face-batch-embeddings/', methods=['POST'])
+def face_batch_embeddings():
+    logger.info('face-batch-embeddings API called')
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+    obj_ids = data.get('obj_ids')
+    need_classify = data.get('need_classify', False)
+
+    try:
+        flask_app.app.face_recognition_manager.face_embeddings_by_obj_ids(repo_id, obj_ids, need_classify)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'success': True}, 200
+
+
+@flask_app.route('/api/v1/face-cluster/', methods=['POST'])
+def face_cluster():
+    logger.info('face-cluster API called')
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
+
+    try:
+        flask_app.app.face_recognition_manager.update_face_cluster(repo_id)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'success': True}, 200
+
+@flask_app.route('/api/v1/update-people-cover-photo/', methods=['POST'])
+def update_photo_cover():
+    logger.info('update-people-cover-photo API called')
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+    people_id = data.get('people_id')
+    path = data.get('path')
+    download_token = data.get('download_token')
+
+    try:
+        flask_app.app.face_recognition_manager.update_people_cover_photo(repo_id, people_id, path, download_token)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'success': True}, 200
+
+@flask_app.route('/api/v1/recognize-faces/', methods=['POST'])
+def recognize_faces():
+    logger.info('recognize-faces API called')
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+    obj_ids = data.get('obj_ids')
+    
+
+    try:
+        flask_app.app.face_recognition_manager.recognize_faces_by_obj_ids(repo_id, obj_ids)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internet server error.'}, 500
+
+    return {'success': True}, 200
+
 
 
 @flask_app.route('/api/v1/translate/', methods=['POST'])
