@@ -18,7 +18,7 @@ def parse_response(response):
 
 
 class MetadataServerAPI:
-    def __init__(self, user, timeout=30):
+    def __init__(self, user, timeout=60):
         self.user = user
         self.timeout = timeout
         self.secret_key = SECRET_KEY

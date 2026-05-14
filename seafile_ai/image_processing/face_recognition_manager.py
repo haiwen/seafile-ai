@@ -85,6 +85,7 @@ class FaceRecognitionManager:
     def save_cluster_face(self, repo_id, related_row_ids, row_ids, id_to_record, cluster_center, face_row_id):
         logger.info('save_cluster_face, repo_id=%s, face_row_id=%s', repo_id, face_row_id)
         face_image = None
+        record = None
         for row_id in related_row_ids:
             if row_ids.count(row_id) == 1:
                 record = id_to_record[row_id]
@@ -179,7 +180,7 @@ class FaceRecognitionManager:
                 vectors.append(face_vector)
                 row_ids.append(row_id)
 
-        culstered_rows, unclustered_rows = get_faces_rows(repo_id, self.metadata_server_api)
+        clustered_rows, unclustered_rows = get_faces_rows(repo_id, self.metadata_server_api)
         min_cluster_size = get_min_cluster_size(len(vectors))
         if len(vectors) < min_cluster_size:
             clt_labels = [-1] * len(vectors)
@@ -212,7 +213,7 @@ class FaceRecognitionManager:
             face_row = {
                 FACES_TABLE.columns.vector.name: b64encode_embeddings(cluster_center.tolist()),
             }
-            old_cluster, distance = get_cluster_by_center(cluster_center, culstered_rows)
+            old_cluster, distance = get_cluster_by_center(cluster_center, clustered_rows)
             if old_cluster:
                 cluster_id = old_cluster[FACES_TABLE.columns.id.name]
                 old_distance = cluster_id_to_min_distance.get(cluster_id)
@@ -287,7 +288,7 @@ class FaceRecognitionManager:
             row_id = row[METADATA_TABLE.columns.id.name]
             if not row.get(METADATA_TABLE.columns.face_vectors.name):
                 obj_id = row[METADATA_TABLE.columns.obj_id.name]
-                faces = self.app.image_processing_manager.face_embeddings_without_token(repo_id, obj_id)
+                faces = self.app.image_processing_manager.face_embeddings_without_token(repo_id, obj_id) or []
                 face_embeddings = [face['embedding'] for face in faces]
                 vector = b64encode_embeddings(face_embeddings) if face_embeddings else VECTOR_DEFAULT_FLAG
                 updated_rows.append({
