@@ -4,6 +4,7 @@ import logging
 import mammoth
 
 from urllib.parse import quote as urlquote
+from urllib.parse import urlparse
 from pathlib import Path
 from io import BytesIO
 from PIL import Image
@@ -41,7 +42,9 @@ class FormatNotSupportedException(Exception):
 
 
 def gen_file_get_url(token, filename):
-    return '%s/files/%s/%s' % (SEAFILE_SERVER_URL.rstrip('/') + '/seafhttp', token, urlquote(filename))
+    parsed = urlparse(SEAFILE_SERVER_URL)
+    seafile_server_url = f"{parsed.scheme}://{parsed.netloc}"
+    return '%s/files/%s/%s' % (seafile_server_url.rstrip('/') + '/seafhttp', token, urlquote(filename))
 
 
 def get_file_by_token(token, filename):
