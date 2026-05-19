@@ -35,6 +35,24 @@ FACE_EMBEDDING_SERVICE_KEY = ''
 
 SEAFILE_SERVER_URL = ''
 
+INNER_METADATA_SERVER_URL = 'http://127.0.0.1:8084'
+
+METADATA_FILE_TYPES = {
+    '_picture': ('gif', 'jpeg', 'jpg', 'heic', 'png', 'ico', 'bmp', 'tif', 'tiff', 'psd', 'webp', 'jfif', 'mpo', 'jpe', 'xbm',
+                 'svg', 'ppm', 'pcx', 'xcf', 'xpm', 'mgn', 'ufo', 'ai'),
+    '_document': ('oform', 'ppt', 'pptx', 'odt', 'fodt', 'odp', 'fodp', 'odg', 'pdf', 'xls', 'xlsx', 'ods',
+                  'fods', 'xmind', 'ac', 'am', 'bat', 'diff', 'org', 'properties', 'vi', 'vim', 'xml', 'log',
+                  'csv', 'rst', 'patch', 'txt', 'text', 'tex', 'markdown', 'md', 'sdoc', 'doc', 'docx', ),
+    '_code': ('cc', 'c', 'cmake', 'cpp', 'cs', 'css', 'el', 'h', 'html', 'htm', 'java', 'js', 'less', 'make', 'php', 'pl',
+              'py', 'rb', 'scala', 'script', 'sh', 'sql', 'groovy', 'go', 'yml', 'xhtml', 'json', ),
+    '_video': ('mp4', 'ogv', 'webm', 'mov', 'avi', 'wmv', 'asf', 'asx', 'rm', 'rmvb', 'mpg', 'mpeg', 'mpe', '3gp',
+               'm4v', 'mkv', 'flv', 'vob'),
+    '_audio': ('mp3', 'oga', 'ogg', 'wav', 'flac', 'opus', 'aac', 'au', 'm4a', 'aif', 'aiff', 'wma', 'mp1', 'mp2'),
+    '_compressed': ('rar', 'zip', '7z', 'tar', 'gz', 'bz2', 'tgz', 'xz', 'lzma'),
+    '_diagram': ('draw', 'exdraw'),
+}
+
+
 CONF_DIR = '/opt/seafile/conf/'
 
 try:
@@ -66,3 +84,8 @@ LOG_LEVEL = os.getenv('SEAFILE_AI_LOG_LEVEL') or LOG_LEVEL
 REDIS_HOST = os.getenv('REDIS_HOST') or REDIS_HOST
 REDIS_PORT = os.getenv('REDIS_PORT') or REDIS_PORT
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD') or REDIS_PASSWORD
+
+# metadata config
+METADATA_SERVER_URL = os.getenv('INNER_METADATA_SERVER_URL') or INNER_METADATA_SERVER_URL
+
+

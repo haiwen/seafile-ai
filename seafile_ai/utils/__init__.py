@@ -13,10 +13,11 @@ from pdfminer.high_level import extract_text
 from seafile_ai.config import SEAFILE_SERVER_URL
 from seafile_ai.utils.sdoc2md import sdoc2md
 from seafile_ai.utils.parse_pptx import get_pptx_text
+from seafobj import fs_mgr
 
 logger = logging.getLogger(__name__)
 
-
+ZERO_OBJ_ID = '0000000000000000000000000000000000000000'
 def parse_response(response):
     if response.status_code >= 400 or response.status_code < 200:
         raise ConnectionError(response.status_code, response.text)
@@ -59,6 +60,25 @@ def get_image_by_token(token, filename):
         raise ConnectionError(response.status_code, response.text)
 
     return response.content
+
+def get_image_by_obj_store(repo_id, obj_id):
+    if obj_id == ZERO_OBJ_ID:
+        return b''
+    f = None
+    try:
+        f = fs_mgr.load_seafile(repo_id, 1, obj_id)
+        b_content = f.get_content()
+        if not b_content.strip():
+            return b''
+        return b_content
+    except Exception as e:
+        raise Exception('Failed to get file content by obj id: %s' % e)
+    finally:
+        # MEMORY FIX: Clear SeaFile object's cached content to prevent memory leak
+        # The _content field caches the entire file content and is never released
+        if f is not None:
+            f._content = None
+            f.blocks = None
 
 
 def parse_file(file_name, download_token):

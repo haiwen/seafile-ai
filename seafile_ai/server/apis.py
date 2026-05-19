@@ -67,7 +67,7 @@ def generate_summary():
         summary = flask_app.app.text_processing_manager.generate_summary(path, download_token, context)
     except Exception as e:
         logger.exception(e)
-        return {'error_msg': 'Internet server error.'}, 500
+        return {'error_msg': 'Internal server error.'}, 500
 
     return {'summary': summary}, 200
 
@@ -113,7 +113,7 @@ def image_caption():
         return {'error_msg': 'file format not supported.'}, 400
     except Exception as e:
         logger.exception(e)
-        return {'error_msg': 'Internet server error.'}, 500
+        return {'error_msg': 'Internal server error.'}, 500
 
     return {'desc': desc}, 200
 
@@ -155,7 +155,7 @@ def generate_file_tags():
             tags = flask_app.app.image_processing_manager.image_tags(path, download_token, lang, context)
         except Exception as e:
             logger.exception(e)
-            return {'error_msg': 'Internet server error.'}, 500
+            return {'error_msg': 'Internal server error.'}, 500
     else:
         candidate_tags = data.get('candidate_tags', [])
 
@@ -166,7 +166,7 @@ def generate_file_tags():
             tags = flask_app.app.text_processing_manager.doc_tags(path, download_token, candidate_tags, context)
         except Exception as e:
             logger.exception(e)
-            return {'error_msg': 'Internet server error.'}, 500
+            return {'error_msg': 'Internal server error.'}, 500
 
     return {'tags': tags}, 200
 
@@ -207,13 +207,14 @@ def ocr():
         return {'error_msg': 'file format not supported.'}, 400
     except Exception as e:
         logger.exception(e)
-        return {'error_msg': 'Internet server error.'}, 500
+        return {'error_msg': 'Internal server error.'}, 500
 
     return {'ocr_result': ocr_result}, 200
 
 
 @flask_app.route('/api/v1/face-embeddings/', methods=['POST'])
 def face_embeddings():
+    logger.info('face-embeddings API called')
     is_valid = check_auth_token(request)
     if not is_valid:
         return {'error_msg': 'Permission denied'}, 403
@@ -237,9 +238,113 @@ def face_embeddings():
         faces = flask_app.app.image_processing_manager.face_embeddings(path, download_token, need_face)
     except Exception as e:
         logger.exception(e)
-        return {'error_msg': 'Internet server error.'}, 500
+        return {'error_msg': 'Internal server error.'}, 500
 
     return {'faces': faces}, 200
+
+@flask_app.route('/api/v1/face-batch-embeddings/', methods=['POST'])
+def face_batch_embeddings():
+    logger.info('face-batch-embeddings API called')
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+    obj_ids = data.get('obj_ids')
+    need_classify = data.get('need_classify', False)
+
+    try:
+        flask_app.app.face_recognition_manager.face_embeddings_by_obj_ids(repo_id, obj_ids, need_classify)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'success': True}, 200
+
+
+@flask_app.route('/api/v1/face-cluster/', methods=['POST'])
+def face_cluster():
+    logger.info('face-cluster API called')
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
+
+    try:
+        flask_app.app.face_recognition_manager.update_face_cluster(repo_id)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'success': True}, 200
+
+@flask_app.route('/api/v1/update-people-cover-photo/', methods=['POST'])
+def update_photo_cover():
+    logger.info('update-people-cover-photo API called')
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+    people_id = data.get('people_id')
+    path = data.get('path')
+    download_token = data.get('download_token')
+
+    try:
+        flask_app.app.face_recognition_manager.update_people_cover_photo(repo_id, people_id, path, download_token)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'success': True}, 200
+
+@flask_app.route('/api/v1/recognize-faces/', methods=['POST'])
+def recognize_faces():
+    logger.info('recognize-faces API called')
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    repo_id = data.get('repo_id')
+    obj_ids = data.get('obj_ids')
+    
+
+    try:
+        flask_app.app.face_recognition_manager.recognize_faces_by_obj_ids(repo_id, obj_ids)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'success': True}, 200
+
 
 
 @flask_app.route('/api/v1/translate/', methods=['POST'])
@@ -275,7 +380,7 @@ def translate():
         translation = flask_app.app.text_processing_manager.translate(text, lang, context)
     except Exception as e:
         logger.exception(e)
-        return {'error_msg': 'Internet server error.'}, 500
+        return {'error_msg': 'Internal server error.'}, 500
 
     return {'translation': translation}, 200
 
@@ -320,7 +425,7 @@ def writing_assistant():
         return {'error_msg': 'openai server error.'}, 500
     except Exception as e:
         logger.exception(e)
-        return {'error_msg': 'Internet server error.'}, 500
+        return {'error_msg': 'Internal server error.'}, 500
 
     return {'content': content}, 200
 
