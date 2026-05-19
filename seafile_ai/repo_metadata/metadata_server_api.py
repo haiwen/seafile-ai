@@ -1,7 +1,7 @@
 import logging
 import requests, jwt, time
 
-from seafile_ai.config import METADATA_SERVER_URL, SECRET_KEY
+from seafile_ai.config import METADATA_SERVER_URL, JWT_PRIVATE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class MetadataServerAPI:
     def __init__(self, user, timeout=60):
         self.user = user
         self.timeout = timeout
-        self.secret_key = SECRET_KEY
+        self.secret_key = JWT_PRIVATE_KEY
         self.server_url = METADATA_SERVER_URL
 
     def gen_headers(self, base_id):

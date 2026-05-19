@@ -37,6 +37,8 @@ SEAFILE_SERVER_URL = ''
 
 INNER_METADATA_SERVER_URL = 'http://127.0.0.1:8084'
 
+JWT_PRIVATE_KEY = ''
+
 METADATA_FILE_TYPES = {
     '_picture': ('gif', 'jpeg', 'jpg', 'heic', 'png', 'ico', 'bmp', 'tif', 'tiff', 'psd', 'webp', 'jfif', 'mpo', 'jpe', 'xbm',
                  'svg', 'ppm', 'pcx', 'xcf', 'xpm', 'mgn', 'ufo', 'ai'),
@@ -69,7 +71,8 @@ except ImportError as e:
     pass
 
 SEAFILE_SERVER_URL = os.getenv('SEAFILE_SERVER_URL') or SEAFILE_SERVER_URL
-SECRET_KEY = os.getenv('JWT_PRIVATE_KEY') or SECRET_KEY
+JWT_PRIVATE_KEY = os.getenv('JWT_PRIVATE_KEY') or JWT_PRIVATE_KEY
+SECRET_KEY = JWT_PRIVATE_KEY or SECRET_KEY
 
 LLM_TYPE = os.getenv('SEAFILE_AI_LLM_TYPE') or LLM_TYPE
 LLM_URL = os.getenv('SEAFILE_AI_LLM_URL') or LLM_URL

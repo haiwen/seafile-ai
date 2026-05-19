@@ -18,7 +18,7 @@ class SeafileAIApp(object):
         self.llm_api = LLMAPI(self.data_logger, llm_type, base_url, api_key, model)
         
         self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
-        self.seahub_api = SeahubAPI(config.SEAFILE_SERVER_URL, config.SECRET_KEY)
+        self.seahub_api = SeahubAPI(config.SEAFILE_SERVER_URL, config.JWT_PRIVATE_KEY)
 
         self.text_processing_manager = TextProcessingManager(self, config.LLM_TYPE)
         self.image_processing_manager = ImageProcessingManager(self)
