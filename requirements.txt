@@ -13,5 +13,7 @@ pyjwt~=2.11.0
 pdfminer.six==20260107
 requests~=2.32.4
 litellm~=1.83.0
+sqlalchemy~=2.0.36
+pymysql~=1.1.0
 redis~=7.1.1
 pillow-heif==1.2.*

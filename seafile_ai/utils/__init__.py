@@ -2,6 +2,7 @@ import requests
 import json
 import logging
 import mammoth
+import re
 
 from urllib.parse import quote as urlquote
 from urllib.parse import urlparse
@@ -81,7 +82,19 @@ def parse_file(file_name, repo_id, obj_id):
 
     return parser_mapping.get(file_ext, lambda x: '')(doc)
 
+def parse_file_content(file_name, doc):
+    file_ext = Path(file_name).suffix.lower()
 
+    parser_mapping = {
+        '.sdoc': lambda x: sdoc2md(json.loads(x.decode())),
+        '.md': lambda x: x.decode(),
+        '.markdown': lambda x: x.decode(),
+        '.docx': docx2md,
+        '.pdf': get_pdf_text,
+        '.pptx': get_pptx_text
+    }
+
+    return parser_mapping.get(file_ext, lambda x: '')(doc)
 def docx2md(file):
     ignore_images = lambda _: []
     result = mammoth.convert_to_markdown(BytesIO(file), convert_image=ignore_images)
@@ -124,3 +137,28 @@ def resize_image_binary(image_binary, ext, size):
 
 def is_pdf(file_path):
     return file_path.lower().endswith('.pdf')
+
+
+def remove_reference_markers(content):
+    return re.sub(r'\[Reference \d+\]', '', content or '')
+
+
+def remove_sources_content_and_snippets(sources):
+    results = []
+    for source in sources or []:
+        if not isinstance(source, dict):
+            continue
+        new_source = dict(source)
+        new_source.pop('content', None)
+        new_source.pop('snippets', None)
+        results.append(new_source)
+    return results
+
+
+def object_to_json_str(obj):
+    if isinstance(obj, str):
+        return obj
+    try:
+        return '```json\n' + json.dumps(obj, indent=4, ensure_ascii=False) + '\n```'
+    except Exception:
+        return str(obj)

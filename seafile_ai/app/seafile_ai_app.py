@@ -1,7 +1,9 @@
 from seafile_ai.image_processing.face_recognition_manager import FaceRecognitionManager
 from seafile_ai.image_processing.image_processing_manager import ImageProcessingManager
+from seafile_ai.chat_manager import StreamingChat
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
 from seafile_ai.text_processing.text_processing_manager import TextProcessingManager
+from seafile_ai.db import init_db_session_class
 from seafile_ai.utils.face_embedding_api import FaceEmbeddingAPI
 from seafile_ai.utils.seahub_api import SeahubAPI
 from seafile_ai.data_logging.data_logging import DataLogging
@@ -10,6 +12,7 @@ from seafile_ai.utils.llm_api import LLMAPI
 class SeafileAIApp(object):
     def __init__(self, config):
         self.config = config
+        self.db_session_class = init_db_session_class()
         self.data_logger = DataLogging(config.REDIS_HOST, config.REDIS_PORT, config.REDIS_PASSWORD)
         llm_type = config.LLM_TYPE
         base_url = config.LLM_URL
@@ -23,6 +26,7 @@ class SeafileAIApp(object):
         self.text_processing_manager = TextProcessingManager(self, config.LLM_TYPE)
         self.image_processing_manager = ImageProcessingManager(self)
         self.face_recognition_manager = FaceRecognitionManager(self)
+        self.streaming_chat = StreamingChat(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
 
     def serve_forever(self):
