@@ -266,8 +266,8 @@ class FaceRecognitionManager:
         self.face_cluster(repo_id)
         logger.info('Finished face clustering in repo %s' % repo_id)
 
-    def update_people_cover_photo(self, repo_id, people_id, path, download_token):
-        face_image = self.get_image_face(path, download_token, center=None)
+    def update_people_cover_photo(self, repo_id, people_id, obj_id):
+        face_image = self.get_image_face_without_token(repo_id,obj_id, center=None)
         filename = f'{people_id}.jpg'
         logger.info('Update cover photo for people %s in repo %s', people_id, repo_id)
         self.save_face(repo_id, face_image, filename, replace=True)
