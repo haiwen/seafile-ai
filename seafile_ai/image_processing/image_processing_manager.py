@@ -3,7 +3,7 @@ import os
 import re
 from seafile_ai import config
 from seafile_ai.image_processing.utils import resize_image_binary
-from seafile_ai.utils import get_image_by_obj_store, get_image_by_token
+from seafile_ai.utils import get_file_content_by_seafobj, get_image_by_token
 from seafile_ai.utils.constants import LANGUAGE
 
 
@@ -123,7 +123,7 @@ class ImageProcessingManager:
 
     def face_embeddings_without_token(self, repo_id, obj_id, need_face):
         # get iamge by seafobj
-        file = get_image_by_obj_store(repo_id, obj_id)
+        file = get_file_content_by_seafobj(repo_id, obj_id)
         if not file:
             return None
         result = self.app.face_embedding_api.face_embeddings(file, need_face)

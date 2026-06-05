@@ -54,7 +54,7 @@ class FaceRecognitionManager:
     def save_face(self, repo_id, image, filename, replace=False):
         return self.app.seahub_api.save_face(repo_id, image, filename, replace)
     
-    def get_image_face(self, path, download_token, center=None):
+    def get_image_face(self, path, download_token, center=None): # may deprecated
         logger.info('get_image_face, path=%s', path)
         faces = self.app.image_processing_manager.face_embeddings(path, download_token, True)
         if not faces:
