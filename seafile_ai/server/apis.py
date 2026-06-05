@@ -309,11 +309,10 @@ def update_photo_cover():
 
     repo_id = data.get('repo_id')
     people_id = data.get('people_id')
-    path = data.get('path')
-    download_token = data.get('download_token')
+    obj_id = data.get('obj_id')
 
     try:
-        flask_app.app.face_recognition_manager.update_people_cover_photo(repo_id, people_id, path, download_token)
+        flask_app.app.face_recognition_manager.update_people_cover_photo(repo_id, people_id, obj_id)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internal server error.'}, 500

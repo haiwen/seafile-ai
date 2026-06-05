@@ -64,7 +64,7 @@ def get_image_by_token(token, filename):
 
     return response.content
 
-def get_image_by_obj_store(repo_id, obj_id):
+def get_file_content_by_seafobj(repo_id, obj_id):
     if obj_id == ZERO_OBJ_ID:
         return b''
     f = None
