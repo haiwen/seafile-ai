@@ -84,8 +84,8 @@ def get_file_content_by_seafobj(repo_id, obj_id):
             f.blocks = None
 
 
-def parse_file(file_name, download_token):
-    doc = get_file_by_token(download_token, file_name)
+def parse_file(file_name, repo_id, obj_id):
+    doc = get_file_content_by_seafobj(repo_id, obj_id)
     file_ext = Path(file_name).suffix.lower()
 
     parser_mapping = {
