@@ -3,7 +3,7 @@ import os
 import re
 from seafile_ai import config
 from seafile_ai.image_processing.utils import resize_image_binary
-from seafile_ai.utils import get_file_content_by_seafobj, get_image_by_token
+from seafile_ai.utils import get_file_content_by_seafobj
 from seafile_ai.utils.constants import LANGUAGE
 
 

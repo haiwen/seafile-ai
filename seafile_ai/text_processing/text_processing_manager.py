@@ -5,7 +5,7 @@ import base64
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, WritingType
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
-    resize_image_binary, is_pdf, get_file_by_token
+    resize_image_binary, is_pdf
 from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
 
 logger = logging.getLogger(__name__)
