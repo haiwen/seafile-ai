@@ -4,8 +4,8 @@ import re
 import base64
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, WritingType
-from seafile_ai.utils import InvalidWritingTypeException, parse_file, FormatNotSupportedException, get_file_ext, \
-    resize_image_binary, is_pdf, get_file_by_token
+from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
+    resize_image_binary, is_pdf
 from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
 
 logger = logging.getLogger(__name__)
@@ -24,9 +24,9 @@ class TextProcessingManager:
             prompt = 'You are a document summarization expert. I need you to generate a concise summary of a document that is about 100 words. The summary should capture the main points and themes of the document clearly and effectively.The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
         return self._gen_doc_summary(content, prompt, context)
 
-    def generate_summary(self, path, download_token, context):
+    def generate_summary(self, repo_id, obj_id, path, context):
         file_name = os.path.basename(path)
-        content = parse_file(file_name, download_token)
+        content = parse_file(file_name, repo_id, obj_id)
 
         if content:
             summary_text = self._generate_summary_text(file_name, content[:LLM_INPUT_CHARACTERS_LIMIT], context)
@@ -42,9 +42,9 @@ class TextProcessingManager:
         summary = self.app.llm_api.run(messages, context)
         return summary
 
-    def doc_tags(self, path, download_token, candidate_tags, context):
+    def doc_tags(self, repo_id, obj_id, path, candidate_tags, context):
         file_name = os.path.basename(path)
-        doc_content = parse_file(file_name, download_token)
+        doc_content = parse_file(file_name, repo_id, obj_id)
 
         if not doc_content:
             return None
@@ -133,14 +133,14 @@ class TextProcessingManager:
 
         return predefined_prompt
 
-    def extract_text(self, file_name, download_token, context):
+    def extract_text(self, repo_id, obj_id, file_name, context):
         if not is_pdf(file_name) and get_file_ext(file_name) not in EXTRACT_TEXT_SUPPORTED_IMAGES:
             raise FormatNotSupportedException
 
         if is_pdf(file_name):
-            return parse_file(file_name, download_token)
+            return parse_file(file_name, repo_id, obj_id)
 
-        file_content = get_file_by_token(download_token, file_name)
+        file_content = get_file_content_by_seafobj(repo_id, obj_id)
         image = resize_image_binary(file_content, 'jpeg', 512)
         encode_img = base64.b64encode(image).decode('utf-8')
         messages = [

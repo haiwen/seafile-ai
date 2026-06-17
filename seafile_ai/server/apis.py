@@ -46,7 +46,8 @@ def generate_summary():
         return {'error_msg': 'Bad request.'}, 400
 
     path = data.get('path')
-    download_token = data.get('download_token')
+    repo_id = data.get('repo_id')
+    obj_id = data.get('obj_id')
     username = data.get('username')
     org_id = data.get('org_id')
 
@@ -55,16 +56,16 @@ def generate_summary():
         'org_id': org_id
     }
 
-    if not path:
-        return {'error_msg': 'path invalid.'}, 400
-    if not download_token:
-        return {'error_msg': 'download_token invalid.'}, 400
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
+    if not obj_id:
+        return {'error_msg': 'obj_id invalid.'}, 400
     if Path(path).suffix not in SUMMARY_SUPPORTED_FILES:
         return {'error_msg': 'unsupported file format.'}, 400
     if not username:
         return {'error_msg': 'username invalid.'}, 400
     try:
-        summary = flask_app.app.text_processing_manager.generate_summary(path, download_token, context)
+        summary = flask_app.app.text_processing_manager.generate_summary(repo_id, obj_id, path, context)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internal server error.'}, 500
@@ -84,22 +85,26 @@ def image_caption():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    path = data.get('path')
+    obj_id = data.get('obj_id')
+    repo_id = data.get('repo_id')
     lang = data.get('lang')
     username = data.get('username')
     org_id = data.get('org_id')
-    download_token = data.get('download_token')
     capture_time = data.get('capture_time')
     address = data.get('address')
 
-    if not path:
-        return {'error_msg': 'path invalid.'}, 400
+    
     if not lang:
         return {'error_msg': 'lang invalid.'}, 400
-    if not download_token:
-        return {'error_msg': 'download_token invalid.'}, 400
+    
     if not username:
         return {'error_msg': 'username invalid.'}, 400
+    
+    if not obj_id:
+        return {'error_msg': 'obj_id invalid.'}, 400
+    
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
 
     context = {
         'username': username,
@@ -107,7 +112,7 @@ def image_caption():
     }
 
     try:
-        desc = flask_app.app.image_processing_manager.image_caption(path, download_token, lang, context, capture_time, address)
+        desc = flask_app.app.image_processing_manager.image_caption(repo_id, obj_id, lang, context, capture_time, address)
     except UnidentifiedImageError as e:
         logger.exception(e)
         return {'error_msg': 'file format not supported.'}, 400
@@ -131,7 +136,8 @@ def generate_file_tags():
         return {'error_msg': 'Bad request.'}, 400
 
     path = data.get('path')
-    download_token = data.get('download_token')
+    obj_id = data.get('obj_id')
+    repo_id = data.get('repo_id')
     file_type = data.get('file_type')
     username = data.get('username')
     org_id = data.get('org_id')
@@ -142,8 +148,10 @@ def generate_file_tags():
     }
     if not path:
         return {'error_msg': 'path invalid.'}, 400
-    if not download_token:
-        return {'error_msg': 'download_token invalid.'}, 400
+    if not obj_id:
+        return {'error_msg': 'obj_id invalid.'}, 400
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
     if not file_type or file_type not in ['image', 'doc']:
         return {'error_msg': 'file_type invalid.'}, 400
     if not username:
@@ -152,7 +160,7 @@ def generate_file_tags():
     if file_type == 'image':
         lang = data.get('lang', 'en')
         try:
-            tags = flask_app.app.image_processing_manager.image_tags(path, download_token, lang, context)
+            tags = flask_app.app.image_processing_manager.image_tags(repo_id, obj_id, lang, context)
         except Exception as e:
             logger.exception(e)
             return {'error_msg': 'Internal server error.'}, 500
@@ -163,7 +171,7 @@ def generate_file_tags():
             return {'error_msg': 'candidate_tags invalid.'}, 400
 
         try:
-            tags = flask_app.app.text_processing_manager.doc_tags(path, download_token, candidate_tags, context)
+            tags = flask_app.app.text_processing_manager.doc_tags(repo_id, obj_id, path, candidate_tags, context)
         except Exception as e:
             logger.exception(e)
             return {'error_msg': 'Internal server error.'}, 500
@@ -183,25 +191,28 @@ def ocr():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    file_name = data.get('file_name')
-    download_token = data.get('download_token')
     username = data.get('username')
     org_id = data.get('org_id')
+    obj_id = data.get('obj_id')
+    repo_id = data.get('repo_id')
+    file_name = data.get('file_name')
 
     context = {
         'username': username,
         'org_id': org_id
     }
 
-    if not file_name:
-        return {'error_msg': 'file_name invalid.'}, 400
-    if not download_token:
-        return {'error_msg': 'download_token invalid.'}, 400
     if not username:
         return {'error_msg': 'username invalid.'}, 400
+    if not file_name:
+        return {'error_msg': 'file_name invalid.'}, 400
+    if not obj_id:
+        return {'error_msg': 'obj_id invalid.'}, 400
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
 
     try:
-        ocr_result = flask_app.app.text_processing_manager.extract_text(file_name, download_token, context)
+        ocr_result = flask_app.app.text_processing_manager.extract_text(repo_id, obj_id,file_name, context)
     except FormatNotSupportedException as e:
         logger.exception(e)
         return {'error_msg': 'file format not supported.'}, 400
@@ -210,37 +221,6 @@ def ocr():
         return {'error_msg': 'Internal server error.'}, 500
 
     return {'ocr_result': ocr_result}, 200
-
-
-@flask_app.route('/api/v1/face-embeddings/', methods=['POST'])
-def face_embeddings():
-    logger.info('face-embeddings API called')
-    is_valid = check_auth_token(request)
-    if not is_valid:
-        return {'error_msg': 'Permission denied'}, 403
-
-    try:
-        data = json.loads(request.data)
-    except Exception as e:
-        logger.exception(e)
-        return {'error_msg': 'Bad request.'}, 400
-
-    path = data.get('path')
-    download_token = data.get('download_token')
-    need_face = data.get('need_face', False)
-
-    if not path:
-        return {'error_msg': 'path invalid.'}, 400
-    if not download_token:
-        return {'error_msg': 'download_token invalid.'}, 400
-
-    try:
-        faces = flask_app.app.image_processing_manager.face_embeddings(path, download_token, need_face)
-    except Exception as e:
-        logger.exception(e)
-        return {'error_msg': 'Internal server error.'}, 500
-
-    return {'faces': faces}, 200
 
 @flask_app.route('/api/v1/face-batch-embeddings/', methods=['POST'])
 def face_batch_embeddings():

@@ -46,24 +46,6 @@ def gen_file_get_url(token, filename):
     seafile_server_url = f"{parsed.scheme}://{parsed.netloc}"
     return '%s/files/%s/%s' % (seafile_server_url.rstrip('/') + '/seafhttp', token, urlquote(filename))
 
-
-def get_file_by_token(token, filename):
-    url = gen_file_get_url(token, filename)
-    response = requests.get(url, timeout=10)
-    if response.status_code != 200:
-        raise ConnectionError(response.status_code, response.text)
-
-    return response.content
-
-
-def get_image_by_token(token, filename):
-    url = gen_file_get_url(token, filename)
-    response = requests.get(url, timeout=10)
-    if response.status_code != 200:
-        raise ConnectionError(response.status_code, response.text)
-
-    return response.content
-
 def get_file_content_by_seafobj(repo_id, obj_id):
     if obj_id == ZERO_OBJ_ID:
         return b''
@@ -84,8 +66,8 @@ def get_file_content_by_seafobj(repo_id, obj_id):
             f.blocks = None
 
 
-def parse_file(file_name, download_token):
-    doc = get_file_by_token(download_token, file_name)
+def parse_file(file_name, repo_id, obj_id):
+    doc = get_file_content_by_seafobj(repo_id, obj_id)
     file_ext = Path(file_name).suffix.lower()
 
     parser_mapping = {

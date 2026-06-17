@@ -3,7 +3,7 @@ import os
 import re
 from seafile_ai import config
 from seafile_ai.image_processing.utils import resize_image_binary
-from seafile_ai.utils import get_file_content_by_seafobj, get_image_by_token
+from seafile_ai.utils import get_file_content_by_seafobj
 from seafile_ai.utils.constants import LANGUAGE
 
 
@@ -12,9 +12,8 @@ class ImageProcessingManager:
     def __init__(self, app):
         self.app = app
 
-    def image_caption(self, path, download_token, lang, context, capture_time, address):
-        file_name = os.path.basename(path)
-        content = get_image_by_token(download_token, file_name)
+    def image_caption(self, repo_id, obj_id, lang, context, capture_time, address):
+        content = get_file_content_by_seafobj(repo_id, obj_id)
         if not content:
             return None
         content = resize_image_binary(content)
@@ -46,9 +45,8 @@ class ImageProcessingManager:
         desc = self.app.llm_api.run(messages, context)
         return desc
 
-    def image_tags(self, path, download_token, lang, context):
-        file_name = os.path.basename(path.rstrip('/'))
-        file = get_image_by_token(download_token, file_name)
+    def image_tags(self, repo_id, obj_id, lang, context):
+        file = get_file_content_by_seafobj(repo_id, obj_id)
         if not file:
             return None
         content = resize_image_binary(file)
@@ -99,10 +97,9 @@ class ImageProcessingManager:
         tags = re.split(r'[，,]', result)
         return tags
 
-    def ocr(self, path, download_token):
+    def ocr(self, repo_id, obj_id):
         if config.OCR_SERVICE_TYPE == 'seafile-ocr':
-            file_name = os.path.basename(path.rstrip('/'))
-            file = get_image_by_token(download_token, file_name)
+            file = get_file_content_by_seafobj(repo_id, obj_id)
             if not file:
                 return None
 
@@ -110,17 +107,6 @@ class ImageProcessingManager:
             return result.get('ocr_result')
         else:
             raise Exception('unknown ocr service type')
-
-    def face_embeddings(self, path, download_token, need_face):
-        file_name = os.path.basename(path.rstrip('/'))
-        file = get_image_by_token(download_token, file_name)
-        if not file:
-            return None
-
-        result = self.app.face_embedding_api.face_embeddings(file, need_face)
-        return result.get('faces')
-    
-
     def face_embeddings_without_token(self, repo_id, obj_id, need_face):
         # get iamge by seafobj
         file = get_file_content_by_seafobj(repo_id, obj_id)
