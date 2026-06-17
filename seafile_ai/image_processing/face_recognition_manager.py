@@ -30,9 +30,16 @@ class FaceRecognitionManager:
         for row in rows:
             obj_id = row[METADATA_TABLE.columns.obj_id.name]
             faces = self.app.image_processing_manager.face_embeddings_without_token(repo_id, obj_id, False)
+            row_id = row[METADATA_TABLE.columns.id.name]
+            if not faces:
+                updated_rows.append({
+                    METADATA_TABLE.columns.id.name: row_id,
+                    METADATA_TABLE.columns.face_vectors.name: VECTOR_DEFAULT_FLAG,
+                })
+                continue
             face_embeddings = [face['embedding'] for face in faces]
             vector = b64encode_embeddings(face_embeddings) if face_embeddings else VECTOR_DEFAULT_FLAG
-            row_id = row[METADATA_TABLE.columns.id.name]
+            
             updated_rows.append({
                 METADATA_TABLE.columns.id.name: row_id,
                 METADATA_TABLE.columns.face_vectors.name: vector,
