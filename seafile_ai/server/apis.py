@@ -3,7 +3,7 @@ import jwt
 import json
 
 from PIL import UnidentifiedImageError
-from flask import Flask, request
+from flask import Flask, Response, request, stream_with_context
 from pathlib import Path
 
 from seafile_ai import config
@@ -31,6 +31,56 @@ def check_auth_token(req):
         return False
 
     return True
+
+
+@flask_app.route('/api/v1/get-ai-reply', methods=['POST'])
+def get_ai_reply():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Bad request.'}, 400
+
+    message = data.get('query')
+    attachments = data.get('attachments', [])
+    username = data.get('username')
+    session_uuid = data.get('session_uuid')
+    repo_id = data.get('repo_id')
+    repo_name = data.get('repo_name')
+    org_id = data.get('org_id')
+    llm_model = data.get('llm_model')
+    repo_prompt = data.get('repo_prompt', '')
+
+    if not message:
+        return {'error_msg': 'question invalid.'}, 400
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+    if not isinstance(attachments, list):
+        return {'error_msg': 'attachments invalid.'}, 400
+
+    context = {
+        'username': username,
+        'session_uuid': session_uuid,
+        'repo_id': repo_id,
+        'repo_name': repo_name,
+        'org_id': org_id,
+        'repo_prompt': repo_prompt,
+    }
+
+    return Response(
+        stream_with_context(flask_app.app.streaming_chat(message, attachments, context, llm_model)),
+        content_type='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+        }
+    )
 
 
 @flask_app.route('/api/v1/generate-summary', methods=['POST'])
@@ -407,4 +457,3 @@ def writing_assistant():
         return {'error_msg': 'Internal server error.'}, 500
 
     return {'content': content}, 200
-
