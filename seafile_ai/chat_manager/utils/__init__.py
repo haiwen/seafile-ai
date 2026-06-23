@@ -1,7 +1,9 @@
 import json
 import logging
+import os
 import re
 from copy import deepcopy
+from pathlib import Path
 
 from seafile_ai.chat_manager.system_prompts import (
     CHAT_CORE_PROMPT,
@@ -11,12 +13,19 @@ from seafile_ai.chat_manager.system_prompts import (
     CHAT_SEARCH_REFERENCE_RULES,
     CHAT_SEARCH_TOOLS_EXAMPLES,
 )
+from seafile_ai.repo_metadata.constants import METADATA_TABLE
+from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
+from seafile_ai.repo_metadata.utils import get_metadata_by_path
+from seafile_ai.utils import parse_file
 
 logger = logging.getLogger(__name__)
 
 REFERENCE_MARKER_RE = re.compile(r'\[Reference\s+(\d+)\]')
 INTERNAL_REFERENCE_RE = re.compile(r'<reference_(\d+)>')
 DOCUMENT_ATTACHMENTS_PROMPT = 'Here are some documents in Json format with title, URL or path, and content.\n\n'
+ATTACHMENT_CONTENT_LIMIT = 6000
+SUPPORTED_ATTACHMENT_SUFFIXES = {'.sdoc', '.md', '.markdown', '.docx', '.pdf', '.pptx'}
+ATTACHMENT_METADATA_SERVER_API = MetadataServerAPI('seafile-ai')
 
 def build_chat_tool_prompt(skip_tool_examples=False):
     tool_prompt_sections = [
@@ -50,9 +59,52 @@ def build_chat_system_prompts(repo_prompt='', skip_tool_examples=False):
     return prompts
 
 
+def truncate_attachment_content(content, limit=ATTACHMENT_CONTENT_LIMIT):
+    content = (content or '').strip()
+    if len(content) <= limit:
+        return content
+    return content[:limit] + '...'
+
+
+def enrich_attachments_with_content(attachments):
+    results = []
+    for attachment in attachments or []:
+        if not isinstance(attachment, dict):
+            continue
+
+        next_attachment = deepcopy(attachment)
+        content = next_attachment.get('content')
+        if isinstance(content, str) and content.strip():
+            next_attachment['content'] = truncate_attachment_content(content)
+            results.append(next_attachment)
+            continue
+
+        repo_id = next_attachment.get('repo_id')
+        path = next_attachment.get('path') or ''
+        name = next_attachment.get('name') or os.path.basename(path)
+        suffix = Path(name or path).suffix.lower()
+        if not repo_id or not path or suffix not in SUPPORTED_ATTACHMENT_SUFFIXES:
+            results.append(next_attachment)
+            continue
+
+        try:
+            row = get_metadata_by_path(repo_id, path, ATTACHMENT_METADATA_SERVER_API)
+            obj_id = row.get(METADATA_TABLE.columns.obj_id.name) if row else None
+            if obj_id:
+                parsed_content = parse_file(name or path, repo_id, obj_id)
+                if parsed_content:
+                    next_attachment['content'] = truncate_attachment_content(parsed_content)
+        except Exception as error:
+            logger.warning('parse attachment failed: %s', error)
+
+        results.append(next_attachment)
+    return results
+
+
 def combine_attachments_to_message(attachments, message):
     if not attachments:
         return message
+    attachments = enrich_attachments_with_content(attachments)
     return '%s```json\n%s\n```\n\n%s' % (
         DOCUMENT_ATTACHMENTS_PROMPT,
         json.dumps(attachments, ensure_ascii=False),
