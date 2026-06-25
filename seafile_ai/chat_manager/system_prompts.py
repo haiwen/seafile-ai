@@ -58,17 +58,10 @@ When search tools were used:
 - Do not output any <reference_x> tag if search tools were not used or the results are not useful."""
 
 CHAT_SEARCH_POLICY = """Search policy:
-- For almost every non-trivial library knowledge or factual question, start with `documents_search`.
-- First check whether the user's question may be answered by documents in the library. If yes, search before answering.
-- Typical cases include questions such as "what is", "how to configure", "how to set up", "does it support", "why does this happen", "what does the documentation say", "how to handle after upgrade", and similar product or documentation questions.
-- When in doubt, search first rather than answering directly from memory.
-- If the current message or attached documents already provide enough information, answer directly from that provided content instead of searching.
-- If the current request is only a rewrite, translation, polishing, or summarization of user-provided text or attachments, do not search.
-- If `documents_search` finds relevant documents, stop searching and answer by summarizing those documents with citations.
-- If `documents_search` does not find relevant documents or does not provide enough evidence, do not force citations from weak matches; answer directly instead.
-- Search queries should usually stay close to the user's original keywords.
-- Preserve exact technical terms, product names, config keys, file names, API names, and error messages when they are important.
-- Prefer concise keyword-style queries over rewriting everything into a full natural-language sentence.
+- Use search tools first when the answer needs reference material.
+- Start with `documents_search`.
+- If `documents_search` is sufficient, stop searching and answer.
+- Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""
 
 CHAT_SEARCH_REFERENCE_RULES = """Search reference rules:
@@ -78,6 +71,15 @@ CHAT_SEARCH_REFERENCE_RULES = """Search reference rules:
 - If several references support the same statement, place the labels together, for example `<reference_0><reference_3>`.
 - If search results are irrelevant, weak, or unused in the answer, do not cite them.
 - If no search tool was used, do not output any `<reference_x>` tags."""
+
+CHAT_CONTENT_GENERATION_RULES = """Content-generation rules:
+- Use content-generation tools only when the user explicitly asks to create, record, save, or generate content as an artifact.
+- Do not use content-generation tools for ordinary discussion, explanation, brainstorming, or recommendation requests.
+- `generate_markdown` is for producing a Markdown document artifact.
+- If the user explicitly asks for a Markdown document and `generate_markdown` is available, do not fall back to a plain-text answer or a fenced Markdown code block.
+- If search results are insufficient but the request is still to produce a Markdown artifact, generate the document from the best available information already available in the conversation or from general knowledge.
+- After a content-generation tool returns its result, preserve that returned tag block exactly.
+- If content-generation tools are not available, answer in normal text and do not pretend that content was created."""
 
 CHAT_SEARCH_TOOLS_EXAMPLES = """Search examples:
 
@@ -122,4 +124,58 @@ User: Which number is largest in 5, 9, 19, 28, and 3?
 Tool call: none
 Final answer: 28."""
 
-MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT = f'WARNING: You have reached step {MAX_STEPS}. Tool access has been physically disabled for this request. Please provide your final response based only on information already available. DO NOT RETURN ANY TOOL CALLS IN THIS STEP.'
+CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES = """Content-generation examples:
+
+Example 1
+User: Put the answer above into a Markdown document.
+Tool call:
+{
+  "name": "generate_markdown",
+  "arguments": {
+    "file_name": "answer.md",
+    "content": "# Title\n\nDocument content"
+  }
+}
+Tool result:
+<seafile-ai-markdown file_name="answer.md">
+# Title
+
+Document content
+</seafile-ai-markdown>
+Final answer:
+I recorded it in a Markdown document.
+<seafile-ai-markdown file_name="answer.md">
+# Title
+
+Document content
+</seafile-ai-markdown>
+
+Example 2
+User: Summarize the deployment steps and write them into a Markdown document.
+Step 1 tool call:
+{
+  "name": "documents_search",
+  "arguments": {
+    "query": "Seafile Docker deployment"
+  }
+}
+Step 1 result is insufficient.
+Step 2 tool call:
+{
+  "name": "generate_markdown",
+  "arguments": {
+    "file_name": "seafile-docker-deployment.md",
+    "content": "# Deploy Seafile with Docker"
+  }
+}
+Tool result:
+<seafile-ai-markdown file_name="seafile-docker-deployment.md">
+# Deploy Seafile with Docker
+</seafile-ai-markdown>
+Final answer:
+I prepared the Markdown document.
+<seafile-ai-markdown file_name="seafile-docker-deployment.md">
+# Deploy Seafile with Docker
+</seafile-ai-markdown>"""
+
+MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT = f'WARNING: You have reached step {MAX_STEPS}. Tool access has been physically disabled for this request. Please provide your final response based on existing information. DO NOT RESPONSE ANY TOOL CALLS IN THIS STEP!!! (Even if the tools list is not empty and tool_choice is not none)'

@@ -6,7 +6,7 @@ from seafile_ai import config
 from seafile_ai.db.models import ChatMessages
 from seafile_ai.chat_manager.memory import OpenAIMemory, build_memory_from_db
 from seafile_ai.chat_manager.system_prompts import MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT
-from seafile_ai.chat_manager.tools import DocumentsSearch
+from seafile_ai.chat_manager.tools import DocumentsSearch, MarkdownGenerator
 from seafile_ai.chat_manager.utils import (
     build_chat_system_prompts,
     combine_attachments_to_message,
@@ -25,10 +25,18 @@ logger = logging.getLogger(__name__)
 class BasicChat:
     def __init__(self, app):
         self.app = app
-        self.documents_search = DocumentsSearch()
+        self.search_tools = (
+            DocumentsSearch(),
+        )
+        self.content_generators = (
+            MarkdownGenerator(),
+        )
 
     def _register_tools(self, tool_executor, context):
-        self.documents_search.register(tool_executor, context=context, app=self.app)
+        for tool in self.search_tools:
+            tool.register(tool_executor, context=context, app=self.app)
+        for tool in self.content_generators:
+            tool.register(tool_executor)
 
     def __call__(self, message, attachments, context, model):
         tool_executor = OpenAIToolExecutor()
