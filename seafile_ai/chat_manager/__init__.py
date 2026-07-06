@@ -16,6 +16,7 @@ from seafile_ai.chat_manager.utils import (
 from seafile_ai.chat_manager.utils.callbacker import ChatCallBacker
 from seafile_ai.utils import remove_sources_content_and_snippets
 from seafile_ai.utils.completion import StreamingCompletionUtils
+from seafile_ai.utils.llm_api import get_llm_client_by_model_id
 from seafile_ai.utils.sse import SSE
 from seafile_ai.utils.tools import OpenAIToolExecutor
 
@@ -66,6 +67,7 @@ class StreamingChat(BasicChat):
     def run(self, model, tool_executor, message, attachments, **kwargs):
         try:
             context = kwargs.get('context', {})
+            llm_client = get_llm_client_by_model_id(self.app.data_logger, model)
             yield SSE.status('Preparing', 'Initializing user input')
 
             system_prompts = build_chat_system_prompts(context.get('repo_prompt', ''))
@@ -118,7 +120,7 @@ class StreamingChat(BasicChat):
                         completion_kwargs['tool_choice'] = 'none'
 
                     completion_kwargs['messages'] = memory
-                    response = self.app.llm_api.completion(**completion_kwargs)
+                    response = llm_client.completion(**completion_kwargs)
                 except Exception as error:
                     time_usage = time.time() - time_begin
                     completion_retries.append(StreamingCompletionUtils.build_completion_retry_entry(
@@ -206,7 +208,7 @@ class StreamingChat(BasicChat):
                                 'output_tokens': chunk.usage.completion_tokens,
                                 'total_tokens': chunk.usage.total_tokens,
                             }
-                            self.app.llm_api.logger_usage(token_usage, context)
+                            llm_client.logger_usage(token_usage, context)
                 except Exception as error:
                     if tool_calls or content:
                         raise AssertionError('Cannot deal with invalid response')

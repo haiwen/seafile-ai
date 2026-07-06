@@ -3,14 +3,20 @@ import logging
 
 import litellm
 
+from seafile_ai.config import LLM_MODEL_ID_MODELS_MAP, DEFAULT_LLM_MODEL
 from seafile_ai.utils import LLMChatCompletionException
 from seafile_ai.utils.constants import MODEL_USAGE_STATISTIC_CHANNEL_NAME
 
 logger = logging.getLogger(__name__)
 
 
+def get_llm_client_by_model_id(data_logger, model_id):
+    model_config = LLM_MODEL_ID_MODELS_MAP.get(model_id, DEFAULT_LLM_MODEL) if model_id else DEFAULT_LLM_MODEL
+    return LLMAPI(data_logger, model_config.get('model'), model_config.get('type', 'openai'), model_config.get('url'), model_config.get('key'))
+
+
 class LLMAPI:
-    def __init__(self, data_logger, llm_type='openai', base_url=None, api_key=None, model='gpt-4o-mini', timeout=180):
+    def __init__(self, data_logger, model, llm_type='openai', base_url=None, api_key=None, timeout=180):
         self.data_logger = data_logger
         self.timeout = timeout
         if llm_type == 'other':
@@ -33,6 +39,8 @@ class LLMAPI:
 
         context = kwargs.pop('context', {})
         try:
+            if 'gpt-5' in self.model_id:
+                kwargs['temperature'] = 1
             response = litellm.completion(
                 model=self.model,
                 base_url=self.base_url,

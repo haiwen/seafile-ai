@@ -14,16 +14,19 @@ class SeafileAIApp(object):
         self.config = config
         self.db_session_class = init_db_session_class()
         self.data_logger = DataLogging(config.REDIS_HOST, config.REDIS_PORT, config.REDIS_PASSWORD)
-        llm_type = config.LLM_TYPE
-        base_url = config.LLM_URL
-        api_key = config.LLM_KEY
-        model = config.LLM_MODEL
-        self.llm_api = LLMAPI(self.data_logger, llm_type, base_url, api_key, model)
+        self.llm_api = LLMAPI(
+            self.data_logger,
+            config.DEFAULT_LLM_MODEL.get('model'),
+            config.DEFAULT_LLM_MODEL.get('type', 'openai'),
+            config.DEFAULT_LLM_MODEL.get('url'),
+            config.DEFAULT_LLM_MODEL.get('key'),
+            timeout=180,
+        )
         
         self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
         self.seahub_api = SeahubAPI(config.SEAFILE_SERVER_URL, config.SECRET_KEY)
 
-        self.text_processing_manager = TextProcessingManager(self, config.LLM_TYPE)
+        self.text_processing_manager = TextProcessingManager(self, config.DEFAULT_LLM_MODEL.get('type', 'openai'))
         self.image_processing_manager = ImageProcessingManager(self)
         self.face_recognition_manager = FaceRecognitionManager(self)
         self.streaming_chat = StreamingChat(self)
