@@ -193,13 +193,10 @@ try:
 except ImportError as e:
     pass
 
-yaml_file_path = os.path.join(CONF_DIR, os.environ.get('SEAFILE_AI_CONFIG_NAME', 'seafile_ai_config.yaml'))
-configs = _ConfigParser(yaml_file_path, 'seafile-ai')
-
-SEAFILE_SERVER_URL = configs.get('SEAFILE_SERVER_URL', SEAFILE_SERVER_URL)
-SECRET_KEY = configs.get('JWT_PRIVATE_KEY', SECRET_KEY)
-SEASEARCH_URL = configs.get('SEASEARCH_URL', SEASEARCH_URL)
-SEASEARCH_TOKEN = configs.get('SEASEARCH_TOKEN', SEASEARCH_TOKEN)
+SEAFILE_SERVER_URL = os.getenv('SEAFILE_SERVER_URL') or SEAFILE_SERVER_URL
+SECRET_KEY = os.getenv('JWT_PRIVATE_KEY') or SECRET_KEY
+SEASEARCH_URL = os.getenv('SEASEARCH_URL') or SEASEARCH_URL
+SEASEARCH_TOKEN = os.getenv('SEASEARCH_TOKEN') or SEASEARCH_TOKEN
 
 MYSQL_DB_HOST = os.getenv('SEAFILE_MYSQL_DB_HOST') or MYSQL_HOST
 MYSQL_DB_PORT = os.getenv('SEAFILE_MYSQL_DB_PORT') or MYSQL_PORT
@@ -209,6 +206,8 @@ MYSQL_SEAHUB_DB_NAME = os.getenv('SEAFILE_MYSQL_DB_SEAHUB_DB_NAME') or MYSQL_SEA
 MYSQL_SEAFILE_DB_NAME = os.getenv('SEAFILE_MYSQL_DB_SEAFILE_DB_NAME') or MYSQL_SEAFILE_DB_NAME
 MYSQL_CCNET_DB_NAME = os.getenv('SEAFILE_MYSQL_DB_CCNET_DB_NAME') or MYSQL_CCNET_DB_NAME
 
+yaml_file_path = os.path.join(CONF_DIR, os.environ.get('SEAFILE_AI_CONFIG_NAME', 'seafile_ai_config.yaml'))
+configs = _ConfigParser(yaml_file_path, 'seafile-ai')
 LLM_MODELS = configs.get('LLM_MODELS', [])
 LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL = get_llm_models_maps(LLM_MODELS)
 
