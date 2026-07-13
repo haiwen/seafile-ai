@@ -122,11 +122,14 @@ ENABLE_SYS_LOG = False
 APP_NAME = 'seafile-ai'
 
 # LLM
+LLM_URL = None
+LLM_TYPE = 'openai'
+LLM_KEY = None
+LLM_MODEL = 'gpt-4o-mini'
 LLM_MODELS = []
 LLM_MODEL_ID_MODELS_MAP = {}
 LLM_MODEL_TIER_MODELS_MAP = {}
 DEFAULT_LLM_MODEL = {}
-EMBEDDING_MODEL = {}
 
 # Chat
 CONTEXT_WINDOW_LIMIT = 20
@@ -206,14 +209,28 @@ MYSQL_SEAHUB_DB_NAME = os.getenv('SEAFILE_MYSQL_DB_SEAHUB_DB_NAME') or MYSQL_SEA
 MYSQL_SEAFILE_DB_NAME = os.getenv('SEAFILE_MYSQL_DB_SEAFILE_DB_NAME') or MYSQL_SEAFILE_DB_NAME
 MYSQL_CCNET_DB_NAME = os.getenv('SEAFILE_MYSQL_DB_CCNET_DB_NAME') or MYSQL_CCNET_DB_NAME
 
+LLM_TYPE = os.getenv('SEAFILE_AI_LLM_TYPE') or LLM_TYPE
+LLM_URL = os.getenv('SEAFILE_AI_LLM_URL') or LLM_URL
+LLM_KEY = os.getenv('SEAFILE_AI_LLM_KEY') or LLM_KEY
+LLM_MODEL = os.getenv('SEAFILE_AI_LLM_MODEL') or LLM_MODEL
+
 yaml_file_path = os.path.join(CONF_DIR, os.environ.get('SEAFILE_AI_CONFIG_NAME', 'seafile_ai_config.yaml'))
 configs = _ConfigParser(yaml_file_path, 'seafile-ai')
 LLM_MODELS = configs.get('LLM_MODELS', [])
-LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL = get_llm_models_maps(LLM_MODELS)
 
-EMBEDDING_MODEL = configs.get('EMBEDDING_MODEL', {})
-if not check_llm_validated(EMBEDDING_MODEL):
-    raise ValueError('EMBEDDING_MODEL is not set or invalid')
+if LLM_MODELS:
+    LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL = get_llm_models_maps(LLM_MODELS)
+else:
+    DEFAULT_LLM_MODEL = {
+        'type': LLM_TYPE,
+        'model': LLM_MODEL,
+        'label': LLM_MODEL,
+        'key': LLM_KEY,
+    }
+    if LLM_URL:
+        DEFAULT_LLM_MODEL['url'] = LLM_URL
+    LLM_MODELS = [DEFAULT_LLM_MODEL]
+    LLM_MODEL_ID_MODELS_MAP = {LLM_MODEL: DEFAULT_LLM_MODEL}
 
 FACE_EMBEDDING_SERVICE_URL = os.getenv('FACE_EMBEDDING_SERVICE_URL') or FACE_EMBEDDING_SERVICE_URL
 FACE_EMBEDDING_SERVICE_KEY = os.getenv('FACE_EMBEDDING_SERVICE_KEY') or FACE_EMBEDDING_SERVICE_KEY
