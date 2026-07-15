@@ -35,6 +35,24 @@ class TextProcessingManager:
 
         return summary_text if summary_text not in ['None', 'none', None] else ''
 
+    def generate_ai_summary(self, repo_id, obj_id, path, context):
+        file_name = os.path.basename(path)
+        content = parse_file(file_name, repo_id, obj_id)
+
+        if not content:
+            return ''
+
+        prompt = (
+            'You are an expert in summarizing documents. '
+            'Read the document content and write one concise sentence that captures the main points and key idea. '
+            'Prefer the key topic and useful keywords over technical details. '
+            'Keep it within 200 characters, do not include any Markdown, and return only the summary sentence. '
+            'The output language must match the input language. '
+            'If there is no meaningful content to summarize, output word: None'
+        )
+        summary_text = self._gen_doc_summary(content[:LLM_INPUT_CHARACTERS_LIMIT], prompt, context)
+        return summary_text if summary_text not in ['None', 'none', None] else ''
+
     def _gen_doc_summary(self, content, prompt, context):
         system_prompt = {"role": "system", "content": prompt}
         user_prompt = {"role": "user", "content": 'Summarize the following content' + content}
