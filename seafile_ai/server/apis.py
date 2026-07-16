@@ -117,7 +117,7 @@ def generate_summary():
     if not username:
         return {'error_msg': 'username invalid.'}, 400
     try:
-        summary = flask_app.app.text_processing_manager.generate_ai_summary(repo_id, obj_id, path, context)
+        summary = flask_app.app.text_processing_manager.generate_summary(repo_id, obj_id, path, context)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internal server error.'}, 500

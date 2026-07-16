@@ -16,7 +16,7 @@ class TextProcessingManager:
         self.app = app
         self.llm_type = llm_type
 
-    def generate_ai_summary(self, repo_id, obj_id, path, context):
+    def generate_summary(self, repo_id, obj_id, path, context):
         file_name = os.path.basename(path)
         content = parse_file(file_name, repo_id, obj_id)
 
