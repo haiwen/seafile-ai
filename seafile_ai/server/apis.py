@@ -110,12 +110,14 @@ def generate_summary():
         return {'error_msg': 'repo_id invalid.'}, 400
     if not obj_id:
         return {'error_msg': 'obj_id invalid.'}, 400
-    if Path(path).suffix not in SUMMARY_SUPPORTED_FILES:
+    if not path:
+        return {'error_msg': 'path invalid.'}, 400
+    if Path(path).suffix.lower() not in SUMMARY_SUPPORTED_FILES:
         return {'error_msg': 'unsupported file format.'}, 400
     if not username:
         return {'error_msg': 'username invalid.'}, 400
     try:
-        summary = flask_app.app.text_processing_manager.generate_summary(repo_id, obj_id, path, context)
+        summary = flask_app.app.text_processing_manager.generate_ai_summary(repo_id, obj_id, path, context)
     except Exception as e:
         logger.exception(e)
         return {'error_msg': 'Internal server error.'}, 500
