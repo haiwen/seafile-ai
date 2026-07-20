@@ -274,6 +274,9 @@ def sdoc2md(json_tree):
     elements = json_tree.get('elements', [])
     if version == 3:
         elements = json_tree.get('children', [])
+
+    if not elements:
+        elements = json_tree
     for sub in elements:
         results.append(json2md(sub))
     markdown_text = "\n".join(results)
