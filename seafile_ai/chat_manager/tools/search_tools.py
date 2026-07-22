@@ -223,6 +223,8 @@ class DocumentsSearch(BasicTool):
         if not query:
             return []
 
+        logger.info('documents_search query: %s', query)
+
         try:
             search_results = self._search_documents(repo_id, query, count)
         except Exception as error:
