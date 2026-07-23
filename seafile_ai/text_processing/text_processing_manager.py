@@ -16,23 +16,22 @@ class TextProcessingManager:
         self.app = app
         self.llm_type = llm_type
 
-    def _generate_summary_text(self, file_name, content, context):
-        file_ext = get_file_ext(file_name)
-        if file_ext == '.pptx':
-            prompt = 'You are a PowerPoint summarizer. You will receive a text version of the PowerPoint slides. Your task is to extract the main points and generate a summary that is concise, clear, and focused on the key elements of the content. - Requirement: **Attention The output language is the same as the input PPT main contentlanguage.(If there are Chinese characters, then it is Chinese.)**'
-        else:
-            prompt = 'You are a document summarization expert. I need you to generate a concise summary of a document that is about 100 words. The summary should capture the main points and themes of the document clearly and effectively.The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
-        return self._gen_doc_summary(content, prompt, context)
-
     def generate_summary(self, repo_id, obj_id, path, context):
         file_name = os.path.basename(path)
         content = parse_file(file_name, repo_id, obj_id)
 
-        if content:
-            summary_text = self._generate_summary_text(file_name, content[:LLM_INPUT_CHARACTERS_LIMIT], context)
-        else:
-            summary_text = None
+        if not content:
+            return ''
 
+        prompt = (
+            'You are an expert in summarizing documents. '
+            'Read the document content and write one concise sentence that captures the main points and key idea. '
+            'Prefer the key topic and useful keywords over technical details. '
+            'Keep it within 200 characters, do not include any Markdown, and return only the summary sentence. '
+            'The output language must match the input language. '
+            'If there is no meaningful content to summarize, output word: None'
+        )
+        summary_text = self._gen_doc_summary(content[:LLM_INPUT_CHARACTERS_LIMIT], prompt, context)
         return summary_text if summary_text not in ['None', 'none', None] else ''
 
     def _gen_doc_summary(self, content, prompt, context):
