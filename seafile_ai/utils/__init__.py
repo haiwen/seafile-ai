@@ -102,7 +102,10 @@ def docx2md(file):
 
 
 def get_pdf_text(file):
-    text = extract_text(BytesIO(file))
+    try:
+        text = extract_text(BytesIO(file),maxpages=2)
+    except Exception:
+        text = ''
     return text
 
 
