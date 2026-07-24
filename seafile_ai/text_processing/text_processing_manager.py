@@ -3,7 +3,7 @@ import logging
 import re
 import base64
 
-from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_CHARACTER_LIMIT, WritingType
+from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
     resize_image_binary, is_pdf
 from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
@@ -21,7 +21,7 @@ class TextProcessingManager:
         if file_ext == '.pptx':
             prompt = 'You are a PowerPoint summarizer. You will receive a text version of the PowerPoint slides. Your task is to extract the main points and generate a summary that is concise, clear, and focused on the key elements of the content. - Requirement: **Attention The output language is the same as the input PPT main contentlanguage.(If there are Chinese characters, then it is Chinese.)**'
         else:
-            prompt = f'You are a document summarization expert. I need you to generate a concise summary of a document in 2-3 sentences, within {SUMMARY_CHARACTER_LIMIT} characters. The summary should capture the main points and themes of the document clearly and effectively. The summary should start with a phrase that introduces the document, such as "This document introduces..." or "The document describes...", in the same language as the input. Do not include any Markdown. The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
+            prompt = f'You are a document summarization expert. I need you to generate a concise summary of a document in 2-3 sentences, within {SUMMARY_WORD_LIMIT} words. The summary should capture the main points and themes of the document clearly and effectively. The summary should start with a phrase that introduces the document, such as "This document introduces..." or "The document describes...", in the same language as the input. Do not include any Markdown. The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
         return self._gen_doc_summary(content, prompt, context)
 
     def generate_summary(self, repo_id, obj_id, path, context):

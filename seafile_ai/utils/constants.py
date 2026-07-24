@@ -1,7 +1,7 @@
 import os
 
 LLM_INPUT_CHARACTERS_LIMIT = 4000
-SUMMARY_CHARACTER_LIMIT = int(os.environ.get('SUMMARY_CHARACTER_LIMIT', 100))
+SUMMARY_WORD_LIMIT = int(os.environ.get('SUMMARY_WORD_LIMIT', 50))
 SUMMARY_SUPPORTED_FILES = ['.sdoc', '.md', '.markdown', '.docx', '.pdf', '.pptx']
 
 EXTRACT_TEXT_SUPPORTED_IMAGES = ('.gif', '.jpeg', '.jpg', '.png', '.heic', '.ico', '.bmp', '.tif', '.tiff', '.psd', '.webp', '.jfif')
