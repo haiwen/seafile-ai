@@ -1,5 +1,7 @@
 from html2text import HTML2Text
+import logging
 
+logger = logging.getLogger(__name__)
 
 HEADER_LABEL = [
     'header1',
@@ -278,6 +280,10 @@ def sdoc2md(json_tree):
     if not elements:
         elements = json_tree
     for sub in elements:
-        results.append(json2md(sub))
+        if isinstance(sub, dict):
+            results.append(json2md(sub))
+        else:
+            logger.warning(f"skip invalid sdoc element, type={type(sub)}, value={sub}")
+            pass
     markdown_text = "\n".join(results)
     return markdown_text
