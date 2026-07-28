@@ -103,43 +103,42 @@ class AISummarySearcher:
         matched_details = []  # Store matched details for display
         offset = 0
 
+        # Step 1: Load all documents in batches (keep batch queries to avoid large SQL)
+        all_summaries = []
         while rows_scanned < self.max_documents:
-            # Load a batch of ai_summary data with pagination
-            batch_summaries = self._load_ai_summaries_batch(repo_id, offset, self.batch_size)
-            if not batch_summaries:
+            batch = self._load_ai_summaries_batch(repo_id, offset, self.batch_size)
+            if not batch:
                 logger.info('No more documents found, stopping search')
                 break
 
-            batch_count = len(batch_summaries)
-            rows_scanned += batch_count
+            all_summaries.extend(batch)
+            rows_scanned += len(batch)
             batches_scanned += 1
-            offset += batch_count
+            offset += len(batch)
 
             logger.info('Loaded batch %d: %d documents, total scanned: %d',
-                        batches_scanned, batch_count, rows_scanned)
+                        batches_scanned, len(batch), rows_scanned)
 
-            # Evaluate relevance for this batch
-            matched_indices, scores = self._evaluate_relevance(query, batch_summaries, context)
-            matched_count += len(matched_indices)
+        # Step 2: Evaluate relevance for all documents at once (full scan for global ranking)
+        if all_summaries:
+            logger.info('Evaluating relevance for %d documents', len(all_summaries))
+            matched_indices, scores = self._evaluate_relevance(query, all_summaries, context)
+            matched_count = len(matched_indices)
             
             # Collect matched details
             for idx in matched_indices:
-                item = batch_summaries[idx]
+                item = all_summaries[idx]
                 matched_details.append({
                     'filepath': item['file_path'],
                     'score': scores.get(idx, 0),
                 })
             
-            logger.info('Batch %d: %d relevant documents found, scores: %s', batches_scanned, len(matched_indices), scores)
+            logger.info('Found %d relevant documents, scores: %s', matched_count, scores)
             
             # Format results
-            batch_results = self._format_results(batch_summaries, matched_indices, scores, repo_id)
-            results.extend(batch_results)
-
-            # Early termination when enough results reached
-            if len(results) >= remaining_count:
-                logger.info('Reached remaining count (%d), stopping search', remaining_count)
-                break
+            results = self._format_results(all_summaries, matched_indices, scores, repo_id)
+        else:
+            logger.info('No documents found for ai_summary search')
 
         # Sort by relevance score and truncate
         results.sort(key=lambda x: x.get('score', 0), reverse=True)
