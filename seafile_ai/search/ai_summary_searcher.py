@@ -149,7 +149,7 @@ class AISummarySearcher:
         matched_details = matched_details[:remaining_count]
 
         logger.info('ai_summary search completed, found %d relevant documents', len(results))
-        return results, rows_scanned, batches_scanned, matched_count, matched_details
+        return results, rows_scanned, matched_count, matched_details
 
     def _load_ai_summaries_batch(self, repo_id, offset, limit):
         """

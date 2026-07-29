@@ -225,7 +225,7 @@ class DocumentsSearch(BasicTool):
             exclude_keys: Set of (repo_id, path) tuples to exclude from results
 
         Returns:
-            Tuple[List[dict], int, int, int, List[dict]] - (results, rows_scanned, batches_scanned, matched_count, matched_details)
+            Tuple[List[dict], int, int, int, List[dict]] - (results, rows_scanned, matched_count, matched_details)
         """
         if not app or not app.llm_api:
             logger.warning('Cannot fallback to ai_summary search: llm_api is not available')
@@ -234,7 +234,7 @@ class DocumentsSearch(BasicTool):
         ai_summary_searcher = self._get_ai_summary_searcher(app.llm_api)
 
         logger.info('Falling back to ai_summary search for query: %s, remaining: %d', query, remaining_count)
-        results, rows_scanned, batches_scanned, matched_count, matched_details = ai_summary_searcher.search(
+        results, rows_scanned, matched_count, matched_details = ai_summary_searcher.search(
             repo_id, query, remaining_count, context
         )
 
@@ -245,7 +245,7 @@ class DocumentsSearch(BasicTool):
             if key not in exclude_keys:
                 filtered_results.append(result)
 
-        return filtered_results, rows_scanned, batches_scanned, matched_count, matched_details
+        return filtered_results, rows_scanned, matched_count, matched_details
 
     def execute(self, query, context, app, tool_executor, call_back):
         assert isinstance(query, str), 'Your search query must be a string'
@@ -283,7 +283,6 @@ class DocumentsSearch(BasicTool):
         # ---- Phase 2: AI Summary fallback ----
         ai_summary_used = False
         ai_summary_rows_scanned = 0
-        ai_summary_batches_scanned = 0
         ai_summary_matched = 0
         ai_summary_matched_details = []
 
@@ -308,7 +307,7 @@ class DocumentsSearch(BasicTool):
                     exclude_keys = existing_source_keys | {
                         (c['repo_id'], c['path']) for c in reranked_candidates
                     }
-                    fallback_results, ai_summary_rows_scanned, ai_summary_batches_scanned, ai_summary_matched, ai_summary_matched_details = (
+                    fallback_results, ai_summary_rows_scanned, ai_summary_matched, ai_summary_matched_details = (
                         self._fallback_search_by_ai_summary(
                             repo_id=repo_id,
                             query=query,
@@ -379,7 +378,6 @@ class DocumentsSearch(BasicTool):
                 'AI summary fallback mode': fallback_mode,
                 'AI summary fallback used': ai_summary_used,
                 'AI summary rows scanned': ai_summary_rows_scanned,
-                'AI summary batches scanned': ai_summary_batches_scanned,
                 'AI summary matched': ai_summary_matched,
                 'AI summary matched details': matched_details_str,
                 'New references': len(observation_results),
