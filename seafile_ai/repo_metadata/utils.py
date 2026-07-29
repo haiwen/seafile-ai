@@ -67,6 +67,41 @@ def query_metadata_rows(repo_id, metadata_server_api, sql):
 
     return rows
 
+
+def query_ai_summary_rows(repo_id, metadata_server_api, offset=0, limit=50):
+    """
+    Query documents with ai_summary with pagination support
+
+    Args:
+        repo_id: Repository ID
+        metadata_server_api: MetadataServerAPI instance
+        offset: Offset for pagination (default: 0)
+        limit: Maximum number of rows to return (default: 50)
+
+    Returns:
+        List[dict] - Document rows containing ai_summary
+    """
+    logger.info('query_ai_summary_rows, repo_id=%s, offset=%d, limit=%d', repo_id, offset, limit)
+
+    # Only query required fields to avoid performance issues from selecting all columns
+    sql = (
+        f'SELECT `{METADATA_TABLE.columns.obj_id.name}`, '
+        f'`{METADATA_TABLE.columns.ai_summary.name}`, '
+        f'`{METADATA_TABLE.columns.parent_dir.name}`, '
+        f'`{METADATA_TABLE.columns.file_name.name}`, '
+        f'`{METADATA_TABLE.columns.file_mtime.name}`, '
+        f'`{METADATA_TABLE.columns.size.name}` '
+        f'FROM `{METADATA_TABLE.name}` '
+        f'WHERE `{METADATA_TABLE.columns.ai_summary.name}` IS NOT NULL '
+        f'AND `{METADATA_TABLE.columns.ai_summary.name}` != \'\' '
+        f'AND `{METADATA_TABLE.columns.is_dir.name}` = False '
+        f'ORDER BY `{METADATA_TABLE.columns.file_mtime.name}` DESC '
+        f'LIMIT {offset}, {limit}'
+    )
+
+    return metadata_server_api.query_rows(repo_id, sql, []).get('results', [])
+
+
 def get_faces_rows(repo_id, metadata_server_api):
     logger.info('get_faces_rows, repo_id=%s', repo_id)
     sql = f'SELECT * FROM `{FACES_TABLE.name}`'
@@ -116,12 +151,20 @@ def get_metadata_by_path(repo_id, path, metadata_server_api):
 def get_repo_metadata(repo_id):
     with seahub_db_session_class() as session:
         sql = text("""
-            SELECT enabled
+            SELECT enabled, summary_enabled
             FROM repo_metadata
             WHERE repo_id = :repo_id
             LIMIT 1
         """)
         return session.execute(sql, {'repo_id': repo_id}).first()
+
+
+def is_ai_summary_enabled(repo_id):
+    """Check if the repo has metadata enabled and ai_summary enabled."""
+    record = get_repo_metadata(repo_id)
+    if not record:
+        return False
+    return bool(record.enabled and record.summary_enabled)
 
 def get_repo_info(repo_id):
     with seafile_db_session_class() as session:

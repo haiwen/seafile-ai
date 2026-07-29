@@ -50,8 +50,6 @@ def _check_type(func):
                 result = need_type(result)
         return result
     return wrapper
-
-
 class _ConfigParser(object):
     def __init__(self, yaml_file_path, component_name):
         assert yaml_file_path and component_name, "yaml_file_path and component_name must be specified in initilizing ConfigParser"
@@ -165,6 +163,18 @@ SEASEARCH_TOKEN = ''
 
 INNER_METADATA_SERVER_URL = 'http://127.0.0.1:8084'
 
+# AI Summary search configuration
+# Fallback mode: True = supplementary mode (trigger when results insufficient), False = fallback mode (trigger only when results = 0)
+AI_SUMMARY_FALLBACK_SUPPLEMENTARY_MODE = False
+# Number of documents to query per batch
+AI_SUMMARY_SEARCH_BATCH_SIZE = 25
+# Maximum total documents to query
+AI_SUMMARY_SEARCH_MAX_DOCUMENTS = 200
+# Maximum search results to return
+AI_SUMMARY_SEARCH_MAX_RESULTS = 5
+# Minimum relevance score threshold (0-1), documents below this score will be filtered out
+AI_SUMMARY_SEARCH_MIN_RELEVANCE_SCORE = 0.4
+
 METADATA_FILE_TYPES = {
     '_picture': ('gif', 'jpeg', 'jpg', 'heic', 'png', 'ico', 'bmp', 'tif', 'tiff', 'psd', 'webp', 'jfif', 'mpo', 'jpe', 'xbm',
                  'svg', 'ppm', 'pcx', 'xcf', 'xpm', 'mgn', 'ufo', 'ai'),
@@ -243,3 +253,10 @@ REDIS_PASSWORD = os.getenv('REDIS_PASSWORD') or REDIS_PASSWORD
 
 # metadata config
 METADATA_SERVER_URL = os.getenv('INNER_METADATA_SERVER_URL') or INNER_METADATA_SERVER_URL
+
+# AI Summary search config - environment variable overrides
+AI_SUMMARY_FALLBACK_SUPPLEMENTARY_MODE = os.getenv('AI_SUMMARY_FALLBACK_SUPPLEMENTARY_MODE', '').lower() in ('true', '1') or AI_SUMMARY_FALLBACK_SUPPLEMENTARY_MODE
+AI_SUMMARY_SEARCH_BATCH_SIZE = int(os.getenv('AI_SUMMARY_SEARCH_BATCH_SIZE', AI_SUMMARY_SEARCH_BATCH_SIZE))
+AI_SUMMARY_SEARCH_MAX_DOCUMENTS = int(os.getenv('AI_SUMMARY_SEARCH_MAX_DOCUMENTS', AI_SUMMARY_SEARCH_MAX_DOCUMENTS))
+AI_SUMMARY_SEARCH_MAX_RESULTS = int(os.getenv('AI_SUMMARY_SEARCH_MAX_RESULTS', AI_SUMMARY_SEARCH_MAX_RESULTS))
+AI_SUMMARY_SEARCH_MIN_RELEVANCE_SCORE = float(os.getenv('AI_SUMMARY_SEARCH_MIN_RELEVANCE_SCORE', AI_SUMMARY_SEARCH_MIN_RELEVANCE_SCORE))
