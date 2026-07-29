@@ -72,8 +72,8 @@ CHAT_DUPLICATE_CHECK_RULES = """Duplicate-check rules:
 - first action must be exactly one `list_files` call. Do not call `documents_search` before or after it for the same duplicate-check request.
 - If the user does not specify a directory, call `list_files` with the root directory `/`.
 - If the user specifies an absolute directory path, use it. Resolve a relative directory name or path against the root directory before calling `list_files`.
-- Compare only files in `files`, which have valid AI summaries. List every item in `uncomparable_files` with its path and reason, and state that it was excluded from the comparison.
-- Report only possible duplicate groups, each with confidence, a short reason based on AI-summary similarity, and every file path."""
+- Only compare files in `files` that have valid AI summaries. Do not compare files in `uncomparable_files`.
+- Report only possible duplicate groups, each containing a confidence level, a brief reason based on AI summary similarity, and all file paths."""
 
 CHAT_CONTENT_GENERATION_RULES = """Content-generation rules:
 - Use content-generation tools only when the user explicitly asks to create, record, save, or generate content as an artifact.
@@ -175,5 +175,55 @@ I prepared the Markdown document.
 <seafile-ai-markdown file_name="seafile-docker-deployment.md">
 # Deploy Seafile with Docker
 </seafile-ai-markdown>"""
+
+CHAT_DUPLICATE_CHECK_TOOLS_EXAMPLES = """Duplicate-check examples:
+
+Example 1
+User: Check for duplicate documents.
+Tool call:
+{
+  "name": "list_files",
+  "arguments": {
+    "path": "/"
+  }
+}
+Tool result:
+{
+  "files": [
+    {
+      "file_id": "file-1",
+      "file_name": "AI HTML page tutorial.sdoc",
+      "path": "/AI HTML page tutorial.sdoc",
+      "ai_summary": "This document explains how to use the AI HTML page generator."
+    },
+    {
+      "file_id": "file-2",
+      "file_name": "AI HTML page generator.sdoc",
+      "path": "/AI HTML page generator.sdoc",
+      "ai_summary": "This document explains how to use the AI HTML page generator."
+    }
+  ],
+  "uncomparable_files": [
+    {
+      "file_id": "file-3",
+      "file_name": "draft.sdoc",
+      "path": "/draft.sdoc",
+      "reason": "ai_summary_empty"
+    }
+  ]
+}
+Final answer:
+I found the following possible duplicate or highly similar documents:
+
+**Group 1 (Confidence: High)**
+
+- **Reason:** Both AI summaries describe the same tutorial for using the AI HTML page generator.
+- **File paths:**
+  - `/AI HTML page tutorial.sdoc`
+  - `/AI HTML page generator.sdoc`
+
+**Files not compared**
+
+- `/draft.sdoc`: AI summary is empty, so it was excluded from the comparison."""
 
 MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT = f'WARNING: You have reached step {MAX_STEPS}. Tool access has been physically disabled for this request. Please provide your final response based on existing information. DO NOT RESPONSE ANY TOOL CALLS IN THIS STEP!!! (Even if the tools list is not empty and tool_choice is not none)'
