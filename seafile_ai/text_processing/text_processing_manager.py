@@ -21,7 +21,8 @@ class TextProcessingManager:
         if file_ext == '.pptx':
             prompt = 'You are a PowerPoint summarizer. You will receive a text version of the PowerPoint slides. Your task is to extract the main points and generate a summary that is concise, clear, and focused on the key elements of the content. - Requirement: **Attention The output language is the same as the input PPT main contentlanguage.(If there are Chinese characters, then it is Chinese.)**'
         else:
-            prompt = f'You are a document summarization expert. I need you to generate a concise summary of a document in 2-3 sentences, within {SUMMARY_WORD_LIMIT} words. The summary should capture the main points and themes of the document clearly and effectively. The summary should start with a phrase that introduces the document, such as "This document introduces..." or "The document describes...", in the same language as the input. Do not include any Markdown. The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
+            prompt = f'You are a document summarization expert. I need you to generate a concise summary of a document in 1-3 sentences, within {SUMMARY_WORD_LIMIT} words. The summary should capture the main points and themes of the document clearly and effectively. The summary should start with a phrase that introduces the document, such as "This document introduces..." or "The document describes...", in the same language as the input. Do not include any Markdown. The output language is the same as the input language. If it seems there is no content provided for summarization, just output word: None'
+
         return self._gen_doc_summary(content, prompt, context)
 
     def generate_summary(self, repo_id, obj_id, path, context):
