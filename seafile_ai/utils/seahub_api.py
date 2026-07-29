@@ -37,3 +37,13 @@ class SeahubAPI:
         }
         response = requests.post(url, files=files, data=data, headers=headers, timeout=self.timeout)
         return parse_response(response)
+
+    def list_file_summaries(self, repo_id, username, path):
+        logger.info('list_file_summaries, repo_id=%s, path=%s', repo_id, path)
+        url = f'{self.server_url}/api/v2.1/internal/repos/{repo_id}/file-summaries/'
+        data = {
+            'username': username,
+            'path': path,
+        }
+        response = requests.post(url, json=data, headers=self.gen_headers(), timeout=self.timeout)
+        return parse_response(response)

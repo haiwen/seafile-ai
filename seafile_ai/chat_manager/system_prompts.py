@@ -9,6 +9,7 @@ Decide what is needed at each step:
 Default behavior:
 - The main purpose of this assistant is to search the library documents first and then answer the user.
 - For library, product, or documentation questions, use `documents_search` before answering unless the request is only a brief greeting, courtesy reply, trivial arithmetic, or fully answerable from the user's provided content.
+- For explicit duplicate or semantically similar document checks in a directory, follow the duplicate-check rules instead of using `documents_search`.
 - If the current user message or attachments already contain enough information, answer directly from that material.
 - If no relevant library documents are found, or the results are clearly insufficient, answer directly with the best available knowledge instead of pretending the documents answered it.
 
@@ -65,6 +66,14 @@ CHAT_SEARCH_REFERENCE_RULES = """Search reference rules:
 - If several references support the same statement, place the labels together, for example `<reference_0><reference_3>`.
 - If search results are irrelevant, weak, or unused in the answer, do not cite them.
 - If no search tool was used, do not output any `<reference_x>` tags."""
+
+CHAT_DUPLICATE_CHECK_RULES = """Duplicate-check rules:
+- Use list_files tools only when the user explicitly asks to find duplicate, repeated, identical, or semantically similar documents. Do not trigger it for ordinary document search or requests for related documents.
+- first action must be exactly one `list_files` call. Do not call `documents_search` before or after it for the same duplicate-check request.
+- If the user does not specify a directory, call `list_files` with the root directory `/`.
+- If the user specifies an absolute directory path, use it. Resolve a relative directory name or path against the root directory before calling `list_files`.
+- Compare only files in `files`, which have valid AI summaries. List every item in `uncomparable_files` with its path and reason, and state that it was excluded from the comparison.
+- Report only possible duplicate groups, each with confidence, a short reason based on AI-summary similarity, and every file path."""
 
 CHAT_CONTENT_GENERATION_RULES = """Content-generation rules:
 - Use content-generation tools only when the user explicitly asks to create, record, save, or generate content as an artifact.

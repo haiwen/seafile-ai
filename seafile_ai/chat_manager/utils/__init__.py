@@ -9,6 +9,7 @@ from seafile_ai.chat_manager.system_prompts import (
     CHAT_CORE_PROMPT,
     CHAT_CONTENT_GENERATION_RULES,
     CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES,
+    CHAT_DUPLICATE_CHECK_RULES,
     CHAT_GLOBAL_TOOL_RULES,
     CHAT_OUTPUT_FORMAT_RULES,
     CHAT_SEARCH_POLICY,
@@ -34,6 +35,7 @@ def build_chat_tool_prompt(skip_tool_examples=False):
         CHAT_GLOBAL_TOOL_RULES,
         CHAT_SEARCH_POLICY,
         CHAT_SEARCH_REFERENCE_RULES,
+        CHAT_DUPLICATE_CHECK_RULES,
         CHAT_CONTENT_GENERATION_RULES,
     ]
 

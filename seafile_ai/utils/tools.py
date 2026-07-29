@@ -9,6 +9,11 @@ from seafile_ai.utils.thought_process_recorder import ThoughtProcessRecorder
 def filter_tool_calls_content(tool_name, results):
     if tool_name == 'documents_search':
         return remove_sources_content_and_snippets(deepcopy(results))
+    if tool_name == 'list_files':
+        results = deepcopy(results)
+        for file_info in results.get('files', []):
+            file_info.pop('ai_summary', None)
+        return results
     return results
 
 
