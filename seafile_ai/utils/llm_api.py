@@ -80,7 +80,6 @@ class LLMAPI:
                     'completion_tokens': token_usage.get('output_tokens', 0),
                     'total_tokens': token_usage.get('total_tokens', 0),
                 },
-                'username': context.get('username'),
                 'repo_id': context.get('repo_id'),
                 'repo_owner': context.get('repo_owner'),
                 'group_id': context.get('group_id'),
