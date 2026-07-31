@@ -47,7 +47,6 @@ def get_ai_reply():
 
     message = data.get('query')
     attachments = data.get('attachments', [])
-    username = data.get('username')
     session_uuid = data.get('session_uuid')
     repo_id = data.get('repo_id')
     repo_name = data.get('repo_name')
@@ -62,13 +61,10 @@ def get_ai_reply():
         return {'error_msg': 'question invalid.'}, 400
     if not repo_id:
         return {'error_msg': 'repo_id invalid.'}, 400
-    if not username:
-        return {'error_msg': 'username invalid.'}, 400
     if not isinstance(attachments, list):
         return {'error_msg': 'attachments invalid.'}, 400
 
     context = {
-        'username': username,
         'session_uuid': session_uuid,
         'repo_id': repo_id,
         'repo_name': repo_name,
@@ -104,14 +100,12 @@ def generate_summary():
     path = data.get('path')
     repo_id = data.get('repo_id')
     obj_id = data.get('obj_id')
-    username = data.get('username')
     org_id = data.get('org_id')
     repo_owner = data.get('repo_owner')
     group_id = data.get('group_id')
     scenario = data.get('scenario', 'summary')
 
     context = {
-        'username': username,
         'repo_id': repo_id,
         'repo_owner': repo_owner,
         'group_id': group_id,
@@ -127,8 +121,6 @@ def generate_summary():
         return {'error_msg': 'path invalid.'}, 400
     if Path(path).suffix.lower() not in SUMMARY_SUPPORTED_FILES:
         return {'error_msg': 'unsupported file format.'}, 400
-    if not username:
-        return {'error_msg': 'username invalid.'}, 400
     try:
         summary = flask_app.app.text_processing_manager.generate_summary(repo_id, obj_id, path, context)
     except Exception as e:
@@ -153,7 +145,6 @@ def image_caption():
     obj_id = data.get('obj_id')
     repo_id = data.get('repo_id')
     lang = data.get('lang')
-    username = data.get('username')
     org_id = data.get('org_id')
     capture_time = data.get('capture_time')
     address = data.get('address')
@@ -165,9 +156,6 @@ def image_caption():
     if not lang:
         return {'error_msg': 'lang invalid.'}, 400
     
-    if not username:
-        return {'error_msg': 'username invalid.'}, 400
-    
     if not obj_id:
         return {'error_msg': 'obj_id invalid.'}, 400
     
@@ -175,7 +163,6 @@ def image_caption():
         return {'error_msg': 'repo_id invalid.'}, 400
 
     context = {
-        'username': username,
         'repo_id': repo_id,
         'repo_owner': repo_owner,
         'group_id': group_id,
@@ -211,14 +198,12 @@ def generate_file_tags():
     obj_id = data.get('obj_id')
     repo_id = data.get('repo_id')
     file_type = data.get('file_type')
-    username = data.get('username')
     org_id = data.get('org_id')
     repo_owner = data.get('repo_owner')
     group_id = data.get('group_id')
     scenario = data.get('scenario', 'file-tags')
 
     context = {
-        'username': username,
         'repo_id': repo_id,
         'repo_owner': repo_owner,
         'group_id': group_id,
@@ -233,8 +218,6 @@ def generate_file_tags():
         return {'error_msg': 'repo_id invalid.'}, 400
     if not file_type or file_type not in ['image', 'doc']:
         return {'error_msg': 'file_type invalid.'}, 400
-    if not username:
-        return {'error_msg': 'username invalid.'}, 400
 
     if file_type == 'image':
         lang = data.get('lang', 'en')
@@ -270,7 +253,6 @@ def ocr():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    username = data.get('username')
     org_id = data.get('org_id')
     obj_id = data.get('obj_id')
     repo_id = data.get('repo_id')
@@ -280,7 +262,6 @@ def ocr():
     scenario = data.get('scenario', 'ocr')
 
     context = {
-        'username': username,
         'repo_id': repo_id,
         'repo_owner': repo_owner,
         'group_id': group_id,
@@ -288,8 +269,6 @@ def ocr():
         'scenario': scenario,
     }
 
-    if not username:
-        return {'error_msg': 'username invalid.'}, 400
     if not file_name:
         return {'error_msg': 'file_name invalid.'}, 400
     if not obj_id:
@@ -426,7 +405,6 @@ def translate():
 
     text = data.get('text')
     lang = data.get('lang')
-    username = data.get('username')
     org_id = data.get('org_id')
     repo_id = data.get('repo_id')
     repo_owner = data.get('repo_owner')
@@ -437,11 +415,8 @@ def translate():
         return {'error_msg': 'text invalid.'}, 400
     if not lang or lang not in LANGUAGE:
         return {'error_msg': 'lang invalid.'}, 400
-    if not username:
-        return {'error_msg': 'username invalid.'}, 400
     
     context = { 
-        'username': username,
         'repo_id': repo_id,
         'repo_owner': repo_owner,
         'group_id': group_id,
@@ -473,7 +448,6 @@ def writing_assistant():
     text = data.get('text')
     writing_type = data.get('writing_type')
     custom_prompt = data.get('custom_prompt')
-    username = data.get('username')
     org_id = data.get('org_id')
     repo_id = data.get('repo_id')
     repo_owner = data.get('repo_owner')
@@ -484,11 +458,8 @@ def writing_assistant():
         return {'error_msg': 'text invalid.'}, 400
     if not custom_prompt and not writing_type:
         return {'error_msg': 'writing_type invalid.'}, 400
-    if not username:
-        return {'error_msg': 'username invalid.'}, 400
 
     context = {
-        'username': username,
         'repo_id': repo_id,
         'repo_owner': repo_owner,
         'group_id': group_id,
