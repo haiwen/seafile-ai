@@ -38,9 +38,9 @@ class SeahubAPI:
         response = requests.post(url, files=files, data=data, headers=headers, timeout=self.timeout)
         return parse_response(response)
 
-    def list_file_summaries(self, repo_id, username, path):
-        logger.info('list_file_summaries, repo_id=%s, path=%s', repo_id, path)
-        url = f'{self.server_url}/api/v2.1/internal/repos/{repo_id}/file-summaries/'
+    def list_metadata_records(self, repo_id, username, path):
+        logger.info('list_metadata_records, repo_id=%s, path=%s', repo_id, path)
+        url = f'{self.server_url}/api/v2.1/internal/repos/{repo_id}/metadata/records/'
         data = {
             'username': username,
             'path': path,
