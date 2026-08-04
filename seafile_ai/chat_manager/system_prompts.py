@@ -68,12 +68,11 @@ CHAT_SEARCH_REFERENCE_RULES = """Search reference rules:
 - If no search tool was used, do not output any `<reference_x>` tags."""
 
 CHAT_DUPLICATE_CHECK_RULES = """Duplicate-check rules:
-- Use list_files tools only when the user explicitly asks to find duplicate, repeated, identical, or semantically similar documents. Do not trigger it for ordinary document search or requests for related documents.
-- first action must be exactly one `list_files` call. Do not call `documents_search` before or after it for the same duplicate-check request.
-- If the user does not specify a directory, call `list_files` with the root directory `/`.
-- If the user specifies an absolute directory path, use it. Resolve a relative directory name or path against the root directory before calling `list_files`.
-- Only compare files in `files` that have valid AI summaries. Do not compare files in `uncomparable_files`.
-- Report only possible duplicate groups, each containing a confidence level, a brief reason based on AI summary similarity, and all file paths."""
+- When the user explicitly asks to find duplicate, repeated, identical, or semantically similar documents, identify this as a duplicate-check request. Do not trigger this workflow for ordinary document search or requests for related documents.
+- For a duplicate-check request, first call `list_files` exactly once with no arguments. Do not call `documents_search` before or after it for the same request.
+- `list_files` always returns a JSON array of complete file and directory metadata records for the whole library. If the user specifies an absolute directory path, filter the returned records by their existing `path` field after the tool call. Resolve a relative directory name or path against the root directory before filtering.
+- For duplicate or similar-document checks, select only records whose `_is_dir` is false before comparing. Compare only files with non-empty `_ai_summary` values. Use `path` to identify files and `_ai_summary` to compare document meaning. Do not treat any metadata field, including `_obj_id`, file name, path, or size, as proof that file contents are the same.
+- Report only possible semantically similar document groups, each with a confidence level, brief evidence based on AI summary similarity, and all file paths. Never describe documents as exactly duplicate, identical, or content-verified."""
 
 CHAT_CONTENT_GENERATION_RULES = """Content-generation rules:
 - Use content-generation tools only when the user explicitly asks to create, record, save, or generate content as an artifact.
@@ -183,47 +182,55 @@ User: Check for duplicate documents.
 Tool call:
 {
   "name": "list_files",
-  "arguments": {
-    "path": "/"
-  }
+  "arguments": {}
 }
 Tool result:
-{
-  "files": [
-    {
-      "file_id": "file-1",
-      "file_name": "AI HTML page tutorial.sdoc",
-      "path": "/AI HTML page tutorial.sdoc",
-      "ai_summary": "This document explains how to use the AI HTML page generator."
-    },
-    {
-      "file_id": "file-2",
-      "file_name": "AI HTML page generator.sdoc",
-      "path": "/AI HTML page generator.sdoc",
-      "ai_summary": "This document explains how to use the AI HTML page generator."
-    }
-  ],
-  "uncomparable_files": [
-    {
-      "file_id": "file-3",
-      "file_name": "draft.sdoc",
-      "path": "/draft.sdoc",
-      "reason": "ai_summary_empty"
-    }
-  ]
-}
+[
+  {
+    "_is_dir": true,
+    "_name": "AI guides",
+    "_parent_dir": "/",
+    "path": "/AI guides"
+  },
+  {
+    "_is_dir": false,
+    "_obj_id": "file-object-1",
+    "_name": "AI HTML page tutorial.sdoc",
+    "_parent_dir": "/",
+    "_size": 1024,
+    "_ai_summary": "This document explains how to use the AI HTML page generator.",
+    "path": "/AI HTML page tutorial.sdoc",
+    "custom_category": "tutorial"
+  },
+  {
+    "_is_dir": false,
+    "_obj_id": "file-object-2",
+    "_name": "AI HTML page generator.sdoc",
+    "_parent_dir": "/",
+    "_size": 1024,
+    "_ai_summary": "This document explains how to use the AI HTML page generator.",
+    "path": "/AI HTML page generator.sdoc",
+    "custom_category": "tutorial"
+  },
+  {
+    "_is_dir": false,
+    "_obj_id": "file-object-3",
+    "_name": "draft.sdoc",
+    "_parent_dir": "/",
+    "_ai_summary": null,
+    "path": "/draft.sdoc",
+    "custom_category": "draft"
+  }
+]
 Final answer:
-I found the following possible duplicate or highly similar documents:
+I found the following possible semantically similar documents:
 
 **Group 1 (Confidence: High)**
 
 - **Reason:** Both AI summaries describe the same tutorial for using the AI HTML page generator.
 - **File paths:**
   - `/AI HTML page tutorial.sdoc`
-  - `/AI HTML page generator.sdoc`
+  - `/AI HTML page generator.sdoc`"""
 
-**Files not compared**
-
-- `/draft.sdoc`: AI summary is empty, so it was excluded from the comparison."""
 
 MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT = f'WARNING: You have reached step {MAX_STEPS}. Tool access has been physically disabled for this request. Please provide your final response based on existing information. DO NOT RESPONSE ANY TOOL CALLS IN THIS STEP!!! (Even if the tools list is not empty and tool_choice is not none)'
