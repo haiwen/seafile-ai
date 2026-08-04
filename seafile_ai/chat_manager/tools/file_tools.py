@@ -3,6 +3,8 @@ from datetime import datetime
 
 from seafile_ai.chat_manager.utils.callbacker import ChatCallBacker
 from seafile_ai.repo_metadata.constants import METADATA_TABLE
+from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
+from seafile_ai.repo_metadata.utils import query_metadata_rows
 from seafile_ai.utils.tools import BasicTool
 
 
@@ -21,7 +23,7 @@ def _extract_file_summaries(path, records):
     uncomparable_files = []
     stats = {
         'requested_path': path,
-        'returned_file_count': len(records),
+        'returned_file_count': 0,
         'valid_summary_count': 0,
         'summary_missing_count': 0,
         'summary_empty_count': 0,
@@ -39,6 +41,10 @@ def _extract_file_summaries(path, records):
             'file_name': file_name,
             'path': posixpath.join(parent_dir, file_name),
         }
+        if path != '/' and not file_info['path'].startswith(path + '/'):
+            continue
+
+        stats['returned_file_count'] += 1
         ai_summary = record.get(METADATA_TABLE.columns.ai_summary.name)
         if ai_summary is None:
             stats['summary_missing_count'] += 1
@@ -93,16 +99,19 @@ class ListFiles(BasicTool):
         },
     }
 
-    def execute(self, path, context, app, call_back):
+    def __init__(self):
+        self.metadata_server_api = MetadataServerAPI('seafile-ai')
+
+    def execute(self, path, context, call_back):
         assert isinstance(path, str) and path.startswith('/'), 'Your path must be an absolute directory path'
 
         repo_id = context['repo_id']
         path = posixpath.normpath(path)
         if path == '.':
             path = '/'
-        response = app.seahub_api.list_metadata_records(
-            repo_id, context['username'], path)
-        results = _extract_file_summaries(path, response.get('records', []))
+        sql = f'SELECT * FROM `{METADATA_TABLE.name}` WHERE `{METADATA_TABLE.columns.is_dir.name}` = False'
+        records = query_metadata_rows(repo_id, self.metadata_server_api, sql)
+        results = _extract_file_summaries(path, records)
         if isinstance(call_back, ChatCallBacker):
             stats = results.get('traversal_stats', {})
             call_back('update_execution_detail', {

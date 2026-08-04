@@ -40,7 +40,7 @@ class BasicChat:
         for tool in self.search_tools:
             tool.register(tool_executor, context=context, app=self.app)
         for tool in self.directory_tools:
-            tool.register(tool_executor, context=context, app=self.app)
+            tool.register(tool_executor, context=context)
         for tool in self.content_generators:
             tool.register(tool_executor)
 
