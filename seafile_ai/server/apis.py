@@ -438,3 +438,38 @@ def writing_assistant():
         return {'error_msg': 'Internal server error.'}, 500
 
     return {'content': content}, 200
+
+
+@flask_app.route('/api/v1/generate-icon/', methods=['POST'])
+def generate_icon():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    wiki_name = data.get('wiki_name')
+    username = data.get('username')
+    org_id = data.get('org_id')
+
+    if not wiki_name:
+        return {'error_msg': 'wiki_name invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    context = {
+        'username': username,
+        'org_id': org_id
+    }
+
+    try:
+        icons = flask_app.app.text_processing_manager.generate_icon(wiki_name, context)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'icons': icons}, 200

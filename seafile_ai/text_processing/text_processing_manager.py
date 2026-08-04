@@ -1,12 +1,14 @@
 import os
 import logging
 import re
+import json
 import base64
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
     resize_image_binary, is_pdf
 from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
+from seafile_ai.utils.icon_constants import WIKI_ICON_MANIFEST
 
 logger = logging.getLogger(__name__)
 
@@ -167,3 +169,59 @@ class TextProcessingManager:
             return ''
 
         return extracted_text.strip()
+
+    def generate_icon(self, wiki_name, context):
+        all_icons = []
+        for category in WIKI_ICON_MANIFEST.get('categories', []):
+            category_name = category.get('name', '')
+            for icon in category.get('icons', []):
+                all_icons.append(f"{icon} ({category_name})")
+
+        icons_list_str = ', '.join(all_icons)
+
+        system_content = f'''
+            You are an icon selection expert. I will provide you with a wiki name and a list of available icons. 
+            Each icon has a descriptive name and belongs to a category. 
+            Your task is to select exactly 5 icons that best match the semantic meaning of the wiki name.
+            
+            Rules:
+            1. Return exactly 5 icon names from the list
+            2. Only return the icon names, separated by commas
+            3. Do not include any explanation or additional text
+            4. If you cannot find 5 matching icons, return the closest matches available
+            
+            Available icons: {icons_list_str}
+        '''
+
+        system_prompt = {
+            "role": "system",
+            "content": system_content
+        }
+        user_prompt = {
+            "role": "user",
+            "content": f"Wiki name: {wiki_name}\n\nPlease select 5 icons that best match this wiki name."
+        }
+        messages = [system_prompt, user_prompt]
+
+        try:
+            res = self.app.llm_api.run(messages, context)
+            icon_names = [name.strip() for name in re.split(r'[，,]', res) if name.strip()]
+            
+            valid_icons = set()
+            for category in WIKI_ICON_MANIFEST.get('categories', []):
+                for icon in category.get('icons', []):
+                    valid_icons.add(icon)
+            for icon in WIKI_ICON_MANIFEST.get('homepageIcons', []):
+                valid_icons.add(icon)
+
+            matched_icons = [name for name in icon_names if name in valid_icons]
+            
+            if len(matched_icons) < 5:
+                remaining = [icon for icon in WIKI_ICON_MANIFEST.get('homepageIcons', []) if icon not in matched_icons]
+                needed = 5 - len(matched_icons)
+                matched_icons.extend(remaining[:needed])
+
+            return matched_icons[:5]
+        except Exception as e:
+            logger.exception('Failed to generate icon: %s', e)
+            return WIKI_ICON_MANIFEST.get('homepageIcons', [])[:5]
