@@ -173,27 +173,20 @@ class TextProcessingManager:
     def generate_icon(self, wiki_name, context):
         icon_count = 15
 
-        all_icons = []
-        for category in WIKI_ICON_MANIFEST.get('categories', []):
-            category_name = category.get('name', '')
-            for icon in category.get('icons', []):
-                all_icons.append(f"{icon} ({category_name})")
-
-        icons_list_str = ', '.join(all_icons)
+        icons_list_str = ', '.join(WIKI_ICON_MANIFEST)
 
         system_content = f'''
-            You are an icon selection expert. I will provide you with a wiki name and a list of available icons. 
-            Each icon has a descriptive name and belongs to a category.
+            You are an icon selection expert. I will provide you with a wiki name and a list of available icons.
             Your task is to select exactly {icon_count} icons that best match the semantic meaning of the wiki name.
-            First, select the most relevant icons. If there aren't enough highly relevant icons, 
+            First, select the most relevant icons. If there aren't enough highly relevant icons,
             also include secondarily related ones to reach the required count.
-            
+
             Rules:
             1. Return exactly {icon_count} icon names from the list
             2. Only return the icon names, separated by commas
             3. Do not include any explanation or additional text
             4. Must return {icon_count} icons total, even if some are only secondarily related
-            
+
             Available icons: {icons_list_str}
         '''
 
@@ -210,31 +203,16 @@ class TextProcessingManager:
         try:
             res = self.app.llm_api.run(messages, context)
             icon_names = [name.strip() for name in re.split(r'[，,]', res) if name.strip()]
-            
-            valid_icons = set()
-            for category in WIKI_ICON_MANIFEST.get('categories', []):
-                for icon in category.get('icons', []):
-                    valid_icons.add(icon)
-            for icon in WIKI_ICON_MANIFEST.get('homepageIcons', []):
-                valid_icons.add(icon)
 
+            valid_icons = set(WIKI_ICON_MANIFEST)
             matched_icons = [name for name in icon_names if name in valid_icons]
-            
+
             if len(matched_icons) < icon_count:
-                all_valid_icons = []
-                for category in WIKI_ICON_MANIFEST.get('categories', []):
-                    all_valid_icons.extend(category.get('icons', []))
-                all_valid_icons.extend(WIKI_ICON_MANIFEST.get('homepageIcons', []))
-                
-                remaining = [icon for icon in all_valid_icons if icon not in matched_icons]
+                remaining = [icon for icon in WIKI_ICON_MANIFEST if icon not in matched_icons]
                 needed = icon_count - len(matched_icons)
                 matched_icons.extend(remaining[:needed])
 
             return matched_icons[:icon_count]
         except Exception as e:
             logger.exception('Failed to generate icon: %s', e)
-            all_icons = []
-            for category in WIKI_ICON_MANIFEST.get('categories', []):
-                all_icons.extend(category.get('icons', []))
-            all_icons.extend(WIKI_ICON_MANIFEST.get('homepageIcons', []))
-            return all_icons[:icon_count]
+            return WIKI_ICON_MANIFEST[:icon_count]
