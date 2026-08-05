@@ -171,6 +171,8 @@ class TextProcessingManager:
         return extracted_text.strip()
 
     def generate_icon(self, wiki_name, context):
+        icon_count = 15
+
         all_icons = []
         for category in WIKI_ICON_MANIFEST.get('categories', []):
             category_name = category.get('name', '')
@@ -181,14 +183,16 @@ class TextProcessingManager:
 
         system_content = f'''
             You are an icon selection expert. I will provide you with a wiki name and a list of available icons. 
-            Each icon has a descriptive name and belongs to a category. 
-            Your task is to select exactly 5 icons that best match the semantic meaning of the wiki name.
+            Each icon has a descriptive name and belongs to a category.
+            Your task is to select exactly {icon_count} icons that best match the semantic meaning of the wiki name.
+            First, select the most relevant icons. If there aren't enough highly relevant icons, 
+            also include secondarily related ones to reach the required count.
             
             Rules:
-            1. Return exactly 5 icon names from the list
+            1. Return exactly {icon_count} icon names from the list
             2. Only return the icon names, separated by commas
             3. Do not include any explanation or additional text
-            4. If you cannot find 5 matching icons, return the closest matches available
+            4. Must return {icon_count} icons total, even if some are only secondarily related
             
             Available icons: {icons_list_str}
         '''
@@ -199,7 +203,7 @@ class TextProcessingManager:
         }
         user_prompt = {
             "role": "user",
-            "content": f"Wiki name: {wiki_name}\n\nPlease select 5 icons that best match this wiki name."
+            "content": f"Wiki name: {wiki_name}\n\nPlease select {icon_count} icons that best match this wiki name. You must return exactly {icon_count} icons."
         }
         messages = [system_prompt, user_prompt]
 
@@ -216,12 +220,21 @@ class TextProcessingManager:
 
             matched_icons = [name for name in icon_names if name in valid_icons]
             
-            if len(matched_icons) < 5:
-                remaining = [icon for icon in WIKI_ICON_MANIFEST.get('homepageIcons', []) if icon not in matched_icons]
-                needed = 5 - len(matched_icons)
+            if len(matched_icons) < icon_count:
+                all_valid_icons = []
+                for category in WIKI_ICON_MANIFEST.get('categories', []):
+                    all_valid_icons.extend(category.get('icons', []))
+                all_valid_icons.extend(WIKI_ICON_MANIFEST.get('homepageIcons', []))
+                
+                remaining = [icon for icon in all_valid_icons if icon not in matched_icons]
+                needed = icon_count - len(matched_icons)
                 matched_icons.extend(remaining[:needed])
 
-            return matched_icons[:5]
+            return matched_icons[:icon_count]
         except Exception as e:
             logger.exception('Failed to generate icon: %s', e)
-            return WIKI_ICON_MANIFEST.get('homepageIcons', [])[:5]
+            all_icons = []
+            for category in WIKI_ICON_MANIFEST.get('categories', []):
+                all_icons.extend(category.get('icons', []))
+            all_icons.extend(WIKI_ICON_MANIFEST.get('homepageIcons', []))
+            return all_icons[:icon_count]
