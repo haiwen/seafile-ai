@@ -1,7 +1,6 @@
 import os
 import logging
 import re
-import json
 import base64
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType
