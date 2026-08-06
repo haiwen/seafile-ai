@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from seafile_ai import config
@@ -11,6 +12,7 @@ from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
 from seafile_ai.repo_metadata.utils import get_metadata_by_path
 from seafile_ai.search.repo_file_search_adapter import RepoFileSearchAdapter
 from seafile_ai.search.seasearch_api import SeaSearchAPI
+from seafile_ai.search.summary_vector_search_adapter import SummaryVectorSearchAdapter
 from seafile_ai.utils import get_file_content_by_seafobj, parse_file_content
 from seafile_ai.utils.tools import BasicTool
 
@@ -54,6 +56,24 @@ def truncate_text(content, limit):
     return content[:limit] + '...'
 
 
+def merge_search_candidates(*branches):
+    candidates = {}
+    scores = {}
+    for branch in branches:
+        for rank, candidate in enumerate(branch, start=1):
+            key = (candidate.get('repo_id'), candidate.get('path'))
+            if not all(key):
+                continue
+            if key not in candidates:
+                candidates[key] = candidate.copy()
+            else:
+                for field in ('ai_summary', 'snippet', 'title', 'modified_time'):
+                    if not candidates[key].get(field) and candidate.get(field):
+                        candidates[key][field] = candidate[field]
+            scores[key] = scores.get(key, 0) + 1 / (60 + rank)
+    return [candidates[key] for key in sorted(candidates, key=scores.get, reverse=True)]
+
+
 class DocumentsSearch(BasicTool):
     tool = {
         'type': 'function',
@@ -92,6 +112,7 @@ class DocumentsSearch(BasicTool):
     def __init__(self):
         self.seasearch_api = SeaSearchAPI(config.SEASEARCH_URL, config.SEASEARCH_TOKEN)
         self.search_adapter = RepoFileSearchAdapter(self.seasearch_api)
+        self.summary_vector_search_adapter = SummaryVectorSearchAdapter(self.seasearch_api)
         self.metadata_server_api = MetadataServerAPI('seafile-ai')
 
     def _search_documents(self, repo_id, query, count):
@@ -100,6 +121,16 @@ class DocumentsSearch(BasicTool):
             query,
             size=max(count * SEARCH_LIMIT_MULTIPLIER, 10),
             search_filename_only=False,
+        )
+
+    def _search_documents_by_vector(self, repo_id, query, context, count, app):
+        if not app.embedding_api:
+            return []
+        query_vector = app.embedding_api.generate(query, context)
+        return self.summary_vector_search_adapter.search(
+            repo_id,
+            query_vector,
+            size=max(count * SEARCH_LIMIT_MULTIPLIER, 10),
         )
 
     def _rerank_documents(self, query, candidates, context, count, app):
@@ -207,6 +238,16 @@ class DocumentsSearch(BasicTool):
             })
         return candidates
 
+    def _format_vector_candidates(self, search_results):
+        return [{
+            'repo_id': item.get('repo_id'),
+            'path': item.get('path'),
+            'title': item.get('title'),
+            'snippet': item.get('ai_summary', ''),
+            'ai_summary': item.get('ai_summary', ''),
+            'modified_time': item.get('modified_time'),
+        } for item in search_results if item.get('path')]
+
     def execute(self, query, context, app, tool_executor, call_back):
         assert isinstance(query, str), 'Your search query must be a string'
         sources_results = list(tool_executor.cache.get('sources_results', []))
@@ -225,13 +266,26 @@ class DocumentsSearch(BasicTool):
 
         logger.info('documents_search query: %s', query)
 
-        try:
-            search_results = self._search_documents(repo_id, query, count)
-        except Exception as error:
-            logger.warning('documents_search failed: %s', error)
-            search_results = []
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            keyword_future = executor.submit(self._search_documents, repo_id, query, count)
+            vector_future = executor.submit(
+                self._search_documents_by_vector, repo_id, query, context, count, app
+            )
+            try:
+                search_results = keyword_future.result()
+            except Exception as error:
+                logger.warning('documents_search failed: %s', error)
+                search_results = []
+            try:
+                vector_search_results = vector_future.result()
+            except Exception as error:
+                logger.warning('documents_search vector search failed: %s', error)
+                vector_search_results = []
 
-        candidates = self._format_candidates(search_results)
+        candidates = merge_search_candidates(
+            self._format_candidates(search_results),
+            self._format_vector_candidates(vector_search_results),
+        )
         reranked_candidates = self._rerank_documents(query, candidates, context, count, app)
         reranked_candidates = [
             candidate
@@ -244,7 +298,9 @@ class DocumentsSearch(BasicTool):
         cached_sources = sources_results[:]
         reference_offset = len(sources_results)
         for index, candidate in enumerate(reranked_candidates, start=1):
-            ai_summary = full_content_map.get(candidate['path']) or truncate_text(candidate['snippet'], SOURCE_CONTENT_LIMIT)
+            ai_summary = full_content_map.get(candidate['path']) or truncate_text(
+                candidate.get('ai_summary') or candidate['snippet'], SOURCE_CONTENT_LIMIT
+            )
             source = {
                 'type': 'seafile',
                 'repo_id': candidate['repo_id'],
@@ -268,7 +324,9 @@ class DocumentsSearch(BasicTool):
         if isinstance(call_back, ChatCallBacker):
             call_back('update_execution_detail', {
                 'SeaSearch query': query,
-                'Search results': len(search_results),
+                'Search results': len(search_results) + len(vector_search_results),
+                'Keyword results': len(search_results),
+                'Vector results': len(vector_search_results),
                 'New references': len(observation_results),
                 'Full content fetched': len(full_content_map),
             })

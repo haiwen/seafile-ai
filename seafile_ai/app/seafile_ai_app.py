@@ -8,6 +8,7 @@ from seafile_ai.utils.face_embedding_api import FaceEmbeddingAPI
 from seafile_ai.utils.seahub_api import SeahubAPI
 from seafile_ai.data_logging.data_logging import DataLogging
 from seafile_ai.utils.llm_api import LLMAPI
+from seafile_ai.utils.embedding_api import EmbeddingAPI
 
 class SeafileAIApp(object):
     def __init__(self, config):
@@ -22,6 +23,14 @@ class SeafileAIApp(object):
             config.DEFAULT_LLM_MODEL.get('key'),
             timeout=180,
         )
+        self.embedding_api = None
+        if config.EMBEDDING_MODEL:
+            self.embedding_api = EmbeddingAPI(
+                config.EMBEDDING_MODEL.get('model'),
+                config.EMBEDDING_MODEL.get('type', 'openai'),
+                config.EMBEDDING_MODEL.get('url'),
+                config.EMBEDDING_MODEL.get('key'),
+            )
         
         self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
         self.seahub_api = SeahubAPI(config.SEAFILE_SERVER_URL, config.SECRET_KEY)
