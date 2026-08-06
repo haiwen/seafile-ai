@@ -50,9 +50,6 @@ def get_ai_reply():
     session_uuid = data.get('session_uuid')
     repo_id = data.get('repo_id')
     repo_name = data.get('repo_name')
-    repo_owner = data.get('repo_owner')
-    group_id = data.get('group_id')
-    org_id = data.get('org_id')
     llm_model = data.get('llm_model')
     repo_prompt = data.get('repo_prompt', '')
     scenario = data.get('scenario', 'chat')
@@ -68,9 +65,6 @@ def get_ai_reply():
         'session_uuid': session_uuid,
         'repo_id': repo_id,
         'repo_name': repo_name,
-        'repo_owner': repo_owner,
-        'group_id': group_id,
-        'org_id': org_id,
         'repo_prompt': repo_prompt,
         'scenario': scenario,
     }
@@ -100,16 +94,10 @@ def generate_summary():
     path = data.get('path')
     repo_id = data.get('repo_id')
     obj_id = data.get('obj_id')
-    org_id = data.get('org_id')
-    repo_owner = data.get('repo_owner')
-    group_id = data.get('group_id')
     scenario = data.get('scenario', 'summary')
 
     context = {
         'repo_id': repo_id,
-        'repo_owner': repo_owner,
-        'group_id': group_id,
-        'org_id': org_id,
         'scenario': scenario,
     }
 
@@ -145,11 +133,8 @@ def image_caption():
     obj_id = data.get('obj_id')
     repo_id = data.get('repo_id')
     lang = data.get('lang')
-    org_id = data.get('org_id')
     capture_time = data.get('capture_time')
     address = data.get('address')
-    repo_owner = data.get('repo_owner')
-    group_id = data.get('group_id')
     scenario = data.get('scenario', 'image-caption')
 
     
@@ -164,9 +149,6 @@ def image_caption():
 
     context = {
         'repo_id': repo_id,
-        'repo_owner': repo_owner,
-        'group_id': group_id,
-        'org_id': org_id,
         'scenario': scenario,
     }
 
@@ -198,16 +180,10 @@ def generate_file_tags():
     obj_id = data.get('obj_id')
     repo_id = data.get('repo_id')
     file_type = data.get('file_type')
-    org_id = data.get('org_id')
-    repo_owner = data.get('repo_owner')
-    group_id = data.get('group_id')
     scenario = data.get('scenario', 'file-tags')
 
     context = {
         'repo_id': repo_id,
-        'repo_owner': repo_owner,
-        'group_id': group_id,
-        'org_id': org_id,
         'scenario': scenario,
     }
     if not path:
@@ -253,19 +229,13 @@ def ocr():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
-    org_id = data.get('org_id')
     obj_id = data.get('obj_id')
     repo_id = data.get('repo_id')
     file_name = data.get('file_name')
-    repo_owner = data.get('repo_owner')
-    group_id = data.get('group_id')
     scenario = data.get('scenario', 'ocr')
 
     context = {
         'repo_id': repo_id,
-        'repo_owner': repo_owner,
-        'group_id': group_id,
-        'org_id': org_id,
         'scenario': scenario,
     }
 
@@ -405,10 +375,7 @@ def translate():
 
     text = data.get('text')
     lang = data.get('lang')
-    org_id = data.get('org_id')
     repo_id = data.get('repo_id')
-    repo_owner = data.get('repo_owner')
-    group_id = data.get('group_id')
     scenario = data.get('scenario', 'translate')
 
     if not text:
@@ -418,9 +385,6 @@ def translate():
     
     context = { 
         'repo_id': repo_id,
-        'repo_owner': repo_owner,
-        'group_id': group_id,
-        'org_id': org_id,
         'scenario': scenario,
     }
 
@@ -448,10 +412,7 @@ def writing_assistant():
     text = data.get('text')
     writing_type = data.get('writing_type')
     custom_prompt = data.get('custom_prompt')
-    org_id = data.get('org_id')
     repo_id = data.get('repo_id')
-    repo_owner = data.get('repo_owner')
-    group_id = data.get('group_id')
     scenario = data.get('scenario', 'writing-assistant')
 
     if not text:
@@ -461,9 +422,6 @@ def writing_assistant():
 
     context = {
         'repo_id': repo_id,
-        'repo_owner': repo_owner,
-        'group_id': group_id,
-        'org_id': org_id,
         'scenario': scenario,
     }
 
