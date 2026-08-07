@@ -80,8 +80,8 @@ class LLMAPI:
                     'completion_tokens': token_usage.get('output_tokens', 0),
                     'total_tokens': token_usage.get('total_tokens', 0),
                 },
-                'username': context.get('username'),
-                'org_id': context.get('org_id'),
+                'repo_id': context.get('repo_id'),
+                'scenario': context.get('scenario', 'unknown'),
             }))
         except Exception as error:
             logger.warning('Chat completed but failure to log usages: %s', error)
