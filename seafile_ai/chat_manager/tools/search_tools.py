@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from seafile_ai import config
@@ -18,8 +17,6 @@ from seafile_ai.utils.tools import BasicTool
 
 logger = logging.getLogger(__name__)
 
-RERANK_LIMIT = 6
-FETCH_CONTENT_LIMIT = 4
 SOURCE_CONTENT_LIMIT = 3000
 SEARCH_LIMIT_MULTIPLIER = 3
 SUPPORTED_FULLTEXT_SUFFIXES = {'.md', '.markdown', '.sdoc', '.docx', '.pdf', '.pptx'}
@@ -58,9 +55,8 @@ def truncate_text(content, limit):
 
 def merge_search_candidates(*branches):
     candidates = {}
-    scores = {}
     for branch in branches:
-        for rank, candidate in enumerate(branch, start=1):
+        for candidate in branch:
             key = (candidate.get('repo_id'), candidate.get('path'))
             if not all(key):
                 continue
@@ -70,8 +66,7 @@ def merge_search_candidates(*branches):
                 for field in ('ai_summary', 'snippet', 'title', 'modified_time'):
                     if not candidates[key].get(field) and candidate.get(field):
                         candidates[key][field] = candidate[field]
-            scores[key] = scores.get(key, 0) + 1 / (60 + rank)
-    return [candidates[key] for key in sorted(candidates, key=scores.get, reverse=True)]
+    return list(candidates.values())
 
 
 class DocumentsSearch(BasicTool):
@@ -138,7 +133,7 @@ class DocumentsSearch(BasicTool):
             return candidates[:count]
 
         prompt_items = []
-        for index, item in enumerate(candidates[:RERANK_LIMIT], start=1):
+        for index, item in enumerate(candidates, start=1):
             prompt_items.append({
                 'index': index,
                 'title': item['title'],
@@ -195,7 +190,7 @@ class DocumentsSearch(BasicTool):
 
     def _load_full_contents(self, candidates):
         content_map = {}
-        for candidate in candidates[:FETCH_CONTENT_LIMIT]:
+        for candidate in candidates:
             path = candidate.get('path')
             repo_id = candidate.get('repo_id')
             if not path or not repo_id:
@@ -266,21 +261,17 @@ class DocumentsSearch(BasicTool):
 
         logger.info('documents_search query: %s', query)
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            keyword_future = executor.submit(self._search_documents, repo_id, query, count)
-            vector_future = executor.submit(
-                self._search_documents_by_vector, repo_id, query, context, count, app
-            )
-            try:
-                search_results = keyword_future.result()
-            except Exception as error:
-                logger.warning('documents_search failed: %s', error)
-                search_results = []
-            try:
-                vector_search_results = vector_future.result()
-            except Exception as error:
-                logger.warning('documents_search vector search failed: %s', error)
-                vector_search_results = []
+        try:
+            search_results = self._search_documents(repo_id, query, count)
+        except Exception as error:
+            logger.warning('documents_search failed: %s', error)
+            search_results = []
+
+        try:
+            vector_search_results = self._search_documents_by_vector(repo_id, query, context, count, app)
+        except Exception as error:
+            logger.warning('documents_search vector search failed: %s', error)
+            vector_search_results = []
 
         candidates = merge_search_candidates(
             self._format_candidates(search_results),
