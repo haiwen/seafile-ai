@@ -204,10 +204,15 @@ class TextProcessingManager:
             icon_names = [name.strip() for name in re.split(r'[，,]', res) if name.strip()]
 
             valid_icons = set(WIKI_ICON_MANIFEST)
-            matched_icons = [name for name in icon_names if name in valid_icons]
+            seen = set()
+            matched_icons = []
+            for name in icon_names:
+                if name in valid_icons and name not in seen:
+                    seen.add(name)
+                    matched_icons.append(name)
 
             if len(matched_icons) < icon_count:
-                remaining = [icon for icon in WIKI_ICON_MANIFEST if icon not in matched_icons]
+                remaining = [icon for icon in WIKI_ICON_MANIFEST if icon not in seen]
                 needed = icon_count - len(matched_icons)
                 matched_icons.extend(remaining[:needed])
 

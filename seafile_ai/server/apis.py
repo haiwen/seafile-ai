@@ -452,6 +452,9 @@ def generate_icon():
         logger.exception(e)
         return {'error_msg': 'Bad request.'}, 400
 
+    if not isinstance(data, dict):
+        return {'error_msg': 'Bad request.'}, 400
+
     wiki_name = data.get('wiki_name')
     username = data.get('username')
     org_id = data.get('org_id')
