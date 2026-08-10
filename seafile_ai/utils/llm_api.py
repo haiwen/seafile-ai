@@ -72,6 +72,8 @@ class LLMAPI:
         return response.choices[0].message.to_dict() if 'tools' in kwargs else response.choices[0].message.content
 
     def logger_usage(self, token_usage, context, model=None):
+        if context.get('log_data') is False:
+            return
         try:
             self.data_logger.log_data(MODEL_USAGE_STATISTIC_CHANNEL_NAME, json.dumps({
                 'model': self.model_id if not model else model,
