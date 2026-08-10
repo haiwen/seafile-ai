@@ -438,3 +438,50 @@ def writing_assistant():
         return {'error_msg': 'Internal server error.'}, 500
 
     return {'content': content}, 200
+
+
+@flask_app.route('/api/v1/search-icons/', methods=['POST'])
+def search_icons():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Bad request.'}, 400
+
+    if not isinstance(data, dict):
+        return {'error_msg': 'Bad request.'}, 400
+
+    query = data.get('query')
+    count = data.get('count', 15)
+    username = data.get('username')
+    org_id = data.get('org_id')
+
+    if not query:
+        return {'error_msg': 'query invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    try:
+        count = int(count)
+        if count <= 0 or count > 50:
+            count = 15
+    except (ValueError, TypeError):
+        count = 15
+
+    context = {
+        'username': username,
+        'org_id': org_id,
+        'log_data': False,
+    }
+
+    try:
+        icons = flask_app.app.text_processing_manager.search_icons(query, count, context)
+    except Exception as e:
+        logger.exception(e)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'icons': icons}, 200

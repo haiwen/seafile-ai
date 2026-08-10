@@ -7,6 +7,7 @@ from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
     resize_image_binary, is_pdf
 from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
+from seafile_ai.utils.icon_constants import WIKI_ICON_MANIFEST
 
 logger = logging.getLogger(__name__)
 
@@ -167,3 +168,53 @@ class TextProcessingManager:
             return ''
 
         return extracted_text.strip()
+
+    def search_icons(self, query, count, context):
+        icons_list_str = ', '.join(WIKI_ICON_MANIFEST)
+
+        system_content = f'''
+            You are an icon selection expert. I will provide you with a query term and a list of available icons.
+            Your task is to select exactly {count} icons that best match the semantic meaning of the query.
+            First, select the most relevant icons. If there aren't enough highly relevant icons,
+            also include secondarily related ones to reach the required count.
+
+            Rules:
+            1. Return exactly {count} icon names from the list
+            2. Only return the icon names, separated by commas
+            3. Do not include any explanation or additional text
+            4. Must return {count} icons total, even if some are only secondarily related
+
+            Available icons: {icons_list_str}
+        '''
+
+        system_prompt = {
+            "role": "system",
+            "content": system_content
+        }
+        user_prompt = {
+            "role": "user",
+            "content": f"Query: {query}\n\nPlease select {count} icons that best match this query. You must return exactly {count} icons."
+        }
+        messages = [system_prompt, user_prompt]
+
+        try:
+            res = self.app.llm_api.run(messages, context)
+            icon_names = [name.strip() for name in re.split(r'[，,]', res) if name.strip()]
+
+            valid_icons = set(WIKI_ICON_MANIFEST)
+            seen = set()
+            matched_icons = []
+            for name in icon_names:
+                if name in valid_icons and name not in seen:
+                    seen.add(name)
+                    matched_icons.append(name)
+
+            if len(matched_icons) < count:
+                remaining = [icon for icon in WIKI_ICON_MANIFEST if icon not in seen]
+                needed = count - len(matched_icons)
+                matched_icons.extend(remaining[:needed])
+
+            return matched_icons[:count]
+        except Exception as e:
+            logger.exception('Failed to search icons: %s', e)
+            return WIKI_ICON_MANIFEST[:count]
