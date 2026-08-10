@@ -169,22 +169,20 @@ class TextProcessingManager:
 
         return extracted_text.strip()
 
-    def generate_icon(self, wiki_name, context):
-        icon_count = 15
-
+    def search_icons(self, query, count, context):
         icons_list_str = ', '.join(WIKI_ICON_MANIFEST)
 
         system_content = f'''
-            You are an icon selection expert. I will provide you with a wiki name and a list of available icons.
-            Your task is to select exactly {icon_count} icons that best match the semantic meaning of the wiki name.
+            You are an icon selection expert. I will provide you with a query term and a list of available icons.
+            Your task is to select exactly {count} icons that best match the semantic meaning of the query.
             First, select the most relevant icons. If there aren't enough highly relevant icons,
             also include secondarily related ones to reach the required count.
 
             Rules:
-            1. Return exactly {icon_count} icon names from the list
+            1. Return exactly {count} icon names from the list
             2. Only return the icon names, separated by commas
             3. Do not include any explanation or additional text
-            4. Must return {icon_count} icons total, even if some are only secondarily related
+            4. Must return {count} icons total, even if some are only secondarily related
 
             Available icons: {icons_list_str}
         '''
@@ -195,7 +193,7 @@ class TextProcessingManager:
         }
         user_prompt = {
             "role": "user",
-            "content": f"Wiki name: {wiki_name}\n\nPlease select {icon_count} icons that best match this wiki name. You must return exactly {icon_count} icons."
+            "content": f"Query: {query}\n\nPlease select {count} icons that best match this query. You must return exactly {count} icons."
         }
         messages = [system_prompt, user_prompt]
 
@@ -211,12 +209,12 @@ class TextProcessingManager:
                     seen.add(name)
                     matched_icons.append(name)
 
-            if len(matched_icons) < icon_count:
+            if len(matched_icons) < count:
                 remaining = [icon for icon in WIKI_ICON_MANIFEST if icon not in seen]
-                needed = icon_count - len(matched_icons)
+                needed = count - len(matched_icons)
                 matched_icons.extend(remaining[:needed])
 
-            return matched_icons[:icon_count]
+            return matched_icons[:count]
         except Exception as e:
-            logger.exception('Failed to generate icon: %s', e)
-            return WIKI_ICON_MANIFEST[:icon_count]
+            logger.exception('Failed to search icons: %s', e)
+            return WIKI_ICON_MANIFEST[:count]
