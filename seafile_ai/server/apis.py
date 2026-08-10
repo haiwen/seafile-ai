@@ -459,6 +459,7 @@ def search_icons():
     count = data.get('count', 15)
     username = data.get('username')
     org_id = data.get('org_id')
+    scenario = data.get('scenario', 'search-icons')
 
     if not query:
         return {'error_msg': 'query invalid.'}, 400
@@ -474,7 +475,8 @@ def search_icons():
 
     context = {
         'username': username,
-        'org_id': org_id
+        'org_id': org_id,
+        'scenario': scenario,
     }
 
     try:
