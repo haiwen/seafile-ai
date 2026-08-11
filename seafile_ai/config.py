@@ -219,8 +219,8 @@ yaml_file_path = os.path.join(CONF_DIR, os.environ.get('SEAFILE_AI_CONFIG_NAME',
 configs = _ConfigParser(yaml_file_path, 'seafile-ai')
 LLM_MODELS = configs.get('LLM_MODELS', [])
 EMBEDDING_MODEL = configs.get('EMBEDDING_MODEL', {})
-if EMBEDDING_MODEL and not check_llm_validated(EMBEDDING_MODEL):
-    raise ValueError('EMBEDDING_MODEL is invalid')
+if not check_llm_validated(EMBEDDING_MODEL):
+    raise ValueError('EMBEDDING_MODEL is not set or invalid')
 
 if LLM_MODELS:
     LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL = get_llm_models_maps(LLM_MODELS)
