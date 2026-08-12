@@ -12,7 +12,7 @@ class SummaryVectorSearchAdapter:
             'query_field': 'vec',
             'k': size,
             'return_fields': [
-                'repo_id', 'path', 'filename', 'obj_id', 'ai_summary',
+                'repo_id', 'path', 'filename', 'ai_summary',
                 'ai_summary_mtime', 'mtime',
             ],
             'vector': query_vector,
