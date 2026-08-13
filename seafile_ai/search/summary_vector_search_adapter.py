@@ -12,7 +12,7 @@ class SummaryVectorSearchAdapter:
             'query_field': 'vec',
             'k': size,
             'return_fields': [
-                'repo_id', 'path', 'filename', 'ai_summary',
+                'repo_id', 'row_id', 'path', 'filename', 'ai_summary',
                 'ai_summary_mtime', 'mtime',
             ],
             'vector': query_vector,
@@ -28,6 +28,7 @@ class SummaryVectorSearchAdapter:
                 continue
             results.append({
                 'repo_id': self._get_field(fields, 'repo_id') or repo_id,
+                'row_id': self._get_field(fields, 'row_id'),
                 'path': path,
                 'title': self._get_field(fields, 'filename') or os.path.basename(path),
                 'ai_summary': self._get_field(fields, 'ai_summary') or '',
