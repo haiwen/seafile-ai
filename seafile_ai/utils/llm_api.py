@@ -41,6 +41,9 @@ class LLMAPI:
         try:
             if 'gpt-5' in self.model_id:
                 kwargs['temperature'] = 1
+                # Chat Completions cannot combine GPT-5 reasoning with function tools.
+                if kwargs.get('tools'):
+                    kwargs['reasoning_effort'] = 'none'
             response = litellm.completion(
                 model=self.model,
                 base_url=self.base_url,
