@@ -14,8 +14,8 @@ class MarkdownGenerator(BasicTool):
                         'type': 'string',
                         'description': """This parameter represents the filename of the generated Markdown file (or document), which must follow these rules:
 - Must end with .md
-- Use lowercase letters, numbers, hyphens, or underscores
-- Should reflect the document content""",
+- If the user specifies filename, must use it as the filename without translating, transliterating, or changing its language; append .md if needed
+- Otherwise, use a concise filename in the same language as the generated document, unless another document language is explicitly requested""",
                     },
                     'content': {
                         'type': 'string',
