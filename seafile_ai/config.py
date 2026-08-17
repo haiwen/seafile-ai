@@ -221,6 +221,13 @@ LLM_MODELS = configs.get('LLM_MODELS', [])
 EMBEDDING_MODEL = configs.get('EMBEDDING_MODEL', {})
 if not check_llm_validated(EMBEDDING_MODEL):
     raise ValueError('EMBEDDING_MODEL is not set or invalid')
+EMBEDDING_DIMENSIONS = 1024
+try:
+    dimensions = int(EMBEDDING_MODEL.get('dimensions', EMBEDDING_DIMENSIONS))
+    if dimensions > 0:
+        EMBEDDING_DIMENSIONS = dimensions
+except (TypeError, ValueError):
+    pass
 
 if LLM_MODELS:
     LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL = get_llm_models_maps(LLM_MODELS)

@@ -3,11 +3,10 @@ import math
 
 import litellm
 
+from seafile_ai.config import EMBEDDING_DIMENSIONS
+
 
 logger = logging.getLogger(__name__)
-
-EMBEDDING_DIMENSIONS = 1536
-
 
 class EmbeddingAPI:
     def __init__(self, model, model_type='openai', base_url=None, api_key=None, timeout=30):
