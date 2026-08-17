@@ -43,6 +43,7 @@ class EmbeddingAPI:
             response = litellm.embedding(
                 model=self.model,
                 input=contents,
+                dimensions=EMBEDDING_DIMENSIONS,
                 api_base=self.base_url,
                 api_key=self.api_key,
                 custom_llm_provider=self.model_type,
