@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import time
 from pathlib import Path
 
 from seafile_ai import config
@@ -121,20 +122,34 @@ class DocumentsSearch(BasicTool):
     def _search_documents_by_vector(self, repo_id, query, context, count, app):
         if not app.embedding_api:
             return []
+        t0 = time.time()
         query_vector = app.embedding_api.generate(query, context)
+        t1 = time.time()
         logger.info(
-            'Document Search query embedding generated, repo_id=%s, dimensions=%d',
-            repo_id, len(query_vector)
+            '[Chat Step Analysis] Embedding generation: %.3fs, repo_id=%s, dimensions=%d',
+            t1 - t0, repo_id, len(query_vector)
         )
-        return self.summary_vector_search_adapter.search(
+        results = self.summary_vector_search_adapter.search(
             repo_id,
             query_vector,
             size=max(count * SEARCH_LIMIT_MULTIPLIER, 10),
         )
+        t2 = time.time()
+        logger.info(
+            '[Chat Step Analysis] Vector SeaSearch query: %.3fs, repo_id=%s, results=%d',
+            t2 - t1, repo_id, len(results)
+        )
+        logger.info(
+            '[Chat Step Analysis] Vector search total: %.3fs, repo_id=%s',
+            t2 - t0, repo_id
+        )
+        return results
 
     def _rerank_documents(self, query, candidates, context, count, app):
         if len(candidates) <= 1:
             return candidates[:count]
+
+        t0 = time.time()
 
         prompt_items = []
         for index, item in enumerate(candidates, start=1):
@@ -170,6 +185,12 @@ class DocumentsSearch(BasicTool):
             logger.warning('documents_search rerank failed: %s', error)
             ranked_indices = []
 
+        t1 = time.time()
+        logger.info(
+            '[Chat Step Analysis] LLM rerank: %.3fs, candidates=%d, query=%s',
+            t1 - t0, len(candidates), query
+        )
+
         ranked = []
         used = set()
         for index in ranked_indices:
@@ -193,6 +214,7 @@ class DocumentsSearch(BasicTool):
         return ranked[:count]
 
     def _load_full_contents(self, candidates):
+        t0 = time.time()
         content_map = {}
         for candidate in candidates:
             path = candidate.get('path')
@@ -218,6 +240,11 @@ class DocumentsSearch(BasicTool):
                 except Exception as error:
                     logger.warning('documents_search parse file failed: %s', error)
             content_map[path] = truncate_text(content, SOURCE_CONTENT_LIMIT) if content else ''
+        t1 = time.time()
+        logger.info(
+            '[Chat Step Analysis] Full content loading: %.3fs, documents=%d',
+            t1 - t0, len(candidates)
+        )
         return content_map
 
     def _format_candidates(self, search_results):
@@ -265,11 +292,19 @@ class DocumentsSearch(BasicTool):
 
         logger.info('documents_search query: %s', query)
 
+        t_total = time.time()
+
+        t0 = time.time()
         try:
             search_results = self._search_documents(repo_id, query, count)
         except Exception as error:
             logger.warning('documents_search failed: %s', error)
             search_results = []
+        t1 = time.time()
+        logger.info(
+            '[Chat Step Analysis] Keyword SeaSearch query: %.3fs, repo_id=%s, results=%d',
+            t1 - t0, repo_id, len(search_results)
+        )
 
         try:
             vector_search_results = self._search_documents_by_vector(repo_id, query, context, count, app)
@@ -281,13 +316,23 @@ class DocumentsSearch(BasicTool):
             self._format_candidates(search_results),
             self._format_vector_candidates(vector_search_results),
         )
+        t_merge = time.time()
+        logger.info(
+            '[Chat Step Analysis] Merge candidates: %.3fs, total=%d (keyword=%d, vector=%d)',
+            t_merge - t1, len(candidates), len(search_results), len(vector_search_results)
+        )
+
         reranked_candidates = self._rerank_documents(query, candidates, context, count, app)
+        t_rerank = time.time()
+
         reranked_candidates = [
             candidate
             for candidate in reranked_candidates
             if (candidate.get('repo_id'), candidate.get('path')) not in existing_source_keys
         ]
+
         full_content_map = self._load_full_contents(reranked_candidates)
+        t_content = time.time()
 
         observation_results = []
         cached_sources = sources_results[:]
@@ -326,4 +371,9 @@ class DocumentsSearch(BasicTool):
                 'Full content fetched': len(full_content_map),
             })
 
+        t_end = time.time()
+        logger.info(
+            '[Chat Step Analysis] documents_search total: %.3fs, query=%s, candidates=%d, final=%d',
+            t_end - t_total, query, len(candidates), len(observation_results)
+        )
         return observation_results
