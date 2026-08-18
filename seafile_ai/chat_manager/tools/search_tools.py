@@ -179,7 +179,7 @@ class DocumentsSearch(BasicTool):
         ]
 
         try:
-            response = app.llm_api.run(messages, context, json_mode=True)
+            response = app.llm_api.run(messages, context, json_mode=True, temperature=0.1)
             ranked_indices = json.loads(response).get('indices', [])
         except Exception as error:
             logger.warning('documents_search rerank failed: %s', error)
