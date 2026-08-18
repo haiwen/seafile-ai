@@ -14,6 +14,7 @@ from seafile_ai.search.repo_file_search_adapter import RepoFileSearchAdapter
 from seafile_ai.search.seasearch_api import SeaSearchAPI
 from seafile_ai.search.summary_vector_search_adapter import SummaryVectorSearchAdapter
 from seafile_ai.utils import get_file_content_by_seafobj, parse_file_content
+from seafile_ai.utils.llm_api import get_llm_client_by_model_id
 from seafile_ai.utils.tools import BasicTool
 
 logger = logging.getLogger(__name__)
@@ -145,7 +146,7 @@ class DocumentsSearch(BasicTool):
         )
         return results
 
-    def _rerank_documents(self, query, candidates, context, count, app):
+    def _rerank_documents(self, query, candidates, context, count, app, model=None):
         if len(candidates) <= 1:
             return candidates[:count]
 
@@ -179,7 +180,11 @@ class DocumentsSearch(BasicTool):
         ]
 
         try:
-            response = app.llm_api.run(messages, context, json_mode=True, temperature=0.1)
+            if model:
+                rerank_llm = get_llm_client_by_model_id(app.data_logger, model)
+            else:
+                rerank_llm = app.llm_api
+            response = rerank_llm.run(messages, context, json_mode=True, temperature=0.1)
             ranked_indices = json.loads(response).get('indices', [])
         except Exception as error:
             logger.warning('documents_search rerank failed: %s', error)
@@ -274,7 +279,7 @@ class DocumentsSearch(BasicTool):
             'modified_time': item.get('modified_time'),
         } for item in search_results if item.get('path')]
 
-    def execute(self, query, context, app, tool_executor, call_back):
+    def execute(self, query, context, app, model, tool_executor, call_back):
         assert isinstance(query, str), 'Your search query must be a string'
         sources_results = list(tool_executor.cache.get('sources_results', []))
         existing_source_keys = {
@@ -322,7 +327,7 @@ class DocumentsSearch(BasicTool):
             t_merge - t1, len(candidates), len(search_results), len(vector_search_results)
         )
 
-        reranked_candidates = self._rerank_documents(query, candidates, context, count, app)
+        reranked_candidates = self._rerank_documents(query, candidates, context, count, app, model)
         t_rerank = time.time()
 
         reranked_candidates = [
