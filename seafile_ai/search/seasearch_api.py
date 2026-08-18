@@ -40,3 +40,8 @@ class SeaSearchAPI:
         url = self.server + '/api/unified_search'
         response = requests.post(url, headers=self.headers, data=data, timeout=self.timeout)
         return parse_response(response)
+
+    def vector_search(self, index_name, data):
+        url = self.server + '/api/' + index_name + '/_search/vector'
+        response = requests.post(url, headers=self.headers, json=data, timeout=self.timeout)
+        return parse_response(response)

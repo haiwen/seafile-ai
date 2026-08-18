@@ -118,6 +118,43 @@ def generate_summary():
     return {'summary': summary}, 200
 
 
+@flask_app.route('/api/v1/embeddings/batch', methods=['POST'])
+def batch_generate_embeddings():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Bad request.'}, 400
+
+    contents = data.get('contents')
+    if not isinstance(contents, list) or not contents or len(contents) > 50:
+        return {'error_msg': 'contents invalid.'}, 400
+    if not all(isinstance(content, str) and content for content in contents):
+        return {'error_msg': 'contents invalid.'}, 400
+    if not flask_app.app.embedding_api:
+        return {'error_msg': 'Embedding model is not configured.'}, 503
+
+    context = {
+        'username': data.get('username'),
+        'org_id': data.get('org_id'),
+        'scenario': data.get('scenario', 'summary_index'),
+    }
+    try:
+        embeddings = flask_app.app.embedding_api.batch_generate(contents, context)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {
+        'model': flask_app.app.embedding_api.model_id,
+        'embeddings': embeddings,
+    }, 200
+
+
 @flask_app.route('/api/v1/image-caption/', methods=['POST'])
 def image_caption():
     is_valid = check_auth_token(request)
