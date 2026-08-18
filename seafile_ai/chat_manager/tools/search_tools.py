@@ -153,12 +153,15 @@ class DocumentsSearch(BasicTool):
         t0 = time.time()
 
         prompt_items = []
+        snippet_lengths = []
         for index, item in enumerate(candidates, start=1):
+            snippet = truncate_text(strip_mark_tags(item['snippet']), 400)
+            snippet_lengths.append(len(snippet))
             prompt_items.append({
                 'index': index,
                 'title': item['title'],
                 'path': item['path'],
-                'snippet': truncate_text(strip_mark_tags(item['snippet']), 400),
+                'snippet': snippet,
             })
 
         messages = [
@@ -178,6 +181,14 @@ class DocumentsSearch(BasicTool):
                 }, ensure_ascii=False),
             },
         ]
+
+        avg_snippet_len = sum(snippet_lengths) / len(snippet_lengths) if snippet_lengths else 0
+        max_snippet_len = max(snippet_lengths) if snippet_lengths else 0
+        total_snippet_chars = sum(snippet_lengths)
+        logger.info(
+            '[Chat Step Analysis] Rerank input: candidates=%d, avg_snippet_len=%d, max_snippet_len=%d, total_snippet_chars=%d',
+            len(candidates), int(avg_snippet_len), max_snippet_len, total_snippet_chars
+        )
 
         try:
             if model:
