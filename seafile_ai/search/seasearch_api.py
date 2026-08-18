@@ -43,5 +43,20 @@ class SeaSearchAPI:
 
     def vector_search(self, index_name, data):
         url = self.server + '/api/' + index_name + '/_search/vector'
-        response = requests.post(url, headers=self.headers, json=data, timeout=self.timeout)
+        logger.info(
+            'SeaSearch vector search request, index_name=%s, url=%s, vector_dimensions=%d, k=%s',
+            index_name, url, len(data.get('vector') or []), data.get('k')
+        )
+        try:
+            response = requests.post(url, headers=self.headers, json=data, timeout=self.timeout)
+        except requests.RequestException as error:
+            logger.info('SeaSearch vector search request failed, index_name=%s, error=%s', index_name, error)
+            raise
+        if response.status_code >= 400:
+            logger.info(
+                'SeaSearch vector search response failed, index_name=%s, status=%s, body=%s',
+                index_name, response.status_code, response.text[:1000]
+            )
+        else:
+            logger.info('SeaSearch vector search response, index_name=%s, status=%s', index_name, response.status_code)
         return parse_response(response)

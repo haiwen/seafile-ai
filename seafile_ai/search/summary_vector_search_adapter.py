@@ -1,6 +1,10 @@
 import os
+import logging
 
 from seafile_ai.search.constants import SUMMARY_VECTOR_INDEX_PREFIX
+
+
+logger = logging.getLogger(__name__)
 
 
 class SummaryVectorSearchAdapter:
@@ -8,6 +12,11 @@ class SummaryVectorSearchAdapter:
         self.seasearch_api = seasearch_api
 
     def search(self, repo_id, query_vector, size=10):
+        index_name = SUMMARY_VECTOR_INDEX_PREFIX + repo_id
+        logger.info(
+            'Summary vector search started, repo_id=%s, index_name=%s, vector_dimensions=%d, size=%d',
+            repo_id, index_name, len(query_vector), size
+        )
         data = {
             'query_field': 'vec',
             'k': size,
@@ -18,8 +27,9 @@ class SummaryVectorSearchAdapter:
             'vector': query_vector,
             '_source': False,
         }
-        response = self.seasearch_api.vector_search(SUMMARY_VECTOR_INDEX_PREFIX + repo_id, data) or {}
+        response = self.seasearch_api.vector_search(index_name, data) or {}
         hits = response.get('hits', {}).get('hits', [])
+        logger.info('Summary vector search completed, repo_id=%s, hit_count=%d', repo_id, len(hits))
         results = []
         for hit in hits:
             fields = hit.get('fields', {})

@@ -122,6 +122,10 @@ class DocumentsSearch(BasicTool):
         if not app.embedding_api:
             return []
         query_vector = app.embedding_api.generate(query, context)
+        logger.info(
+            'Document Search query embedding generated, repo_id=%s, dimensions=%d',
+            repo_id, len(query_vector)
+        )
         return self.summary_vector_search_adapter.search(
             repo_id,
             query_vector,
@@ -270,7 +274,7 @@ class DocumentsSearch(BasicTool):
         try:
             vector_search_results = self._search_documents_by_vector(repo_id, query, context, count, app)
         except Exception as error:
-            logger.warning('documents_search vector search failed: %s', error)
+            logger.info('Document Search vector search failed, repo_id=%s, query=%r, error=%s', repo_id, query, error)
             vector_search_results = []
 
         candidates = merge_search_candidates(
