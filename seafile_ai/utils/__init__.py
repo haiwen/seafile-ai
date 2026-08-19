@@ -160,7 +160,9 @@ def remove_sources_content_and_snippets(sources):
 
 def object_to_json_str(obj):
     if isinstance(obj, str):
-        return obj
+        return str(obj)
+    if isinstance(obj, (int, float, bool)) or obj is None:
+        return json.dumps(obj, ensure_ascii=False)
     try:
         return '```json\n' + json.dumps(obj, indent=4, ensure_ascii=False) + '\n```'
     except Exception:
