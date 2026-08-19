@@ -17,7 +17,14 @@ def load_module(module_name, source_path, modules):
     return module
 
 
-def load_file_tools(query_metadata_rows, metadata_enabled=True, default_max_records=100):
+def load_file_tools(
+    query_metadata_rows,
+    metadata_enabled=True,
+    default_max_records=100,
+    get_repo_info=None,
+    get_file_id_by_path=None,
+    parse_file=None,
+):
     config_module = ModuleType('seafile_ai.config')
     config_module.DEFAULT_LIST_FILES_MAX_RECORDS = default_max_records
     seafile_ai_module = ModuleType('seafile_ai')
@@ -43,6 +50,11 @@ def load_file_tools(query_metadata_rows, metadata_enabled=True, default_max_reco
     metadata_utils_module = ModuleType('seafile_ai.repo_metadata.utils')
     metadata_utils_module.query_metadata_rows = query_metadata_rows
     metadata_utils_module.is_repo_metadata_enabled = Mock(return_value=metadata_enabled)
+    metadata_utils_module.get_repo_info = get_repo_info or Mock()
+    metadata_utils_module.get_file_id_by_path = get_file_id_by_path or Mock()
+
+    utils_module = ModuleType('seafile_ai.utils')
+    utils_module.parse_file = parse_file or Mock()
 
     tools_module = ModuleType('seafile_ai.utils.tools')
     tools_module.BasicTool = object
@@ -57,6 +69,7 @@ def load_file_tools(query_metadata_rows, metadata_enabled=True, default_max_reco
             'seafile_ai.repo_metadata.constants': constants_module,
             'seafile_ai.repo_metadata.metadata_server_api': metadata_server_api_module,
             'seafile_ai.repo_metadata.utils': metadata_utils_module,
+            'seafile_ai.utils': utils_module,
             'seafile_ai.utils.tools': tools_module,
         },
     )
@@ -88,4 +101,93 @@ class ListFilesTest(unittest.TestCase):
 
         self.assertEqual(result['records'], [])
         self.assertIn('Tell the user to enable library metadata', result['warning'])
+        query_metadata_rows.assert_not_called()
+
+
+class ReadFilesTest(unittest.TestCase):
+    def test_reads_content_by_path_without_metadata(self):
+        query_metadata_rows = Mock()
+        get_repo_info = Mock(return_value={'repo_id': 'repo-id'})
+        get_file_id_by_path = Mock(return_value='obj-id')
+        parse_file = Mock(return_value='Project plan')
+        module = load_file_tools(
+            query_metadata_rows,
+            get_repo_info=get_repo_info,
+            get_file_id_by_path=get_file_id_by_path,
+            parse_file=parse_file,
+        )
+
+        result = module.ReadFiles().execute(['/documents/plan.sdoc'], {'repo_id': 'repo-id'}, None)
+
+        self.assertEqual(result, [{
+            'path': '/documents/plan.sdoc',
+            'content': 'Project plan',
+        }])
+        get_repo_info.assert_called_once_with('repo-id')
+        get_file_id_by_path.assert_called_once_with({'repo_id': 'repo-id'}, '/documents/plan.sdoc')
+        parse_file.assert_called_once_with('/documents/plan.sdoc', 'repo-id', 'obj-id')
+        query_metadata_rows.assert_not_called()
+
+    def test_reads_every_requested_file(self):
+        query_metadata_rows = Mock()
+        get_repo_info = Mock(return_value={'repo_id': 'repo-id'})
+        get_file_id_by_path = Mock(side_effect=['obj-%d' % index for index in range(6)])
+        parse_file = Mock(side_effect=['content-%d' % index for index in range(6)])
+        module = load_file_tools(
+            query_metadata_rows,
+            get_repo_info=get_repo_info,
+            get_file_id_by_path=get_file_id_by_path,
+            parse_file=parse_file,
+        )
+        file_paths = ['/documents/plan-%d.sdoc' % index for index in range(6)]
+
+        result = module.ReadFiles().execute(file_paths, {'repo_id': 'repo-id'}, None)
+
+        self.assertEqual(result, [
+            {'path': file_path, 'content': 'content-%d' % index}
+            for index, file_path in enumerate(file_paths)
+        ])
+        self.assertEqual(get_file_id_by_path.call_count, 6)
+        self.assertEqual(parse_file.call_count, 6)
+
+    def test_returns_full_content_without_a_character_limit(self):
+        query_metadata_rows = Mock()
+        get_repo_info = Mock(return_value={'repo_id': 'repo-id'})
+        get_file_id_by_path = Mock(return_value='obj-id')
+        content = 'a' * 6001
+        parse_file = Mock(return_value=content)
+        module = load_file_tools(
+            query_metadata_rows,
+            get_repo_info=get_repo_info,
+            get_file_id_by_path=get_file_id_by_path,
+            parse_file=parse_file,
+        )
+
+        result = module.ReadFiles().execute(['/documents/plan.sdoc'], {'repo_id': 'repo-id'}, None)
+
+        self.assertEqual(result, [{'path': '/documents/plan.sdoc', 'content': content}])
+
+    def test_reports_unavailable_files_without_reading_them(self):
+        query_metadata_rows = Mock()
+        get_repo_info = Mock(return_value={'repo_id': 'repo-id'})
+        get_file_id_by_path = Mock(return_value=None)
+        parse_file = Mock()
+        module = load_file_tools(
+            query_metadata_rows,
+            get_repo_info=get_repo_info,
+            get_file_id_by_path=get_file_id_by_path,
+            parse_file=parse_file,
+        )
+
+        result = module.ReadFiles().execute(
+            ['/documents/missing.sdoc', '/documents/image.png'],
+            {'repo_id': 'repo-id'},
+            None,
+        )
+
+        self.assertEqual(result, [
+            {'path': '/documents/missing.sdoc', 'error': 'File not found'},
+            {'path': '/documents/image.png', 'error': 'Unsupported file type'},
+        ])
+        parse_file.assert_not_called()
         query_metadata_rows.assert_not_called()
