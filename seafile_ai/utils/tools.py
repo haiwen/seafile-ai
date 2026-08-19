@@ -7,7 +7,7 @@ from seafile_ai.utils.thought_process_recorder import ThoughtProcessRecorder
 
 
 def filter_tool_calls_content(tool_name, results):
-    if tool_name == 'documents_search':
+    if tool_name in ('documents_search', 'read_files'):
         return remove_sources_content_and_snippets(deepcopy(results))
     return results
 

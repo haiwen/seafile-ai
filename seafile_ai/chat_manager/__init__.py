@@ -6,7 +6,7 @@ from seafile_ai import config
 from seafile_ai.db.models import ChatMessages
 from seafile_ai.chat_manager.memory import OpenAIMemory, build_memory_from_db
 from seafile_ai.chat_manager.system_prompts import MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT
-from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, MarkdownGenerator
+from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, MarkdownGenerator, ReadFiles
 from seafile_ai.chat_manager.utils import (
     build_chat_system_prompts,
     combine_attachments_to_message,
@@ -31,6 +31,7 @@ class BasicChat:
         )
         self.directory_tools = (
             ListFiles(),
+            ReadFiles(),
         )
         self.content_generators = (
             MarkdownGenerator(),
