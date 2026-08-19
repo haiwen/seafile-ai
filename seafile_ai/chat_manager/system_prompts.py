@@ -30,6 +30,16 @@ CHAT_GLOBAL_TOOL_RULES = """Global tool rules:
 - If no suitable tool is available, answer directly with the best available information.
 - If a tool result is already sufficient, stop calling tools and answer."""
 
+CHAT_LIST_FILES_TOOL_RULES = """List-files tool rules:
+- When the user asks to list, find, or summarize a specific number of files, pass that number as `max_records`. For example, "top 10 files" requires `max_records: 10`.
+- Use `directory` when the user specifies a directory. It searches that directory and its nested directories.
+- Use `name_contains` when the user specifies a file-name keyword.
+- Keep `include_dirs` false unless the user explicitly asks for directories."""
+
+CHAT_LIST_FILES_METADATA_DISABLED_RULE = """List-files metadata-disabled rule:
+- If `list_files` reports that metadata is disabled, clearly tell the user that the library administrator must enable library metadata before file listing, file-name filtering, AI summaries, or custom metadata can be used.
+- Do not ask the user for a directory, a file-name keyword, or an exported file list in this case, because `list_files` cannot query the library until metadata is enabled."""
+
 CHAT_OUTPUT_FORMAT_RULES = """Output format rules:
 - Each response must do exactly one thing: either return tool call(s) or return the final user-facing answer.
 - Do not mix tool calls with a natural-language final answer in the same response.

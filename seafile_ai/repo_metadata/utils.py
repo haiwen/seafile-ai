@@ -50,17 +50,39 @@ def get_metadata_by_row_ids(repo_id, row_ids, metadata_server_api):
     return query_result
 
 
-def query_metadata_rows(repo_id, metadata_server_api, sql):
+def query_metadata_rows(repo_id, metadata_server_api, sql, limit=-1, params=None):
+    """
+    Query metadata rows from the metadata server.
+
+    Args:
+        repo_id: The repository ID.
+        metadata_server_api: The MetadataServerAPI instance.
+        sql: The SQL query to execute.
+        limit: Maximum number of rows to return.
+                - -1 (default): return all records (paginated internally).
+                - > 0: return at most 'limit' rows, stops fetching after reaching the limit.
+        params: SQL query parameters.
+
+    Returns:
+        List of metadata row dicts.
+    """
     rows = []
     offset = 10000
     start = 0
 
     while True:
-        query_sql = f"{sql} LIMIT {start}, {offset}"
-        response_rows = metadata_server_api.query_rows(repo_id, query_sql, []).get('results', [])
+        fetch_limit = min(offset, limit) if limit > 0 else offset
+        query_sql = f"{sql} LIMIT {start}, {fetch_limit}"
+        response_rows = metadata_server_api.query_rows(repo_id, query_sql, params or []).get('results', [])
         if not response_rows:
             response_rows = []
         rows.extend(response_rows)
+
+        # If a positive limit is set and we've fetched enough, stop
+        if limit > 0 and len(rows) >= limit:
+            rows = rows[:limit]
+            break
+
         if len(response_rows) < offset:
             break
         start += offset
@@ -122,6 +144,12 @@ def get_repo_metadata(repo_id):
             LIMIT 1
         """)
         return session.execute(sql, {'repo_id': repo_id}).first()
+
+
+def is_repo_metadata_enabled(repo_id):
+    metadata = get_repo_metadata(repo_id)
+    return bool(metadata and metadata.enabled)
+
 
 def get_repo_info(repo_id):
     with seafile_db_session_class() as session:
