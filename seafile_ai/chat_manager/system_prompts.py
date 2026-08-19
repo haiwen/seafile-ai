@@ -63,7 +63,9 @@ When search tools were used:
 CHAT_SEARCH_POLICY = """Search policy:
 - Use search tools only when the answer needs library reference material.
 - If the request can be answered well without library references, answer directly.
-- Start with `documents_search`.
+- When an exact file path is known and the question needs that file's content, call `read_files`.
+- Use `list_files` when file names, paths, or metadata are needed to locate a file.
+- Otherwise, start with `documents_search`.
 - If `documents_search` is sufficient, stop searching and answer.
 - Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""

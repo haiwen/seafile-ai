@@ -1,10 +1,17 @@
 import json
+from pathlib import Path
+
 from seafile_ai import config
 from seafile_ai.chat_manager.utils.callbacker import ChatCallBacker
 from seafile_ai.repo_metadata.constants import METADATA_TABLE
 from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
-from seafile_ai.repo_metadata.utils import is_repo_metadata_enabled, query_metadata_rows
+from seafile_ai.repo_metadata.utils import is_repo_metadata_enabled, query_metadata_rows, get_file_id_by_path, \
+    get_repo_info
+from seafile_ai.utils import parse_file
 from seafile_ai.utils.tools import BasicTool
+
+
+SUPPORTED_READ_FILE_SUFFIXES = {'.md', '.markdown', '.sdoc', '.docx', '.pdf', '.pptx'}
 
 
 class ListFiles(BasicTool):
@@ -152,3 +159,67 @@ class ListFiles(BasicTool):
             response['warning'] = warning
 
         return response
+
+
+class ReadFiles(BasicTool):
+    tool = {
+        'type': 'function',
+        'function': {
+            'name': 'read_files',
+            'description': (
+                'Read the content of specific files in the current library. '
+                'This tool reads file content, not metadata.'
+            ),
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'file_paths': {
+                        'type': 'array',
+                        'description': 'Exact file paths in the current library.',
+                        'items': {
+                            'type': 'string',
+                        },
+                        'minItems': 1,
+                    },
+                },
+                'required': ['file_paths'],
+            },
+        },
+    }
+
+    def execute(self, file_paths, context, call_back):
+        assert isinstance(file_paths, list), 'file_paths must be a list'
+
+        repo_id = context['repo_id']
+        repo = get_repo_info(repo_id)
+        results = []
+        for file_path in file_paths:
+            if not isinstance(file_path, str) or not file_path.startswith('/'):
+                results.append({'path': file_path, 'error': 'Invalid file path'})
+                continue
+
+            if Path(file_path).suffix.lower() not in SUPPORTED_READ_FILE_SUFFIXES:
+                results.append({'path': file_path, 'error': 'Unsupported file type'})
+                continue
+
+            obj_id = get_file_id_by_path(repo, file_path) if repo else None
+            if not obj_id:
+                results.append({'path': file_path, 'error': 'File not found'})
+                continue
+
+            try:
+                content = parse_file(file_path, repo_id, obj_id)
+            except Exception as error:
+                results.append({'path': file_path, 'error': str(error)})
+                continue
+
+            results.append({
+                'path': file_path,
+                'content': content,
+            })
+
+        if isinstance(call_back, ChatCallBacker):
+            call_back('update_execution_detail', {
+                'Files read': sum('content' in item for item in results),
+            })
+        return results
