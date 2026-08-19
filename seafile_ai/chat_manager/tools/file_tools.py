@@ -116,6 +116,11 @@ class ListFiles(BasicTool):
         results = query_metadata_rows(repo_id, self.metadata_server_api, sql, params=params, limit=max_records + 1)
         is_truncated = len(results) > max_records
         results = results[:max_records]
+        for record in results:
+            parent_dir = record.get(parent_dir_col)
+            file_name = record.get(file_name_col)
+            if isinstance(parent_dir, str) and isinstance(file_name, str) and file_name:
+                record['path'] = f'{parent_dir.rstrip("/")}/{file_name}'
         warning = None
         if is_truncated:
             warning = (

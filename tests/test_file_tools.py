@@ -64,7 +64,8 @@ def load_file_tools(query_metadata_rows, metadata_enabled=True, default_max_reco
 class ListFilesTest(unittest.TestCase):
     def test_lists_files_with_configured_limit(self):
         records = [
-            {'_name': 'plan.sdoc', '_is_dir': False, '_ai_summary': 'Project plan'},
+            {'_parent_dir': '/', '_name': 'plan.sdoc', '_is_dir': False, '_ai_summary': 'Project plan'},
+            {'_parent_dir': '/plans', '_name': 'roadmap.sdoc', '_is_dir': False, '_ai_summary': 'Product roadmap'},
         ]
         query_metadata_rows = Mock(return_value=records)
         module = load_file_tools(query_metadata_rows, default_max_records=10)
@@ -77,7 +78,24 @@ class ListFilesTest(unittest.TestCase):
             'SELECT * FROM `Table1` WHERE (`_is_dir` = false OR `_is_dir` IS NULL) ORDER BY `_file_mtime` DESC',
             params=[], limit=11,
         )
-        self.assertEqual(result, {'records': records})
+        self.assertEqual(result, {
+            'records': [
+                {
+                    '_parent_dir': '/',
+                    '_name': 'plan.sdoc',
+                    '_is_dir': False,
+                    '_ai_summary': 'Project plan',
+                    'path': '/plan.sdoc',
+                },
+                {
+                    '_parent_dir': '/plans',
+                    '_name': 'roadmap.sdoc',
+                    '_is_dir': False,
+                    '_ai_summary': 'Product roadmap',
+                    'path': '/plans/roadmap.sdoc',
+                },
+            ],
+        })
 
     def test_returns_metadata_enablement_warning(self):
         query_metadata_rows = Mock()
