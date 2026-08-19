@@ -17,15 +17,33 @@ def load_module(module_name, source_path, modules):
     return module
 
 
-def load_file_tools(query_metadata_rows):
+def load_file_tools(query_metadata_rows, metadata_enabled=True, default_max_records=100):
+    config_module = ModuleType('seafile_ai.config')
+    config_module.DEFAULT_LIST_FILES_MAX_RECORDS = default_max_records
+    seafile_ai_module = ModuleType('seafile_ai')
+    seafile_ai_module.config = config_module
+
     callbacker_module = ModuleType('seafile_ai.chat_manager.utils.callbacker')
     callbacker_module.ChatCallBacker = type('ChatCallBacker', (), {})
+
+    columns_mock = Mock()
+    columns_mock.is_dir.name = '_is_dir'
+    columns_mock.parent_dir.name = '_parent_dir'
+    columns_mock.file_name.name = '_name'
+    columns_mock.file_mtime.name = '_file_mtime'
     constants_module = ModuleType('seafile_ai.repo_metadata.constants')
-    constants_module.METADATA_TABLE = type('MetadataTable', (), {'name': 'Table1'})
+    metadata_table_mock = Mock()
+    metadata_table_mock.name = 'Table1'
+    metadata_table_mock.columns = columns_mock
+    constants_module.METADATA_TABLE = metadata_table_mock
+
     metadata_server_api_module = ModuleType('seafile_ai.repo_metadata.metadata_server_api')
     metadata_server_api_module.MetadataServerAPI = Mock()
+
     metadata_utils_module = ModuleType('seafile_ai.repo_metadata.utils')
     metadata_utils_module.query_metadata_rows = query_metadata_rows
+    metadata_utils_module.is_repo_metadata_enabled = Mock(return_value=metadata_enabled)
+
     tools_module = ModuleType('seafile_ai.utils.tools')
     tools_module.BasicTool = object
 
@@ -33,6 +51,8 @@ def load_file_tools(query_metadata_rows):
         'test_file_tools_module',
         PROJECT_ROOT / 'seafile_ai/chat_manager/tools/file_tools.py',
         {
+            'seafile_ai': seafile_ai_module,
+            'seafile_ai.config': config_module,
             'seafile_ai.chat_manager.utils.callbacker': callbacker_module,
             'seafile_ai.repo_metadata.constants': constants_module,
             'seafile_ai.repo_metadata.metadata_server_api': metadata_server_api_module,
@@ -42,17 +62,30 @@ def load_file_tools(query_metadata_rows):
     )
 
 class ListFilesTest(unittest.TestCase):
-    def test_returns_raw_full_library_metadata(self):
+    def test_lists_files_with_configured_limit(self):
         records = [
-            {'path': '/documents', '_is_dir': True},
-            {'path': '/documents/plan.sdoc', '_is_dir': False, '_ai_summary': 'Project plan', 'custom': 'value'},
+            {'_name': 'plan.sdoc', '_is_dir': False, '_ai_summary': 'Project plan'},
         ]
         query_metadata_rows = Mock(return_value=records)
-        module = load_file_tools(query_metadata_rows)
+        module = load_file_tools(query_metadata_rows, default_max_records=10)
         tool = module.ListFiles()
 
-        result = tool.execute({'repo_id': 'repo-id'}, None)
+        result = tool.execute(context={'repo_id': 'repo-id'}, call_back=None)
 
-        query_metadata_rows.assert_called_once_with('repo-id', tool.metadata_server_api, 'SELECT * FROM `Table1`')
-        self.assertIs(result, records)
-        self.assertEqual(module.ListFiles.tool['function']['parameters'], {'type': 'object', 'properties': {}})
+        query_metadata_rows.assert_called_once_with(
+            'repo-id', tool.metadata_server_api,
+            'SELECT * FROM `Table1` WHERE (`_is_dir` = false OR `_is_dir` IS NULL) ORDER BY `_file_mtime` DESC',
+            params=[], limit=11,
+        )
+        self.assertEqual(result, {'records': records})
+
+    def test_returns_metadata_enablement_warning(self):
+        query_metadata_rows = Mock()
+        module = load_file_tools(query_metadata_rows, metadata_enabled=False)
+        tool = module.ListFiles()
+
+        result = tool.execute(context={'repo_id': 'repo-id'}, call_back=None)
+
+        self.assertEqual(result['records'], [])
+        self.assertIn('Tell the user to enable library metadata', result['warning'])
+        query_metadata_rows.assert_not_called()
