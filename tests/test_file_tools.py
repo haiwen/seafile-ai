@@ -85,14 +85,14 @@ class ListFilesTest(unittest.TestCase):
                     '_name': 'plan.sdoc',
                     '_is_dir': False,
                     '_ai_summary': 'Project plan',
-                    'path': '/plan.sdoc',
+                    'path': '<seafile-ai-file>/plan.sdoc</seafile-ai-file>',
                 },
                 {
                     '_parent_dir': '/plans',
                     '_name': 'roadmap.sdoc',
                     '_is_dir': False,
                     '_ai_summary': 'Product roadmap',
-                    'path': '/plans/roadmap.sdoc',
+                    'path': '<seafile-ai-file>/plans/roadmap.sdoc</seafile-ai-file>',
                 },
             ],
         })
