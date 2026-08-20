@@ -120,7 +120,8 @@ class ListFiles(BasicTool):
             parent_dir = record.get(parent_dir_col)
             file_name = record.get(file_name_col)
             if isinstance(parent_dir, str) and isinstance(file_name, str) and file_name:
-                record['path'] = f'{parent_dir.rstrip("/")}/{file_name}'
+                raw_path = f'{parent_dir.rstrip("/")}/{file_name}'
+                record['path'] = f'<seafile-ai-file>{raw_path}</seafile-ai-file>'
         warning = None
         if is_truncated:
             warning = (
