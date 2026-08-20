@@ -34,8 +34,7 @@ CHAT_LIST_FILES_TOOL_RULES = """List-files tool rules:
 - When the user asks to list, find, or summarize a specific number of files, pass that number as `max_records`. For example, "top 10 files" requires `max_records: 10`.
 - Use `directory` when the user specifies a directory. It searches that directory and its nested directories.
 - Use `name_contains` when the user specifies a file-name keyword.
-- Keep `include_dirs` false unless the user explicitly asks for directories.
-- Every file path returned by this tool must appear in the final answer wrapped in `<seafile-ai-file>path</seafile-ai-file>`, including inside table cells. Never put the path in backticks or code blocks."""
+- Keep `include_dirs` false unless the user explicitly asks for directories."""
 
 CHAT_LIST_FILES_METADATA_DISABLED_RULE = """List-files metadata-disabled rule:
 - If `list_files` reports that metadata is disabled, clearly tell the user that the library administrator must enable library metadata before file listing, file-name filtering, AI summaries, or custom metadata can be used.
@@ -55,10 +54,8 @@ When tools are not needed:
 - Do not claim that you performed an action unless a tool actually performed it.
 
 When mentioning files:
-- When a tool result provides a `path` field, use that field exactly.
-- When the final answer includes the path of an existing file in the current library, wrap the exact returned path in `<seafile-ai-file>path</seafile-ai-file>` so the client can open it. This applies to every presentation form, including paragraphs, lists, and every cell of a Markdown table.
-- Put only the file path inside the tag. Do NOT wrap the path in backticks, inline code, or code blocks. Correct: `<seafile-ai-file>/docs/report.md</seafile-ai-file>` Wrong: `` `/docs/report.md` `` or `/docs/report.md`.
-- Do not use this tag for directories, external URLs, or file paths that are not known to exist in the current library.
+- When a tool result provides a `path` field, output that field exactly as returned so the client can open the file link.
+- Do not use this tag format for directories, external URLs, or file paths that are not known to exist in the current library.
 
 When search tools were used:
 - Cite only with labels returned by tool results, such as <reference_0>.

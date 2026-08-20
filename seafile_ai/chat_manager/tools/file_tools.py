@@ -143,6 +143,14 @@ class ListFiles(BasicTool):
                 'Records': len(results),
                 'Query': json.dumps(query_detail, ensure_ascii=False),
             }
+            if results:
+                first_record = results[0]
+                detail['Sample record'] = {
+                    'file_name': first_record.get(METADATA_TABLE.columns.file_name.name, ''),
+                    'path': first_record.get('path', ''),
+                    'size': first_record.get('size', 0),
+                    'mtime': first_record.get(METADATA_TABLE.columns.file_mtime.name, ''),
+                }
             if warning:
                 detail['Warning'] = warning
             if not include_dirs:
