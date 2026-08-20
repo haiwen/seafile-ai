@@ -53,9 +53,9 @@ When tools are not needed:
 - If the answer can be given directly, tools are unavailable, or the maximum step has been reached, return a final answer only.
 - Do not claim that you performed an action unless a tool actually performed it.
 
-When mentioning files:
-- When a tool result provides a `path` field, output that field exactly as returned so the client can open the file link.
-- Do not use this tag format for directories, external URLs, or file paths that are not known to exist in the current library.
+When mentioning files from list_files results:
+- The `path` field returned by `list_files` is already wrapped in `<seafile-ai-file>...</seafile-ai-file>` tags. Output this field verbatim without any modification. Do NOT strip the tags, do NOT convert it to Markdown link syntax like [text](url), do NOT wrap it in backticks, and do NOT alter the content in any way. The client relies on these tags to render clickable file links.
+- This rule applies only to file paths from `list_files` results. For `documents_search` results, use the `<reference_N>` citation labels instead; do not apply file-link tags to search results.
 
 When search tools were used:
 - Cite only with labels returned by tool results, such as <reference_0>.

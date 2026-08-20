@@ -16,7 +16,12 @@ class ListFiles(BasicTool):
                 'List files and directories in the current library. '
                 'Return up to the configured maximum number of metadata records as JSON. '
                 'This tool returns metadata, not file content. '
-                'Set include_dirs to true only when the user asks for directories.'
+                'Set include_dirs to true only when the user asks for directories. '
+                'IMPORTANT: Each returned record contains a `path` field wrapped in '
+                '<seafile-ai-file>...</seafile-ai-file> tags. When mentioning file paths '
+                'in your final answer, you MUST output the `path` field verbatim without '
+                'stripping the tags, converting it to Markdown links, or wrapping it in backticks. '
+                'Do not apply these tags to search results from documents_search; use <reference_N> labels instead.'
             ),
             'parameters': {
                 'type': 'object',
@@ -143,14 +148,6 @@ class ListFiles(BasicTool):
                 'Records': len(results),
                 'Query': json.dumps(query_detail, ensure_ascii=False),
             }
-            if results:
-                first_record = results[0]
-                detail['Sample record'] = {
-                    'file_name': first_record.get(METADATA_TABLE.columns.file_name.name, ''),
-                    'path': first_record.get('path', ''),
-                    'size': first_record.get('size', 0),
-                    'mtime': first_record.get(METADATA_TABLE.columns.file_mtime.name, ''),
-                }
             if warning:
                 detail['Warning'] = warning
             if not include_dirs:
