@@ -5,9 +5,8 @@ from seafile_ai import config
 from seafile_ai.chat_manager.utils.callbacker import ChatCallBacker
 from seafile_ai.repo_metadata.constants import METADATA_TABLE
 from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
-from seafile_ai.repo_metadata.utils import is_repo_metadata_enabled, query_metadata_rows, get_file_id_by_path, \
-    get_repo_info
-from seafile_ai.utils import parse_file
+from seafile_ai.repo_metadata.utils import get_file_id_by_path, get_repo_info, is_repo_metadata_enabled, query_metadata_rows
+from seafile_ai.utils import FileSizeLimitExceeded, parse_file
 from seafile_ai.utils.tools import BasicTool
 
 
@@ -179,7 +178,8 @@ class ReadFiles(BasicTool):
             'name': 'read_files',
             'description': (
                 'Read the content of specific files in the current library. '
-                'This tool reads file content, not metadata.'
+                'This tool reads file content, not metadata. '
+                f'Read at most {config.READ_FILES_MAX_FILES} files in one call.'
             ),
             'parameters': {
                 'type': 'object',
@@ -191,6 +191,7 @@ class ReadFiles(BasicTool):
                             'type': 'string',
                         },
                         'minItems': 1,
+                        'maxItems': config.READ_FILES_MAX_FILES,
                     },
                 },
                 'required': ['file_paths'],
@@ -204,7 +205,22 @@ class ReadFiles(BasicTool):
         repo_id = context['repo_id']
         repo = get_repo_info(repo_id)
         results = []
-        for file_path in file_paths:
+        total_chars = 0
+        for index, file_path in enumerate(file_paths):
+            if index >= config.READ_FILES_MAX_FILES:
+                results.append({
+                    'path': file_path,
+                    'error': f'File limit exceeded (maximum {config.READ_FILES_MAX_FILES} files)',
+                })
+                continue
+
+            if total_chars >= config.READ_FILES_MAX_TOTAL_CHARS:
+                results.append({
+                    'path': file_path,
+                    'error': f'Content limit reached (maximum {config.READ_FILES_MAX_TOTAL_CHARS} characters)',
+                })
+                continue
+
             if not isinstance(file_path, str) or not file_path.startswith('/'):
                 results.append({'path': file_path, 'error': 'Invalid file path'})
                 continue
@@ -219,15 +235,29 @@ class ReadFiles(BasicTool):
                 continue
 
             try:
-                content = parse_file(file_path, repo_id, obj_id)
+                content = parse_file(file_path, repo_id, obj_id, config.READ_FILES_MAX_FILE_SIZE)
+            except FileSizeLimitExceeded:
+                results.append({
+                    'path': file_path,
+                    'error': f'File size exceeds {config.READ_FILES_MAX_FILE_SIZE} bytes limit',
+                })
+                continue
             except Exception as error:
                 results.append({'path': file_path, 'error': str(error)})
                 continue
 
-            results.append({
-                'path': file_path,
-                'content': content,
-            })
+            remaining_chars = config.READ_FILES_MAX_TOTAL_CHARS - total_chars
+            if len(content) > remaining_chars:
+                results.append({
+                    'path': file_path,
+                    'content': content[:remaining_chars],
+                    'truncated': True,
+                })
+                total_chars = config.READ_FILES_MAX_TOTAL_CHARS
+                continue
+
+            results.append({'path': file_path, 'content': content})
+            total_chars += len(content)
 
         if isinstance(call_back, ChatCallBacker):
             call_back('update_execution_detail', {

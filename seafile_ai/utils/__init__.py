@@ -42,21 +42,29 @@ class FormatNotSupportedException(Exception):
     pass
 
 
+class FileSizeLimitExceeded(Exception):
+    pass
+
+
 def gen_file_get_url(token, filename):
     parsed = urlparse(SEAFILE_SERVER_URL)
     seafile_server_url = f"{parsed.scheme}://{parsed.netloc}"
     return '%s/files/%s/%s' % (seafile_server_url.rstrip('/') + '/seafhttp', token, urlquote(filename))
 
-def get_file_content_by_seafobj(repo_id, obj_id):
+def get_file_content_by_seafobj(repo_id, obj_id, max_size=None):
     if obj_id == ZERO_OBJ_ID:
         return b''
     f = None
     try:
         f = fs_mgr.load_seafile(repo_id, 1, obj_id)
+        if max_size is not None and f.size > max_size:
+            raise FileSizeLimitExceeded()
         b_content = f.get_content()
         if not b_content.strip():
             return b''
         return b_content
+    except FileSizeLimitExceeded:
+        raise
     except Exception as e:
         raise Exception('Failed to get file content by obj id: %s' % e)
     finally:
@@ -67,8 +75,8 @@ def get_file_content_by_seafobj(repo_id, obj_id):
             f.blocks = None
 
 
-def parse_file(file_name, repo_id, obj_id):
-    doc = get_file_content_by_seafobj(repo_id, obj_id)
+def parse_file(file_name, repo_id, obj_id, max_size=None):
+    doc = get_file_content_by_seafobj(repo_id, obj_id, max_size)
     file_ext = Path(file_name).suffix.lower()
 
     parser_mapping = {
