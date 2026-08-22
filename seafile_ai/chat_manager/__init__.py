@@ -72,7 +72,6 @@ class StreamingChat(BasicChat):
     def run(self, model, tool_executor, message, attachments, **kwargs):
         try:
             context = kwargs.get('context', {})
-            t_chat_start = time.time()
 
             llm_client = get_llm_client_by_model_id(self.app.data_logger, model)
             yield SSE.status('Preparing', 'Initializing user input')
@@ -92,11 +91,6 @@ class StreamingChat(BasicChat):
                 'role': 'user',
                 'content': user_raw_message,
             })
-            t_chat_init = time.time()
-            logger.info(
-                '[Chat Step Analysis] Chat initialization: %.3fs, session_uuid=%s, model=%s',
-                t_chat_init - t_chat_start, context.get('session_uuid'), model
-            )
 
             current_step = 0
             current_retry = 0
@@ -301,15 +295,6 @@ class StreamingChat(BasicChat):
                         raise AssertionError('Invalid response: cannot return tool_calls at max steps')
 
                     current_retry = 0
-                    t_llm_done = time.time()
-                    logger.info(
-                        '[Chat Step Analysis] LLM step %d (tool call): %.3fs, tools=%s, tokens_in=%d, tokens_out=%d',
-                        current_step,
-                        t_llm_done - time_begin,
-                        [tc['function']['name'] for tc in tool_calls],
-                        token_usage.get('input_tokens', 0),
-                        token_usage.get('output_tokens', 0),
-                    )
 
                     memory.append({
                         'role': 'assistant',
@@ -319,7 +304,6 @@ class StreamingChat(BasicChat):
                     if completion_retries:
                         tool_executor.thought_process.set_last_group_completion_retry(completion_retries)
                     tool_calls_num = len(tool_calls)
-                    t_tool_start = time.time()
                     for tool_call_id, tool_call in enumerate(tool_calls):
                         yield from StreamingCompletionUtils.execute_tool_with_retry(
                             tool_executor,
@@ -329,11 +313,6 @@ class StreamingChat(BasicChat):
                             tool_call_id,
                             tool_calls_num,
                         )
-                    t_tool_done = time.time()
-                    logger.info(
-                        '[Chat Step Analysis] Tool execution (step %d): %.3fs, tools=%d',
-                        current_step, t_tool_done - t_tool_start, tool_calls_num
-                    )
 
                     tool_executor.thought_process.update_last_group_tokens_usage(token_usage)
                     tool_executor.thought_process.set_last_group_time_usage(time.time() - time_begin)
@@ -345,15 +324,6 @@ class StreamingChat(BasicChat):
                     continue
 
                 current_retry = 0
-                t_llm_done = time.time()
-                logger.info(
-                    '[Chat Step Analysis] LLM step %d (final answer): %.3fs, answer_len=%d, tokens_in=%d, tokens_out=%d',
-                    current_step,
-                    t_llm_done - time_begin,
-                    len(content),
-                    token_usage.get('input_tokens', 0),
-                    token_usage.get('output_tokens', 0),
-                )
 
                 tool_executor.thought_process.set_final_answer(
                     content,
@@ -365,11 +335,6 @@ class StreamingChat(BasicChat):
                 completion_retries = []
 
                 answer, sources = get_answer_and_sources(tool_executor, content)
-                t_final = time.time()
-                logger.info(
-                    '[Chat Step Analysis] Chat completed: %.3fs total, steps=%d, sources=%d',
-                    t_final - t_chat_start, current_step, len(sources)
-                )
                 yield SSE.results(answer, remove_sources_content_and_snippets(sources), tool_executor.thought_process.details)
                 yield SSE.done()
                 break
