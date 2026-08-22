@@ -3,11 +3,13 @@ import logging
 import re
 import base64
 
-from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType
+from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType, MODEL_REASONING_TIER
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
     resize_image_binary, is_pdf
 from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
 from seafile_ai.utils.icon_constants import WIKI_ICON_MANIFEST
+from seafile_ai.config import AI_UTILS_TIER
+from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +42,9 @@ class TextProcessingManager:
         system_prompt = {"role": "system", "content": prompt}
         user_prompt = {"role": "user", "content": 'Summarize the following content' + content}
         messages = [system_prompt, user_prompt]
-        summary = self.app.llm_api.run(messages, context)
+        tier = AI_UTILS_TIER.get('generate_summary', MODEL_REASONING_TIER.LOW.value)
+        llm = get_llm_client_by_model_tier(self.app.data_logger, tier)
+        summary = llm.run(messages, context)
         return summary
 
     def doc_tags(self, repo_id, obj_id, path, candidate_tags, context):
@@ -68,7 +72,8 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.llm_api.run(messages, context)
+        tier = AI_UTILS_TIER.get('doc_tags', MODEL_REASONING_TIER.LOW.value)
+        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         tags = re.split(r'[，,]', res)
         return [tag.strip() for tag in tags if tag.strip()]
 
@@ -87,7 +92,8 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.llm_api.run(messages, context)
+        tier = AI_UTILS_TIER.get('translate', MODEL_REASONING_TIER.LOW.value)
+        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         return res
 
     def writing_assistant(self, text, custom_prompt, writing_type, context):
@@ -109,7 +115,8 @@ class TextProcessingManager:
         }
         messages = [system_prompt, user_prompt]
 
-        res = self.app.llm_api.run(messages, context)
+        tier = AI_UTILS_TIER.get('writing_assistant', MODEL_REASONING_TIER.MEDIUM.value)
+        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         return res
 
     def get_predefined_prompt(self, prefix, writing_type):
@@ -162,7 +169,8 @@ class TextProcessingManager:
                 ],
             }
         ]
-        extracted_text = self.app.llm_api.run(messages, context)
+        tier = AI_UTILS_TIER.get('ocr', MODEL_REASONING_TIER.LOW.value)
+        extracted_text = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
 
         if not extracted_text:
             return ''
@@ -198,7 +206,8 @@ class TextProcessingManager:
         messages = [system_prompt, user_prompt]
 
         try:
-            res = self.app.llm_api.run(messages, context)
+            tier = AI_UTILS_TIER.get('search_icons', MODEL_REASONING_TIER.LOW.value)
+            res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
             icon_names = [name.strip() for name in re.split(r'[，,]', res) if name.strip()]
 
             valid_icons = set(WIKI_ICON_MANIFEST)
