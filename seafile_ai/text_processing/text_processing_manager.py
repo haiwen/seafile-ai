@@ -73,7 +73,7 @@ class TextProcessingManager:
         messages = [system_prompt, user_prompt]
 
         tier = AI_UTILS_TIER.get('doc_tags', MODEL_REASONING_TIER.LOW.value)
-        llm = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
+        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         tags = re.split(r'[，,]', res)
         return [tag.strip() for tag in tags if tag.strip()]
 
