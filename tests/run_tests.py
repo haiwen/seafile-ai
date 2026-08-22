@@ -11,7 +11,7 @@ spec = importlib.util.spec_from_file_location(
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
-suite = unittest.TestLoader().loadTestsFromTestCase(mod.ListFilesTest)
+suite = unittest.TestLoader().loadTestsFromModule(mod)
 runner = unittest.TextTestRunner(verbosity=2)
 result = runner.run(suite)
 sys.exit(0 if result.wasSuccessful() else 1)
