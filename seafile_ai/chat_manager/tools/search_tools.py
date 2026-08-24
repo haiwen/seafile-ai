@@ -135,7 +135,10 @@ class DocumentsSearch(BasicTool):
 
     def _rerank_documents(self, query, candidates, context, count, app, model=None):
         if len(candidates) <= 1:
-            return candidates[:count], {'candidates': len(candidates), 'elapsed_seconds': 0, 'model': 'n/a'}
+            return candidates[:count], {
+                'candidates': len(candidates), 'elapsed_seconds': 0, 'model': 'n/a',
+                'input_tokens': 0, 'output_tokens': 0,
+            }
 
         t0 = time.time()
         prompt_items = []
@@ -167,6 +170,7 @@ class DocumentsSearch(BasicTool):
         ]
 
         rerank_model = 'unknown'
+        token_usage = {}
         try:
             tier = AI_UTILS_TIER.get('rerank', MODEL_REASONING_TIER.LOW.value)
             rerank_llm = get_llm_client_by_model_tier(app.data_logger, tier)
@@ -174,6 +178,7 @@ class DocumentsSearch(BasicTool):
             rerank_context = dict(context)
             rerank_context['scenario'] = 'rerank'
             response = rerank_llm.run(messages, rerank_context, json_mode=True, temperature=0.1)
+            token_usage = rerank_llm.last_token_usage
             ranked_indices = json.loads(response).get('indices', [])
         except Exception as error:
             logger.warning('documents_search rerank failed: %s', error)
@@ -205,9 +210,12 @@ class DocumentsSearch(BasicTool):
             'candidates': len(candidates),
             'elapsed_seconds': round(elapsed, 3),
             'model': rerank_model,
+            'input_tokens': token_usage.get('input_tokens', 0),
+            'output_tokens': token_usage.get('output_tokens', 0),
         }
-        logger.info('documents_search rerank: candidates=%d, elapsed=%.3fs, model=%s',
-                    len(candidates), elapsed, rerank_model)
+        logger.info('documents_search rerank: candidates=%d, elapsed=%.3fs, model=%s, input_tokens=%d, output_tokens=%d',
+                    len(candidates), elapsed, rerank_model,
+                    rerank_info['input_tokens'], rerank_info['output_tokens'])
         return ranked[:count], rerank_info
 
     def _load_full_contents(self, candidates):
@@ -346,6 +354,10 @@ class DocumentsSearch(BasicTool):
                 'Rerank candidates': rerank_info['candidates'],
                 'Rerank costs': f"{rerank_info['elapsed_seconds']}s",
                 'Rerank model': rerank_info['model'],
+                'Rerank token usages': (
+                    f"{rerank_info['input_tokens'] + rerank_info['output_tokens']} "
+                    f"(input: {rerank_info['input_tokens']}, output: {rerank_info['output_tokens']})"
+                ),
                 'New references': len(observation_results),
                 'Full content fetched': len(full_content_map),
             })

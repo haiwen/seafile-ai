@@ -24,6 +24,7 @@ class LLMAPI:
     def __init__(self, data_logger, model, llm_type='openai', base_url=None, api_key=None, timeout=180):
         self.data_logger = data_logger
         self.timeout = timeout
+        self.last_token_usage = {}
         if llm_type == 'other':
             llm_type = 'hosted_vllm'
         if llm_type in ('other', 'hosted_vllm') and not base_url:
@@ -60,6 +61,13 @@ class LLMAPI:
             logger.error('Chat completion error: %s', str(error))
             raise LLMChatCompletionException('LLM chat completion error: %s' % error)
 
+        try:
+            self.last_token_usage = {
+                'input_tokens': response.usage.prompt_tokens,
+                'output_tokens': response.usage.completion_tokens,
+            }
+        except Exception:
+            self.last_token_usage = {}
         self._logger_usage_from_response(response, context)
         return response
 
