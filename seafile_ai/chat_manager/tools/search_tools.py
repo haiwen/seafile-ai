@@ -133,7 +133,7 @@ class DocumentsSearch(BasicTool):
         )
         return results
 
-    def _rerank_documents(self, query, candidates, context, count, app, model=None):
+    def _rerank_documents(self, query, candidates, context, count, app, tool_executor, model=None):
         if len(candidates) <= 1:
             return candidates[:count], {
                 'candidates': len(candidates), 'elapsed_seconds': 0, 'model': 'n/a',
@@ -216,6 +216,11 @@ class DocumentsSearch(BasicTool):
         logger.info('documents_search rerank: candidates=%d, elapsed=%.3fs, model=%s, input_tokens=%d, output_tokens=%d',
                     len(candidates), elapsed, rerank_model,
                     rerank_info['input_tokens'], rerank_info['output_tokens'])
+        tool_executor.thought_process.update_last_group_tokens_usage({
+            'input_tokens': rerank_info['input_tokens'],
+            'output_tokens': rerank_info['output_tokens'],
+            'total_tokens': rerank_info['input_tokens'] + rerank_info['output_tokens'],
+        })
         return ranked[:count], rerank_info
 
     def _load_full_contents(self, candidates):
@@ -308,7 +313,9 @@ class DocumentsSearch(BasicTool):
             self._format_vector_candidates(vector_search_results),
         )
 
-        reranked_candidates, rerank_info = self._rerank_documents(query, candidates, context, count, app, model)
+        reranked_candidates, rerank_info = self._rerank_documents(
+            query, candidates, context, count, app, tool_executor, model,
+        )
 
         reranked_candidates = [
             candidate
