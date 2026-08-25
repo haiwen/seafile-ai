@@ -1,12 +1,9 @@
 import logging
-
-from seafile_ai.image_processing.face_recognition_manager import FaceRecognitionManager
 from seafile_ai.image_processing.image_processing_manager import ImageProcessingManager
 from seafile_ai.chat_manager import StreamingChat
 from seafile_ai.server.seafile_ai_http_server import SeafileAIHttpServer
 from seafile_ai.text_processing.text_processing_manager import TextProcessingManager
 from seafile_ai.db import init_db_session_class
-from seafile_ai.utils.face_embedding_api import FaceEmbeddingAPI
 from seafile_ai.utils.seahub_api import SeahubAPI
 from seafile_ai.data_logging.data_logging import DataLogging
 from seafile_ai.utils.llm_api import LLMAPI
@@ -41,12 +38,13 @@ class SeafileAIApp(object):
             'keyword and vector search' if self.embedding_api else 'keyword search only',
         )
         
-        self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
+        # Face recognition is no longer available.
+        # self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
         self.seahub_api = SeahubAPI(config.SEAFILE_SERVER_URL, config.SECRET_KEY)
 
         self.text_processing_manager = TextProcessingManager(self, config.DEFAULT_LLM_MODEL.get('type', 'openai'))
         self.image_processing_manager = ImageProcessingManager(self)
-        self.face_recognition_manager = FaceRecognitionManager(self)
+        # self.face_recognition_manager = FaceRecognitionManager(self)
         self.streaming_chat = StreamingChat(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)
 
