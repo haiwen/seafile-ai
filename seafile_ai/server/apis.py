@@ -7,6 +7,7 @@ from flask import Flask, Response, request, stream_with_context
 from pathlib import Path
 
 from seafile_ai import config
+from seafile_ai.server.sdoc_review_utils import build_sdoc_ai_context
 from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionException, FormatNotSupportedException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 
@@ -547,7 +548,7 @@ def sdoc_review():
     if not username:
         return {'error_msg': 'username invalid.'}, 400
 
-    context = {'username': username, 'org_id': data.get('org_id')}
+    context = build_sdoc_ai_context(data, username)
     try:
         review = flask_app.app.text_processing_manager.sdoc_review(prompt, document_context, context)
     except ValueError as error:
@@ -560,6 +561,89 @@ def sdoc_review():
         return {'error_msg': 'Internal server error.'}, 500
 
     return {'review': review}, 200
+
+
+@flask_app.route('/api/v1/sdoc-review-plan/', methods=['POST'])
+def sdoc_review_plan():
+    if not check_auth_token(request):
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Bad request.'}, 400
+
+    prompt = data.get('prompt')
+    document_context = data.get('document_context')
+    username = data.get('username')
+    if not isinstance(prompt, str) or not prompt.strip():
+        return {'error_msg': 'prompt invalid.'}, 400
+    if not isinstance(document_context, dict):
+        return {'error_msg': 'document_context invalid.'}, 400
+    if not isinstance(document_context.get('blocks'), list):
+        return {'error_msg': 'document_context.blocks invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    context = build_sdoc_ai_context(data, username)
+    try:
+        plan = flask_app.app.text_processing_manager.sdoc_review_plan(prompt, document_context, context)
+    except ValueError as error:
+        return {'error_msg': str(error)}, 400
+    except LLMChatCompletionException as error:
+        logger.warning(error)
+        return {'error_msg': 'openai server error.'}, 500
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'plan': plan}, 200
+
+
+@flask_app.route('/api/v1/sdoc-review-chunk/', methods=['POST'])
+def sdoc_review_chunk():
+    if not check_auth_token(request):
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Bad request.'}, 400
+
+    prompt = data.get('prompt')
+    document_context = data.get('document_context')
+    if 'brief' not in data:
+        return {'error_msg': 'brief invalid.'}, 400
+    brief = data.get('brief')
+    chunk_index = data.get('chunk_index')
+    username = data.get('username')
+    if not isinstance(prompt, str) or not prompt.strip():
+        return {'error_msg': 'prompt invalid.'}, 400
+    if not isinstance(document_context, dict):
+        return {'error_msg': 'document_context invalid.'}, 400
+    if not isinstance(document_context.get('blocks'), list):
+        return {'error_msg': 'document_context.blocks invalid.'}, 400
+    if not isinstance(chunk_index, int):
+        return {'error_msg': 'chunk_index invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    context = build_sdoc_ai_context(data, username)
+    try:
+        result = flask_app.app.text_processing_manager.sdoc_review_chunk(
+            prompt, document_context, brief, chunk_index, context)
+    except ValueError as error:
+        return {'error_msg': str(error)}, 400
+    except LLMChatCompletionException as error:
+        logger.warning(error)
+        return {'error_msg': 'openai server error.'}, 500
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return result, 200
 
 
 @flask_app.route('/api/v1/sdoc-analyze/', methods=['POST'])
@@ -583,7 +667,7 @@ def sdoc_analyze():
     if not username:
         return {'error_msg': 'username invalid.'}, 400
 
-    context = {'username': username, 'org_id': data.get('org_id')}
+    context = build_sdoc_ai_context(data, username)
     try:
         analysis = flask_app.app.text_processing_manager.sdoc_analyze(prompt, document_context, context)
     except ValueError as error:

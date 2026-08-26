@@ -3,6 +3,7 @@ import logging
 import re
 import base64
 import json
+import unicodedata
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType, MODEL_REASONING_TIER
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
@@ -13,6 +14,18 @@ from seafile_ai.config import AI_UTILS_TIER
 from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
 
 logger = logging.getLogger(__name__)
+
+
+SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK = 10
+SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK = 6000
+SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD = 12
+
+SECTION_NUMBER_PREFIX_PATTERNS = (
+    r'^\s*\d+(?:\.\d+)*(?:\s*[.、:：\-]\s*|\s+)',
+    r'^\s*[（(]?\s*[一二三四五六七八九十百零]+\s*[）)]?\s*[.、:：\-]\s*',
+    r'^\s*第\s*[0-9一二三四五六七八九十百零]+\s*[章节篇部分]\s*[.、:：\-]?\s*',
+)
+SECTION_QUOTE_PATTERN = re.compile(r'[“"\'「『《]([^”"\'」』》]{2,80})[”"\'」』》]')
 
 
 class TextProcessingManager:
@@ -123,6 +136,10 @@ class TextProcessingManager:
     def sdoc_review(self, prompt, document_context, context):
         """Generate a structured list of suggestions, chunked for long documents.
 
+        Kept for backward compatibility and for documents that fit a single
+        chunk. The progressive flow (Seahub orchestration) uses
+        ``sdoc_review_plan`` + ``sdoc_review_chunk`` instead.
+
         ``document_context`` is the immutable Document Context projection built
         by SDoc Server: an object with ``snapshot_id``, ``file_uuid``,
         ``document_incarnation``, ``exact_sdoc_version``, ``projection_version``,
@@ -132,15 +149,135 @@ class TextProcessingManager:
         hashes and item ids are assigned by Seahub/SDoc Server, never by the model.
         """
         _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
-        if len(blocks) <= 10:
-            return {'items': self._generate_items(prompt, blocks, lists, None, context)}
+        if not blocks:
+            return {'items': []}
 
-        outline = (document_context or {}).get('outline') or []
-        brief = self._generate_revision_brief(prompt, outline, blocks, context)
+        chunks = self._chunk_blocks(blocks, lists)
+        brief = None
+        if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD:
+            outline = (document_context or {}).get('outline') or []
+            brief = self._generate_revision_brief(prompt, outline, blocks, context)
         items = []
-        for chunk in self._chunk_blocks(blocks):
-            items.extend(self._generate_items(prompt, chunk, lists, brief, context))
+        for chunk_index, chunk in enumerate(chunks):
+            chunk_lists = self._lists_for_chunk(lists, chunks, chunk_index)
+            items.extend(self._generate_items(prompt, chunk, chunk_lists, brief, context))
         return {'items': self._dedup_items(items)}
+
+    def sdoc_review_plan(self, prompt, document_context, context):
+        """Return the revision brief and chunk plan for a progressive review.
+
+        The plan is deterministic: same document context + prompt produce the
+        same chunk list. ``chunk_index`` is stable across the plan and each
+        subsequent ``sdoc_review_chunk`` call.
+        """
+        _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
+        chunks = self._chunk_blocks(blocks, lists)
+        brief = None
+        if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD:
+            outline = (document_context or {}).get('outline') or []
+            brief = self._generate_revision_brief(prompt, outline, blocks, context)
+        return {
+            'brief': brief,
+            'chunks': [
+                {'chunk_index': index, 'block_ids': [block.get('block_id') for block in chunk]}
+                for index, chunk in enumerate(chunks)
+            ],
+        }
+
+    def sdoc_review_chunk(self, prompt, document_context, brief, chunk_index, context):
+        """Generate suggestions for a single chunk of the document.
+
+        ``brief`` is the revision brief produced by ``sdoc_review_plan`` (may be
+        None for single-chunk documents). ``chunk_index`` must be a valid index
+        from the plan.
+        """
+        _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
+        chunks = self._chunk_blocks(blocks, lists)
+        if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD and not isinstance(brief, dict):
+            raise ValueError('brief invalid')
+        if chunk_index < 0 or chunk_index >= len(chunks):
+            raise ValueError('chunk_index out of range')
+        chunk_lists = self._lists_for_chunk(lists, chunks, chunk_index)
+        return {'items': self._generate_items(
+            prompt, chunks[chunk_index], chunk_lists, brief, context)}
+
+    @staticmethod
+    def _normalize_section_name(value):
+        value = unicodedata.normalize('NFKC', value or '').strip().casefold()
+        value = value.strip('“”"\'「」『』《》')
+        return re.sub(r'\s+', ' ', value).strip()
+
+    @classmethod
+    def _section_aliases(cls, title):
+        normalized_title = cls._normalize_section_name(title)
+        aliases = {normalized_title} if normalized_title else set()
+        unnumbered_title = unicodedata.normalize('NFKC', title or '')
+        for pattern in SECTION_NUMBER_PREFIX_PATTERNS:
+            updated_title = re.sub(pattern, '', unnumbered_title, count=1)
+            if updated_title != unnumbered_title:
+                unnumbered_title = updated_title
+                break
+        normalized_unnumbered_title = cls._normalize_section_name(unnumbered_title)
+        if normalized_unnumbered_title:
+            aliases.add(normalized_unnumbered_title)
+        return aliases
+
+    @classmethod
+    def _prompt_targets_section(cls, prompt, title):
+        normalized_prompt = cls._normalize_section_name(prompt)
+        aliases = cls._section_aliases(title)
+        quoted_names = {
+            cls._normalize_section_name(match)
+            for match in SECTION_QUOTE_PATTERN.findall(prompt or '')
+        }
+        if aliases.intersection(quoted_names):
+            return True
+        for alias in aliases:
+            if len(alias) >= 4 and alias in normalized_prompt:
+                return True
+            if any(f'{alias}{suffix}' in normalized_prompt for suffix in ('章节', '章', '节', 'section', 'chapter')):
+                return True
+        return False
+
+    @staticmethod
+    def _has_unmatched_explicit_section_scope(prompt):
+        normalized_prompt = unicodedata.normalize('NFKC', prompt or '').casefold()
+        if any(marker in normalized_prompt for marker in (
+                '全文', '整篇', '整个文档', '所有章节', '全部章节', '各章节',
+                'whole document', 'entire document', 'all sections')):
+            return False
+        if any(marker in normalized_prompt for marker in (
+                '章节层级', '章节结构', '标题层级',
+                'chapter structure', 'section structure', 'heading hierarchy')):
+            return False
+        has_scope_word = any(marker in normalized_prompt for marker in (
+            '章节', '章内', '节内', '小节', '标题下', '标题中', '部分内容',
+            'section', 'chapter', 'under the heading',
+        ))
+        return has_scope_word
+
+    @staticmethod
+    def _belongs_to_target_section(node, target_section_ids):
+        if not target_section_ids:
+            return True
+        if node.get('section_id') in target_section_ids:
+            return True
+        return any(
+            isinstance(entry, dict)
+            and str(entry.get('type', '')).startswith('header')
+            and entry.get('id') in target_section_ids
+            for entry in (node.get('ancestor_path') or [])
+        )
+
+    @staticmethod
+    def _scope_section_id(node, target_section_ids):
+        if target_section_ids:
+            if node.get('section_id') in target_section_ids:
+                return node.get('section_id')
+            for entry in node.get('ancestor_path') or []:
+                if isinstance(entry, dict) and entry.get('id') in target_section_ids:
+                    return entry.get('id')
+        return node.get('section_id')
 
     def _collect_blocks(self, prompt, document_context):
         section_titles = {}
@@ -156,23 +293,29 @@ class TextProcessingManager:
         if isinstance(document_context, dict):
             for header in document_context.get('outline') or []:
                 text = (header.get('text') or '').strip()
-                if len(text) >= 2 and text in prompt:
+                if len(text) >= 2 and self._prompt_targets_section(prompt, text):
                     target_section_ids.add(header.get('block_id'))
+
+        if not target_section_ids and self._has_unmatched_explicit_section_scope(prompt):
+            raise ValueError('target section not found')
 
         blocks = []
         if isinstance(document_context, dict):
             for block in document_context.get('blocks') or []:
                 if not isinstance(block, dict) or not block.get('supported'):
                     continue
-                if target_section_ids and block.get('section_id') not in target_section_ids:
+                if not self._belongs_to_target_section(block, target_section_ids):
                     continue
+                scope_section_id = self._scope_section_id(block, target_section_ids)
                 blocks.append({
                     'block_id': block.get('block_id'),
                     'text_node_id': block.get('text_node_id'),
                     'type': block.get('type'),
-                    'section_id': block.get('section_id'),
+                    'section_id': scope_section_id,
                     'section': section_titles.get(block.get('section_id')),
+                    'scope_section': section_titles.get(scope_section_id),
                     'before_leaf_text': block.get('before_leaf_text'),
+                    'ancestor_path': block.get('ancestor_path') or [],
                 })
         lists = []
         if isinstance(document_context, dict):
@@ -184,31 +327,97 @@ class TextProcessingManager:
                     if isinstance(entry, dict) and str(entry.get('type', '')).startswith('header'):
                         section_id = entry.get('id')
                         break
-                if target_section_ids and section_id not in target_section_ids:
+                scoped_list_node = dict(list_node)
+                scoped_list_node['section_id'] = section_id
+                if not self._belongs_to_target_section(scoped_list_node, target_section_ids):
                     continue
                 lists.append({
                     'block_id': list_node.get('block_id'),
                     'type': list_node.get('type'),
-                    'section_id': section_id,
+                    'items': list_node.get('items') or [],
+                    'section_id': self._scope_section_id(scoped_list_node, target_section_ids),
                     'section': section_titles.get(section_id),
                 })
         return section_titles, target_section_ids, blocks, lists
 
-    def _chunk_blocks(self, blocks, max_per_chunk=10):
-        sections = {}
-        order = []
+    @staticmethod
+    def _review_block_payload_size(block):
+        model_block = {
+            'block_id': block.get('block_id'),
+            'text_node_id': block.get('text_node_id'),
+            'type': block.get('type'),
+            'section': block.get('section'),
+            'scope_section': block.get('scope_section'),
+            'before_leaf_text': block.get('before_leaf_text'),
+        }
+        return len(json.dumps(model_block, ensure_ascii=False))
+
+    @staticmethod
+    def _review_list_payload_size(list_node):
+        model_list = {
+            'block_id': list_node.get('block_id'),
+            'type': list_node.get('type'),
+            'items': list_node.get('items') or [],
+            'section': list_node.get('section'),
+        }
+        return len(json.dumps(model_list, ensure_ascii=False))
+
+    def _chunk_blocks(self, blocks, lists=None,
+                      max_per_chunk=SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK,
+                      max_payload_characters=SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK):
+        lists = lists or []
+        list_payload_sizes = {}
+        for list_node in lists:
+            section_id = list_node.get('section_id') or '__none__'
+            list_payload_sizes[section_id] = (
+                list_payload_sizes.get(section_id, 0)
+                + self._review_list_payload_size(list_node)
+            )
+
+        # Preserve document order while packing adjacent small sections into the
+        # same request. Section metadata remains on each block, so semantic
+        # boundaries do not require one model call per heading.
+        chunks = []
+        chunk = []
+        payload_size = 0
+        sections_with_lists_sent = set()
         for block in blocks:
             section_id = block.get('section_id') or '__none__'
-            if section_id not in sections:
-                sections[section_id] = []
-                order.append(section_id)
-            sections[section_id].append(block)
-        chunks = []
-        for section_id in order:
-            section_blocks = sections[section_id]
-            for i in range(0, len(section_blocks), max_per_chunk):
-                chunks.append(section_blocks[i:i + max_per_chunk])
+            first_block_for_section = section_id not in sections_with_lists_sent
+            section_list_payload_size = list_payload_sizes.get(section_id, 0) if first_block_for_section else 0
+            block_payload_size = self._review_block_payload_size(block)
+            exceeds_limit = chunk and (
+                len(chunk) >= max_per_chunk or
+                payload_size + section_list_payload_size + block_payload_size > max_payload_characters
+            )
+            if exceeds_limit:
+                chunks.append(chunk)
+                chunk = []
+                payload_size = 0
+            if first_block_for_section:
+                payload_size += section_list_payload_size
+                sections_with_lists_sent.add(section_id)
+            chunk.append(block)
+            payload_size += block_payload_size
+        if chunk:
+            chunks.append(chunk)
         return chunks
+
+    @staticmethod
+    def _lists_for_chunk(lists, chunks, chunk_index):
+        if chunk_index < 0 or chunk_index >= len(chunks):
+            return []
+        section_ids = {block.get('section_id') for block in chunks[chunk_index]}
+        previous_section_ids = {
+            block.get('section_id')
+            for chunk in chunks[:chunk_index]
+            for block in chunk
+        }
+        return [
+            list_node for list_node in lists
+            if list_node.get('section_id') in section_ids
+            and list_node.get('section_id') not in previous_section_ids
+        ]
 
     def _dedup_items(self, items):
         seen = set()
@@ -252,9 +461,10 @@ class TextProcessingManager:
             'role': 'system',
             'content': (
                 'You are an SDoc writing reviewer. Return exactly one JSON object and no Markdown. '
-                'Suggest edits to up to 10 blocks. Each block has a "section" field naming the '
-                'chapter/section it belongs to. You must ONLY edit blocks whose "section" matches '
-                'the chapter or section named in the user\'s request; never edit other chapters. '
+                'Suggest edits only for the supplied blocks. Each block has a "section" field naming the '
+                'nearest chapter/section and a "scope_section" field naming the resolved requested '
+                'ancestor. The supplied blocks are the authoritative edit scope and may include '
+                'subsections; never invent or edit blocks outside this input. '
                 'Four kinds of edits are supported: '
                 '(1) "replace_block_text" for rewriting a block\'s text; '
                 '(2) "set_block_type" for changing a paragraph to a heading (header1-header6) or '
@@ -277,6 +487,7 @@ class TextProcessingManager:
             'text_node_id': block.get('text_node_id'),
             'type': block.get('type'),
             'section': block.get('section'),
+            'scope_section': block.get('scope_section'),
             'before_leaf_text': block.get('before_leaf_text'),
         } for block in blocks]
         user_content = {'request': prompt, 'blocks': model_blocks, 'lists': lists}
