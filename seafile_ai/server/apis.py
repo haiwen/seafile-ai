@@ -522,3 +522,77 @@ def search_icons():
         return {'error_msg': 'Internal server error.'}, 500
 
     return {'icons': icons}, 200
+
+
+@flask_app.route('/api/v1/sdoc-review/', methods=['POST'])
+def sdoc_review():
+    if not check_auth_token(request):
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Bad request.'}, 400
+
+    prompt = data.get('prompt')
+    document_context = data.get('document_context')
+    username = data.get('username')
+    if not isinstance(prompt, str) or not prompt.strip():
+        return {'error_msg': 'prompt invalid.'}, 400
+    if not isinstance(document_context, dict):
+        return {'error_msg': 'document_context invalid.'}, 400
+    if not isinstance(document_context.get('blocks'), list):
+        return {'error_msg': 'document_context.blocks invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    context = {'username': username, 'org_id': data.get('org_id')}
+    try:
+        review = flask_app.app.text_processing_manager.sdoc_review(prompt, document_context, context)
+    except ValueError as error:
+        return {'error_msg': str(error)}, 400
+    except LLMChatCompletionException as error:
+        logger.warning(error)
+        return {'error_msg': 'openai server error.'}, 500
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'review': review}, 200
+
+
+@flask_app.route('/api/v1/sdoc-analyze/', methods=['POST'])
+def sdoc_analyze():
+    if not check_auth_token(request):
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Bad request.'}, 400
+
+    prompt = data.get('prompt')
+    document_context = data.get('document_context')
+    username = data.get('username')
+    if not isinstance(prompt, str) or not prompt.strip():
+        return {'error_msg': 'prompt invalid.'}, 400
+    if not isinstance(document_context, dict):
+        return {'error_msg': 'document_context invalid.'}, 400
+    if not username:
+        return {'error_msg': 'username invalid.'}, 400
+
+    context = {'username': username, 'org_id': data.get('org_id')}
+    try:
+        analysis = flask_app.app.text_processing_manager.sdoc_analyze(prompt, document_context, context)
+    except ValueError as error:
+        return {'error_msg': str(error)}, 400
+    except LLMChatCompletionException as error:
+        logger.warning(error)
+        return {'error_msg': 'openai server error.'}, 500
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'analysis': analysis}, 200

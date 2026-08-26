@@ -2,6 +2,7 @@ import os
 import logging
 import re
 import base64
+import json
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType, MODEL_REASONING_TIER
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
@@ -118,6 +119,220 @@ class TextProcessingManager:
         tier = AI_UTILS_TIER.get('writing_assistant', MODEL_REASONING_TIER.MEDIUM.value)
         res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         return res
+
+    def sdoc_review(self, prompt, document_context, context):
+        """Generate a structured list of suggestions, chunked for long documents.
+
+        ``document_context`` is the immutable Document Context projection built
+        by SDoc Server: an object with ``snapshot_id``, ``file_uuid``,
+        ``document_incarnation``, ``exact_sdoc_version``, ``projection_version``,
+        ``outline`` and ``blocks``. Each block exposes ``block_id``,
+        ``text_node_id``, ``type``, ``ancestor_path``, ``before_leaf_text`` and a
+        ``supported`` flag. The model only returns semantic fields; canonical
+        hashes and item ids are assigned by Seahub/SDoc Server, never by the model.
+        """
+        _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
+        if len(blocks) <= 10:
+            return {'items': self._generate_items(prompt, blocks, lists, None, context)}
+
+        outline = (document_context or {}).get('outline') or []
+        brief = self._generate_revision_brief(prompt, outline, blocks, context)
+        items = []
+        for chunk in self._chunk_blocks(blocks):
+            items.extend(self._generate_items(prompt, chunk, lists, brief, context))
+        return {'items': self._dedup_items(items)}
+
+    def _collect_blocks(self, prompt, document_context):
+        section_titles = {}
+        if isinstance(document_context, dict):
+            for header in document_context.get('outline') or []:
+                if isinstance(header, dict) and header.get('block_id'):
+                    section_titles[header.get('block_id')] = header.get('text')
+
+        # Deterministic scope resolution: only edit blocks whose section header
+        # is named in the request. When no header is named, fall back to all
+        # supported blocks.
+        target_section_ids = set()
+        if isinstance(document_context, dict):
+            for header in document_context.get('outline') or []:
+                text = (header.get('text') or '').strip()
+                if len(text) >= 2 and text in prompt:
+                    target_section_ids.add(header.get('block_id'))
+
+        blocks = []
+        if isinstance(document_context, dict):
+            for block in document_context.get('blocks') or []:
+                if not isinstance(block, dict) or not block.get('supported'):
+                    continue
+                if target_section_ids and block.get('section_id') not in target_section_ids:
+                    continue
+                blocks.append({
+                    'block_id': block.get('block_id'),
+                    'text_node_id': block.get('text_node_id'),
+                    'type': block.get('type'),
+                    'section_id': block.get('section_id'),
+                    'section': section_titles.get(block.get('section_id')),
+                    'before_leaf_text': block.get('before_leaf_text'),
+                })
+        lists = []
+        if isinstance(document_context, dict):
+            for list_node in document_context.get('lists') or []:
+                if not isinstance(list_node, dict) or not list_node.get('block_id'):
+                    continue
+                section_id = None
+                for entry in reversed(list_node.get('ancestor_path') or []):
+                    if isinstance(entry, dict) and str(entry.get('type', '')).startswith('header'):
+                        section_id = entry.get('id')
+                        break
+                if target_section_ids and section_id not in target_section_ids:
+                    continue
+                lists.append({
+                    'block_id': list_node.get('block_id'),
+                    'type': list_node.get('type'),
+                    'section_id': section_id,
+                    'section': section_titles.get(section_id),
+                })
+        return section_titles, target_section_ids, blocks, lists
+
+    def _chunk_blocks(self, blocks, max_per_chunk=10):
+        sections = {}
+        order = []
+        for block in blocks:
+            section_id = block.get('section_id') or '__none__'
+            if section_id not in sections:
+                sections[section_id] = []
+                order.append(section_id)
+            sections[section_id].append(block)
+        chunks = []
+        for section_id in order:
+            section_blocks = sections[section_id]
+            for i in range(0, len(section_blocks), max_per_chunk):
+                chunks.append(section_blocks[i:i + max_per_chunk])
+        return chunks
+
+    def _dedup_items(self, items):
+        seen = set()
+        result = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            key = (item.get('block_id'), item.get('text_node_id'), item.get('kind'))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(item)
+        return result
+
+    def _generate_revision_brief(self, prompt, outline, blocks, context):
+        system_prompt = {
+            'role': 'system',
+            'content': (
+                'You are an SDoc writing review strategist. Return exactly one JSON object and '
+                'no Markdown. Produce a concise revision brief to keep edits consistent across '
+                'the whole document. The object must be: {"goal":"...","tone":"...","length":"...",'
+                '"terminology":["..."],"heading_strategy":"...","do_not_modify":"..."}. '
+                'Answer in the same language as the user request.'
+            )
+        }
+        user_prompt = {
+            'role': 'user',
+            'content': json.dumps({'request': prompt, 'outline': outline, 'block_count': len(blocks)}, ensure_ascii=False),
+        }
+        content = self.app.llm_api.run([system_prompt, user_prompt], context, response_format={'type': 'json_object'})
+        if not isinstance(content, str):
+            return None
+        try:
+            brief = json.loads(content)
+        except ValueError:
+            return None
+        return brief if isinstance(brief, dict) else None
+
+    def _generate_items(self, prompt, blocks, lists, brief, context):
+        system_prompt = {
+            'role': 'system',
+            'content': (
+                'You are an SDoc writing reviewer. Return exactly one JSON object and no Markdown. '
+                'Suggest edits to up to 10 blocks. Each block has a "section" field naming the '
+                'chapter/section it belongs to. You must ONLY edit blocks whose "section" matches '
+                'the chapter or section named in the user\'s request; never edit other chapters. '
+                'Four kinds of edits are supported: '
+                '(1) "replace_block_text" for rewriting a block\'s text; '
+                '(2) "set_block_type" for changing a paragraph to a heading (header1-header6) or '
+                'changing a heading level, only when the request asks for heading-level changes; '
+                '(3) "set_list_type" for converting an existing list between ordered_list and '
+                'unordered_list, only when the request asks for list conversion; '
+                '(4) "replace_table_cell_text" for rewriting a table cell\'s text, using block_type '
+                '"table_cell" with the cell\'s block_id and text_node_id. '
+                'Use only block_id, text_node_id, type and before_leaf_text supplied in the document. '
+                'Do not invent ids. The object must be: {"items":['
+                '{"kind":"replace_block_text","block_id":"...","text_node_id":"...","block_type":"...","before_leaf_text":"...","after_text":"...","rationale":"..."} '
+                'or {"kind":"set_block_type","block_id":"...","block_type":"...","after_type":"header2","rationale":"..."} '
+                'or {"kind":"set_list_type","block_id":"...","block_type":"ordered_list","after_type":"unordered_list","rationale":"..."} '
+                'or {"kind":"replace_table_cell_text","block_id":"...","text_node_id":"...","block_type":"table_cell","before_leaf_text":"...","after_text":"...","rationale":"..."}'
+                ']}. If no change is needed, omit it. Never output Slate paths or operations.'
+            )
+        }
+        model_blocks = [{
+            'block_id': block.get('block_id'),
+            'text_node_id': block.get('text_node_id'),
+            'type': block.get('type'),
+            'section': block.get('section'),
+            'before_leaf_text': block.get('before_leaf_text'),
+        } for block in blocks]
+        user_content = {'request': prompt, 'blocks': model_blocks, 'lists': lists}
+        if brief:
+            user_content['revision_brief'] = brief
+        user_prompt = {
+            'role': 'user',
+            'content': json.dumps(user_content, ensure_ascii=False),
+        }
+        content = self.app.llm_api.run([system_prompt, user_prompt], context, response_format={'type': 'json_object'})
+        if not isinstance(content, str):
+            raise ValueError('The model returned an invalid review suggestion.')
+        try:
+            result = json.loads(content)
+        except ValueError as error:
+            raise ValueError('The model returned invalid review JSON.') from error
+        if not isinstance(result, dict) or not isinstance(result.get('items'), list):
+            raise ValueError('The model returned an invalid review suggestion.')
+        return result.get('items') or []
+
+    def sdoc_analyze(self, prompt, document_context, context):
+        """Generate a plain-text analysis of the document for mixed-intent requests."""
+        section_titles = {}
+        if isinstance(document_context, dict):
+            for header in document_context.get('outline') or []:
+                if isinstance(header, dict) and header.get('block_id'):
+                    section_titles[header.get('block_id')] = header.get('text')
+
+        blocks = []
+        if isinstance(document_context, dict):
+            for block in document_context.get('blocks') or []:
+                if not isinstance(block, dict) or not block.get('supported'):
+                    continue
+                blocks.append({
+                    'block_id': block.get('block_id'),
+                    'type': block.get('type'),
+                    'section': section_titles.get(block.get('section_id')),
+                    'before_leaf_text': block.get('before_leaf_text'),
+                })
+
+        system_prompt = {
+            'role': 'system',
+            'content': (
+                'You are an SDoc document analyst. Provide a concise plain-text analysis of the '
+                'document based on the user request. Do not return JSON, edit suggestions or Slate '
+                'operations. Answer in the same language as the user request.'
+            )
+        }
+        user_prompt = {
+            'role': 'user',
+            'content': json.dumps({'request': prompt, 'blocks': blocks}, ensure_ascii=False),
+        }
+        content = self.app.llm_api.run([system_prompt, user_prompt], context)
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError('The model returned no analysis.')
+        return content.strip()
 
     def get_predefined_prompt(self, prefix, writing_type):
         if writing_type == WritingType.ASK:
