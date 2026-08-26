@@ -45,6 +45,10 @@ class LLMAPI:
             kwargs.pop('api_key')
 
         context = kwargs.pop('context', {})
+        request_timeout = kwargs.pop('request_timeout_seconds', None)
+        timeout = self.timeout
+        if isinstance(request_timeout, (int, float)) and 0 < request_timeout <= self.timeout:
+            timeout = request_timeout
         try:
             gpt_version = re.search(r'\bgpt-(\d+)\b', self.model_id)
             if gpt_version and int(gpt_version.group(1)) >= 5:
@@ -64,7 +68,7 @@ class LLMAPI:
                 base_url=self.base_url,
                 api_key=self.api_key,
                 custom_llm_provider=self.llm_type,
-                timeout=self.timeout,
+                timeout=timeout,
                 **kwargs,
             )
         except Exception as error:
@@ -86,6 +90,9 @@ class LLMAPI:
         assert isinstance(messages, (list, tuple))
 
         kwargs['messages'] = messages
+        request_timeout = context.get('request_timeout_seconds')
+        if isinstance(request_timeout, (int, float)):
+            kwargs['request_timeout_seconds'] = request_timeout
         if 'temperature' not in kwargs:
             kwargs['temperature'] = 0
         if kwargs.get('json_mode'):
