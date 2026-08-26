@@ -3,7 +3,7 @@ import logging
 
 import litellm
 
-from seafile_ai.config import LLM_MODEL_ID_MODELS_MAP, DEFAULT_LLM_MODEL
+from seafile_ai.config import LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL
 from seafile_ai.utils import LLMChatCompletionException
 from seafile_ai.utils.constants import MODEL_USAGE_STATISTIC_CHANNEL_NAME
 
@@ -15,10 +15,16 @@ def get_llm_client_by_model_id(data_logger, model_id):
     return LLMAPI(data_logger, model_config.get('model'), model_config.get('type', 'openai'), model_config.get('url'), model_config.get('key'))
 
 
+def get_llm_client_by_model_tier(data_logger, tier):
+    model_config = LLM_MODEL_TIER_MODELS_MAP.get(tier, DEFAULT_LLM_MODEL)
+    return LLMAPI(data_logger, model_config.get('model'), model_config.get('type', 'openai'), model_config.get('url'), model_config.get('key'))
+
+
 class LLMAPI:
     def __init__(self, data_logger, model, llm_type='openai', base_url=None, api_key=None, timeout=180):
         self.data_logger = data_logger
         self.timeout = timeout
+        self.last_token_usage = {}
         if llm_type == 'other':
             llm_type = 'hosted_vllm'
         if llm_type in ('other', 'hosted_vllm') and not base_url:
@@ -55,6 +61,13 @@ class LLMAPI:
             logger.error('Chat completion error: %s', str(error))
             raise LLMChatCompletionException('LLM chat completion error: %s' % error)
 
+        try:
+            self.last_token_usage = {
+                'input_tokens': response.usage.prompt_tokens,
+                'output_tokens': response.usage.completion_tokens,
+            }
+        except Exception:
+            self.last_token_usage = {}
         self._logger_usage_from_response(response, context)
         return response
 

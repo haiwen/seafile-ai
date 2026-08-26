@@ -7,6 +7,7 @@ from pathlib import Path
 
 from seafile_ai import config
 from seafile_ai.chat_manager.utils.callbacker import ChatCallBacker
+from seafile_ai.config import AI_UTILS_TIER
 from seafile_ai.repo_metadata.constants import METADATA_TABLE
 from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
 from seafile_ai.repo_metadata.utils import get_metadata_by_path
@@ -14,7 +15,8 @@ from seafile_ai.search.repo_file_search_adapter import RepoFileSearchAdapter
 from seafile_ai.search.seasearch_api import SeaSearchAPI
 from seafile_ai.search.summary_vector_search_adapter import SummaryVectorSearchAdapter
 from seafile_ai.utils import get_file_content_by_seafobj, parse_file_content
-from seafile_ai.utils.llm_api import get_llm_client_by_model_id
+from seafile_ai.utils.constants import MODEL_REASONING_TIER
+from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
 from seafile_ai.utils.tools import BasicTool
 
 logger = logging.getLogger(__name__)
@@ -123,40 +125,25 @@ class DocumentsSearch(BasicTool):
     def _search_documents_by_vector(self, repo_id, query, context, count, app):
         if not app.embedding_api:
             return []
-        t0 = time.time()
         query_vector = app.embedding_api.generate(query, context)
-        t1 = time.time()
-        logger.info(
-            '[Chat Step Analysis] Embedding generation: %.3fs, repo_id=%s, dimensions=%d',
-            t1 - t0, repo_id, len(query_vector)
-        )
         results = self.summary_vector_search_adapter.search(
             repo_id,
             query_vector,
             size=max(count * SEARCH_LIMIT_MULTIPLIER, 10),
         )
-        t2 = time.time()
-        logger.info(
-            '[Chat Step Analysis] Vector SeaSearch query: %.3fs, repo_id=%s, results=%d',
-            t2 - t1, repo_id, len(results)
-        )
-        logger.info(
-            '[Chat Step Analysis] Vector search total: %.3fs, repo_id=%s',
-            t2 - t0, repo_id
-        )
         return results
 
-    def _rerank_documents(self, query, candidates, context, count, app, model=None):
+    def _rerank_documents(self, query, candidates, context, count, app, tool_executor, model=None):
         if len(candidates) <= 1:
-            return candidates[:count]
+            return candidates[:count], {
+                'candidates': len(candidates), 'elapsed_seconds': 0, 'model': 'n/a',
+                'input_tokens': 0, 'output_tokens': 0,
+            }
 
         t0 = time.time()
-
         prompt_items = []
-        snippet_lengths = []
         for index, item in enumerate(candidates, start=1):
             snippet = truncate_text(strip_mark_tags(item['snippet']), 400)
-            snippet_lengths.append(len(snippet))
             prompt_items.append({
                 'index': index,
                 'title': item['title'],
@@ -182,30 +169,20 @@ class DocumentsSearch(BasicTool):
             },
         ]
 
-        avg_snippet_len = sum(snippet_lengths) / len(snippet_lengths) if snippet_lengths else 0
-        max_snippet_len = max(snippet_lengths) if snippet_lengths else 0
-        total_snippet_chars = sum(snippet_lengths)
-        logger.info(
-            '[Chat Step Analysis] Rerank input: candidates=%d, avg_snippet_len=%d, max_snippet_len=%d, total_snippet_chars=%d',
-            len(candidates), int(avg_snippet_len), max_snippet_len, total_snippet_chars
-        )
-
+        rerank_model = 'unknown'
+        token_usage = {}
         try:
-            if model:
-                rerank_llm = get_llm_client_by_model_id(app.data_logger, model)
-            else:
-                rerank_llm = app.llm_api
-            response = rerank_llm.run(messages, context, json_mode=True, temperature=0.1)
+            tier = AI_UTILS_TIER.get('rerank', MODEL_REASONING_TIER.LOW.value)
+            rerank_llm = get_llm_client_by_model_tier(app.data_logger, tier)
+            rerank_model = rerank_llm.model_id
+            rerank_context = dict(context)
+            rerank_context['scenario'] = 'rerank'
+            response = rerank_llm.run(messages, rerank_context, json_mode=True, temperature=0.1)
+            token_usage = rerank_llm.last_token_usage
             ranked_indices = json.loads(response).get('indices', [])
         except Exception as error:
             logger.warning('documents_search rerank failed: %s', error)
             ranked_indices = []
-
-        t1 = time.time()
-        logger.info(
-            '[Chat Step Analysis] LLM rerank: %.3fs, candidates=%d, query=%s',
-            t1 - t0, len(candidates), query
-        )
 
         ranked = []
         used = set()
@@ -227,10 +204,26 @@ class DocumentsSearch(BasicTool):
                 continue
             ranked.append(candidate)
             used.add(key)
-        return ranked[:count]
+
+        elapsed = time.time() - t0
+        rerank_info = {
+            'candidates': len(candidates),
+            'elapsed_seconds': round(elapsed, 3),
+            'model': rerank_model,
+            'input_tokens': token_usage.get('input_tokens', 0),
+            'output_tokens': token_usage.get('output_tokens', 0),
+        }
+        logger.info('documents_search rerank: candidates=%d, elapsed=%.3fs, model=%s, input_tokens=%d, output_tokens=%d',
+                    len(candidates), elapsed, rerank_model,
+                    rerank_info['input_tokens'], rerank_info['output_tokens'])
+        tool_executor.thought_process.update_last_group_tokens_usage({
+            'input_tokens': rerank_info['input_tokens'],
+            'output_tokens': rerank_info['output_tokens'],
+            'total_tokens': rerank_info['input_tokens'] + rerank_info['output_tokens'],
+        })
+        return ranked[:count], rerank_info
 
     def _load_full_contents(self, candidates):
-        t0 = time.time()
         content_map = {}
         for candidate in candidates:
             path = candidate.get('path')
@@ -256,11 +249,6 @@ class DocumentsSearch(BasicTool):
                 except Exception as error:
                     logger.warning('documents_search parse file failed: %s', error)
             content_map[path] = truncate_text(content, SOURCE_CONTENT_LIMIT) if content else ''
-        t1 = time.time()
-        logger.info(
-            '[Chat Step Analysis] Full content loading: %.3fs, documents=%d',
-            t1 - t0, len(candidates)
-        )
         return content_map
 
     def _format_candidates(self, search_results):
@@ -308,19 +296,11 @@ class DocumentsSearch(BasicTool):
 
         logger.info('documents_search query: %s', query)
 
-        t_total = time.time()
-
-        t0 = time.time()
         try:
             search_results = self._search_documents(repo_id, query, count)
         except Exception as error:
             logger.warning('documents_search failed: %s', error)
             search_results = []
-        t1 = time.time()
-        logger.info(
-            '[Chat Step Analysis] Keyword SeaSearch query: %.3fs, repo_id=%s, results=%d',
-            t1 - t0, repo_id, len(search_results)
-        )
 
         try:
             vector_search_results = self._search_documents_by_vector(repo_id, query, context, count, app)
@@ -332,14 +312,10 @@ class DocumentsSearch(BasicTool):
             self._format_candidates(search_results),
             self._format_vector_candidates(vector_search_results),
         )
-        t_merge = time.time()
-        logger.info(
-            '[Chat Step Analysis] Merge candidates: %.3fs, total=%d (keyword=%d, vector=%d)',
-            t_merge - t1, len(candidates), len(search_results), len(vector_search_results)
-        )
 
-        reranked_candidates = self._rerank_documents(query, candidates, context, count, app, model)
-        t_rerank = time.time()
+        reranked_candidates, rerank_info = self._rerank_documents(
+            query, candidates, context, count, app, tool_executor, model,
+        )
 
         reranked_candidates = [
             candidate
@@ -348,7 +324,6 @@ class DocumentsSearch(BasicTool):
         ]
 
         full_content_map = self._load_full_contents(reranked_candidates)
-        t_content = time.time()
 
         observation_results = []
         cached_sources = sources_results[:]
@@ -383,13 +358,20 @@ class DocumentsSearch(BasicTool):
                 'Search results': len(search_results) + len(vector_search_results),
                 'Keyword results': len(search_results),
                 'Vector results': len(vector_search_results),
+                'Rerank candidates': rerank_info['candidates'],
+                'Rerank costs': f"{rerank_info['elapsed_seconds']}s",
+                'Rerank model': rerank_info['model'],
+                'Rerank token usages': (
+                    f"{rerank_info['input_tokens'] + rerank_info['output_tokens']} "
+                    f"(input: {rerank_info['input_tokens']}, output: {rerank_info['output_tokens']})"
+                ),
                 'New references': len(observation_results),
                 'Full content fetched': len(full_content_map),
             })
 
-        t_end = time.time()
         logger.info(
-            '[Chat Step Analysis] documents_search total: %.3fs, query=%s, candidates=%d, final=%d',
-            t_end - t_total, query, len(candidates), len(observation_results)
+            'documents_search completed: query=%s, candidates=%d, final=%d (keyword=%d, vector=%d)',
+            query, len(candidates), len(observation_results),
+            len(search_results), len(vector_search_results),
         )
         return observation_results

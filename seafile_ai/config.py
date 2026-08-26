@@ -130,6 +130,7 @@ LLM_MODELS = []
 LLM_MODEL_ID_MODELS_MAP = {}
 LLM_MODEL_TIER_MODELS_MAP = {}
 DEFAULT_LLM_MODEL = {}
+AI_UTILS_TIER = {}
 EMBEDDING_MODEL = {}
 
 # Chat
@@ -221,6 +222,10 @@ LLM_MODEL = os.getenv('SEAFILE_AI_LLM_MODEL') or LLM_MODEL
 yaml_file_path = os.path.join(CONF_DIR, os.environ.get('SEAFILE_AI_CONFIG_NAME', 'seafile_ai_config.yaml'))
 configs = _ConfigParser(yaml_file_path, 'seafile-ai')
 LLM_MODELS = configs.get('LLM_MODELS', [])
+AI_UTILS_TIER = configs.get('AI_UTILS_TIER', {}, check_type=False)
+if not isinstance(AI_UTILS_TIER, dict):
+    logger.warning('AI_UTILS_TIER must be a mapping; falling back to defaults')
+    AI_UTILS_TIER = {}
 EMBEDDING_MODEL = configs.get('EMBEDDING_MODEL', {})
 if not check_llm_validated(EMBEDDING_MODEL):
     raise ValueError('EMBEDDING_MODEL is not set or invalid')
