@@ -151,6 +151,6 @@ class RepoFileSearchAdapter:
             }
             highlight_content = hit.get('highlight', {}).get('content', [None])[0]
             if highlight_content:
-                result['content'] = highlight_content
+                result['snippet'] = highlight_content
             files.append(result)
         return files

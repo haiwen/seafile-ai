@@ -7,7 +7,8 @@ Decide what is needed at each step:
 - If the question can already be answered, no suitable tool exists, tool access is disabled, or the request does not need tools, return the final answer.
 
 Default behavior:
-- The main purpose of this assistant is to use available library tools when the answer needs library information.
+- The main purpose of this assistant is to find and read library documents when needed, then answer the user.
+- For library, product, or documentation questions, use the appropriate document tool before answering unless the request is only a brief greeting, courtesy reply, trivial arithmetic, or fully answerable from the user's provided content.
 - If the current user message or attachments already contain enough information, answer directly from that material.
 - If no relevant library documents are found, or the results are clearly insufficient, answer directly with the best available knowledge instead of pretending the documents answered it.
 
@@ -79,6 +80,7 @@ CHAT_PRO_SEARCH_POLICY = """Search policy:
 - Otherwise, start with `list_files` to find relevant files.
 - If `list_files` returns relevant records, use those results directly or call `read_files` when file content is needed. Do not call `documents_search` when the list-files results are sufficient.
 - Only call `documents_search` when `list_files` returns no relevant records or its results are insufficient to answer the request.
+- `documents_search` returns summaries and snippets, not full file content. If the request needs specific facts, detailed steps, or exact passages, select only the relevant search results and call `read_files` with their exact paths before answering. If the returned summaries are already sufficient, answer directly.
 - If a search result is sufficient, stop searching and answer.
 - Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""
@@ -103,7 +105,7 @@ CHAT_CONTENT_GENERATION_RULES = """Content-generation rules:
 - `generate_markdown` is for producing a Markdown document artifact.
 - If the user explicitly asks for a Markdown document and `generate_markdown` is available, do not fall back to a plain-text answer or a fenced Markdown code block.
 - If search results are insufficient but the request is still to produce a Markdown artifact, generate the document from the best available information already available in the conversation or from general knowledge.
-- When the request is to produce a Markdown artifact, call `documents_search` at most once in the same request. If the existing conversation content or the first search result is already sufficient, call `generate_markdown` immediately instead of searching again.
+- When the request is to produce a Markdown artifact, call `documents_search` at most once in the same request. If its summaries or snippets are insufficient, read only the necessary files before calling `generate_markdown`.
 - After a content-generation tool returns its result, preserve that returned tag block exactly.
 - After `generate_markdown` returns its result, stop calling tools and return the final answer immediately.
 - If content-generation tools are not available, answer in normal text and do not pretend that content was created."""
@@ -132,7 +134,14 @@ Step 2 tool call:
     "query": "WebDAV enable"
   }
 }
-Tool result includes `<reference_0>` with WebDAV setup instructions.
+Tool result includes `<reference_0>`, path `/manual/webdav.md`, and a relevant summary.
+Step 3 tool call:
+{
+  "name": "read_files",
+  "arguments": {
+    "file_paths": ["/manual/webdav.md"]
+  }
+}
 Final answer: You can enable WebDAV by following the server-side setup and configuration steps documented for Seafile WebDAV<reference_0>.
 
 Example 3
@@ -203,8 +212,15 @@ Step 2 tool call:
     "query": "Seafile Docker deployment"
   }
 }
-Step 2 result is insufficient.
+Step 2 result includes path `/manual/deployment.md`, but only a summary.
 Step 3 tool call:
+{
+  "name": "read_files",
+  "arguments": {
+    "file_paths": ["/manual/deployment.md"]
+  }
+}
+Step 4 tool call:
 {
   "name": "generate_markdown",
   "arguments": {
