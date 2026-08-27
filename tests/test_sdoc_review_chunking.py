@@ -184,6 +184,18 @@ class SDocReviewChunkingTest(unittest.TestCase):
 
         self.assertGreater(len(chunks), 1)
 
+    def test_default_chunk_payload_budget_is_conservative(self):
+        blocks = [
+            {'block_id': str(index), 'section_id': 'current', 'before_leaf_text': 'x' * 900}
+            for index in range(4)
+        ]
+
+        chunks = self.manager._chunk_blocks(blocks)
+
+        self.assertEqual([[block['block_id'] for block in chunk] for chunk in chunks], [
+            ['0', '1', '2'], ['3'],
+        ])
+
     def test_adjacent_small_sections_share_a_chunk(self):
         blocks = [
             {'block_id': 'a', 'section_id': 'section-a', 'before_leaf_text': '甲'},
@@ -332,6 +344,18 @@ class SDocReviewChunkingTest(unittest.TestCase):
 
         with self.assertRaises(self.module.ReviewPayloadTooLargeError):
             self.manager._chunk_blocks(blocks, lists)
+
+    def test_review_item_generation_limits_output_size(self):
+        self.manager.app.llm_api.run.return_value = '{"items": []}'
+
+        self.manager._generate_items('改进全文', [], [], None, {})
+
+        kwargs = self.manager.app.llm_api.run.call_args.kwargs
+        self.assertEqual(
+            kwargs['max_tokens'], self.module.SDOC_REVIEW_MAX_OUTPUT_TOKENS_PER_CHUNK)
+        self.assertIn(
+            'at most %d high-value suggestions' % self.module.SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK,
+            self.manager.app.llm_api.run.call_args.args[0][0]['content'])
 
 
 if __name__ == '__main__':
