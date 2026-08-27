@@ -256,14 +256,17 @@ class ReadFiles(BasicTool):
             remaining_chars = config.READ_FILES_MAX_TOTAL_CHARS - total_chars
             if len(content) > remaining_chars:
                 results.append({
-                    'path': file_path,
+                    'path': f'<seafile-ai-file>{file_path}</seafile-ai-file>',
                     'content': content[:remaining_chars],
                     'truncated': True,
                 })
                 total_chars = config.READ_FILES_MAX_TOTAL_CHARS
                 continue
 
-            results.append({'path': file_path, 'content': content})
+            results.append({
+                'path': f'<seafile-ai-file>{file_path}</seafile-ai-file>',
+                'content': content,
+            })
             total_chars += len(content)
 
         if isinstance(call_back, ChatCallBacker):

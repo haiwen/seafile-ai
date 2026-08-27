@@ -145,7 +145,7 @@ class ReadFilesTest(unittest.TestCase):
         result = module.ReadFiles().execute(['/documents/plan.sdoc'], {'repo_id': 'repo-id'}, None)
 
         self.assertEqual(result, [{
-            'path': '/documents/plan.sdoc',
+            'path': '<seafile-ai-file>/documents/plan.sdoc</seafile-ai-file>',
             'content': 'Project plan',
         }])
         get_repo_info.assert_called_once_with('repo-id')
@@ -171,7 +171,10 @@ class ReadFilesTest(unittest.TestCase):
             None,
         )
 
-        self.assertEqual(result, [{'path': '/documents/plan.sdoc', 'content': 'Project plan'}])
+        self.assertEqual(result, [{
+            'path': '<seafile-ai-file>/documents/plan.sdoc</seafile-ai-file>',
+            'content': 'Project plan',
+        }])
         get_file_id_by_path.assert_called_once_with({'repo_id': 'repo-id'}, '/documents/plan.sdoc')
         parse_file.assert_called_once_with('/documents/plan.sdoc', 'repo-id', 'obj-id', 10 * 1024 * 1024)
 
@@ -192,8 +195,8 @@ class ReadFilesTest(unittest.TestCase):
         result = module.ReadFiles().execute(file_paths, {'repo_id': 'repo-id'}, None)
 
         self.assertEqual(result, [
-            {'path': file_paths[0], 'content': 'content-0'},
-            {'path': file_paths[1], 'content': 'content-1'},
+            {'path': f'<seafile-ai-file>{file_paths[0]}</seafile-ai-file>', 'content': 'content-0'},
+            {'path': f'<seafile-ai-file>{file_paths[1]}</seafile-ai-file>', 'content': 'content-1'},
             {'path': file_paths[2], 'error': 'File limit exceeded (maximum 2 files)'},
         ])
         self.assertEqual(get_file_id_by_path.call_count, 2)
@@ -219,8 +222,8 @@ class ReadFilesTest(unittest.TestCase):
         )
 
         self.assertEqual(result, [
-            {'path': '/documents/plan-1.sdoc', 'content': 'abcdefghij'},
-            {'path': '/documents/plan-2.sdoc', 'content': 'kl', 'truncated': True},
+            {'path': '<seafile-ai-file>/documents/plan-1.sdoc</seafile-ai-file>', 'content': 'abcdefghij'},
+            {'path': '<seafile-ai-file>/documents/plan-2.sdoc</seafile-ai-file>', 'content': 'kl', 'truncated': True},
             {'path': '/documents/plan-3.sdoc', 'error': 'Content limit reached (maximum 12 characters)'},
         ])
         self.assertEqual(parse_file.call_count, 2)
