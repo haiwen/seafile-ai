@@ -1,6 +1,8 @@
 import logging
 import jwt
 import json
+import hashlib
+import time
 
 from PIL import UnidentifiedImageError
 from flask import Flask, Response, request, stream_with_context
@@ -35,6 +37,37 @@ def check_auth_token(req):
         return False
 
     return True
+
+
+def _review_plan_digest(value):
+    serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+
+
+def _encode_review_plan_token(prompt, document_context, plan):
+    payload = {
+        'purpose': 'sdoc_review_plan',
+        'exp': int(time.time()) + 300,
+        'prompt_digest': _review_plan_digest(prompt),
+        'context_digest': _review_plan_digest(document_context),
+        'brief_digest': _review_plan_digest(plan.get('brief')),
+        'chunks_digest': _review_plan_digest(plan.get('chunks')),
+    }
+    return jwt.encode(payload, config.SECRET_KEY, algorithm='HS256')
+
+
+def _review_plan_token_matches(token, prompt, document_context, brief, chunks):
+    try:
+        payload = jwt.decode(token, config.SECRET_KEY, algorithms=['HS256'])
+    except jwt.InvalidTokenError:
+        return False
+    return (
+        payload.get('purpose') == 'sdoc_review_plan'
+        and payload.get('prompt_digest') == _review_plan_digest(prompt)
+        and payload.get('context_digest') == _review_plan_digest(document_context)
+        and payload.get('brief_digest') == _review_plan_digest(brief)
+        and payload.get('chunks_digest') == _review_plan_digest(chunks)
+    )
 
 
 @flask_app.route('/api/v1/get-ai-reply', methods=['POST'])
@@ -605,6 +638,8 @@ def sdoc_review_plan():
         logger.exception(error)
         return {'error_msg': 'Internal server error.'}, 500
 
+    plan = dict(plan)
+    plan['plan_token'] = _encode_review_plan_token(prompt, document_context, plan)
     return {'plan': plan}, 200
 
 
@@ -655,6 +690,7 @@ def sdoc_review_chunk():
 
     prompt = data.get('prompt')
     document_context = data.get('document_context')
+    plan_token = data.get('plan_token')
     if 'brief' not in data:
         return {'error_msg': 'brief invalid.'}, 400
     brief = data.get('brief')
@@ -668,11 +704,20 @@ def sdoc_review_chunk():
         return {'error_msg': 'document_context.blocks invalid.'}, 400
     if not isinstance(chunk_index, int):
         return {'error_msg': 'chunk_index invalid.'}, 400
+    if not isinstance(plan_token, str) or not plan_token:
+        return {'error_msg': 'plan_token invalid.'}, 400
     if not username:
         return {'error_msg': 'username invalid.'}, 400
 
     context = build_sdoc_ai_context(data, username)
     try:
+        _blocks, _lists, chunks = flask_app.app.text_processing_manager.sdoc_review_chunk_manifest(
+            prompt, document_context)
+        if not _review_plan_token_matches(
+                plan_token, prompt, document_context, brief,
+                [{'chunk_index': index, 'block_ids': [block.get('block_id') for block in chunk]}
+                 for index, chunk in enumerate(chunks)]):
+            return {'error_msg': 'review plan does not match the request.'}, 409
         result = flask_app.app.text_processing_manager.sdoc_review_chunk(
             prompt, document_context, brief, chunk_index, context)
     except ReviewPayloadTooLargeError as error:

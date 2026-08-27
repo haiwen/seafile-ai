@@ -40,6 +40,11 @@ SECTION_NUMBER_PREFIX_PATTERNS = (
     r'^\s*[（(]?\s*[一二三四五六七八九十百零]+\s*[）)]?\s*[.、:：\-]\s*',
     r'^\s*第\s*[0-9一二三四五六七八九十百零]+\s*[章节篇部分]\s*[.、:：\-]?\s*',
 )
+SECTION_NUMBER_TOKEN_PATTERNS = (
+    r'^\s*(\d+(?:\.\d+)*)(?:\s*[.、:：\-]\s*|\s+)',
+    r'^\s*[（(]?\s*([一二三四五六七八九十百零]+)\s*[）)]?\s*[.、:：\-]\s*',
+    r'^\s*第\s*([0-9一二三四五六七八九十百零]+)\s*[章节篇部分]',
+)
 SECTION_QUOTE_PATTERN = re.compile(r'[“"\'「『《]([^”"\'」』》]{2,80})[”"\'」』》]')
 
 
@@ -169,7 +174,7 @@ class TextProcessingManager:
 
         chunks = self._chunk_blocks(blocks, lists)
         brief = None
-        if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD:
+        if len(chunks) > 1:
             outline = (document_context or {}).get('outline') or []
             brief = self._generate_revision_brief(prompt, outline, blocks, context)
             if not self._is_valid_revision_brief(brief):
@@ -187,10 +192,9 @@ class TextProcessingManager:
         same chunk list. ``chunk_index`` is stable across the plan and each
         subsequent ``sdoc_review_chunk`` call.
         """
-        _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
-        chunks = self._chunk_blocks(blocks, lists)
+        blocks, _lists, chunks = self.sdoc_review_chunk_manifest(prompt, document_context)
         brief = None
-        if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD:
+        if len(chunks) > 1:
             outline = (document_context or {}).get('outline') or []
             brief = self._generate_revision_brief(prompt, outline, blocks, context)
             if not self._is_valid_revision_brief(brief):
@@ -210,15 +214,19 @@ class TextProcessingManager:
         None for single-chunk documents). ``chunk_index`` must be a valid index
         from the plan.
         """
-        _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
-        chunks = self._chunk_blocks(blocks, lists)
-        if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD and not self._is_valid_revision_brief(brief):
+        blocks, lists, chunks = self.sdoc_review_chunk_manifest(prompt, document_context)
+        if len(chunks) > 1 and not self._is_valid_revision_brief(brief):
             raise ValueError('brief invalid')
         if chunk_index < 0 or chunk_index >= len(chunks):
             raise ValueError('chunk_index out of range')
         chunk_lists = self._lists_for_chunk(lists, chunks, chunk_index)
         return {'items': self._generate_items(
             prompt, chunks[chunk_index], chunk_lists, brief, context)}
+
+    def sdoc_review_chunk_manifest(self, prompt, document_context):
+        """Return the deterministic block/list/chunk manifest without invoking a model."""
+        _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
+        return blocks, lists, self._chunk_blocks(blocks, lists)
 
     def sdoc_review_scope(self, prompt, document_context):
         """Resolve an immutable, model-independent review scope."""
@@ -279,16 +287,37 @@ class TextProcessingManager:
             aliases.add(normalized_unnumbered_title)
         return aliases
 
+    @staticmethod
+    def _section_number_aliases(title):
+        normalized_title = unicodedata.normalize('NFKC', title or '').strip().casefold()
+        aliases = set()
+        for pattern in SECTION_NUMBER_TOKEN_PATTERNS:
+            match = re.match(pattern, normalized_title)
+            if not match:
+                continue
+            number = match.group(1).replace(' ', '')
+            if number:
+                aliases.add(number)
+                aliases.add('第%s章' % number)
+            break
+        return aliases
+
     @classmethod
     def _prompt_targets_section(cls, prompt, title):
         normalized_prompt = cls._normalize_section_name(prompt)
         aliases = cls._section_aliases(title)
+        number_aliases = cls._section_number_aliases(title)
         quoted_names = {
             cls._normalize_section_name(match)
             for match in SECTION_QUOTE_PATTERN.findall(prompt or '')
         }
         if aliases.intersection(quoted_names):
             return True
+        for alias in number_aliases:
+            if alias.startswith('第') and alias in normalized_prompt:
+                return True
+            if re.search(r'(?<![\d.])%s(?![\d.])' % re.escape(alias), normalized_prompt):
+                return True
         for alias in aliases:
             if len(alias) >= 4 and alias in normalized_prompt:
                 return True
@@ -311,7 +340,9 @@ class TextProcessingManager:
             '章节', '章内', '节内', '小节', '标题下', '标题中', '部分内容',
             'section', 'chapter', 'under the heading',
         ))
-        return has_scope_word
+        has_numbered_scope = bool(re.search(
+            r'第\s*[0-9一二三四五六七八九十百零]+\s*[章节篇部分]', normalized_prompt))
+        return has_scope_word or has_numbered_scope
 
     @staticmethod
     def _is_all_sections_request(prompt):
