@@ -153,6 +153,28 @@ class ReadFilesTest(unittest.TestCase):
         parse_file.assert_called_once_with('/documents/plan.sdoc', 'repo-id', 'obj-id', 10 * 1024 * 1024)
         query_metadata_rows.assert_not_called()
 
+    def test_reads_path_tag_returned_by_list_files(self):
+        query_metadata_rows = Mock()
+        get_repo_info = Mock(return_value={'repo_id': 'repo-id'})
+        get_file_id_by_path = Mock(return_value='obj-id')
+        parse_file = Mock(return_value='Project plan')
+        module = load_file_tools(
+            query_metadata_rows,
+            get_repo_info=get_repo_info,
+            get_file_id_by_path=get_file_id_by_path,
+            parse_file=parse_file,
+        )
+
+        result = module.ReadFiles().execute(
+            ['<seafile-ai-file>/documents/plan.sdoc</seafile-ai-file>'],
+            {'repo_id': 'repo-id'},
+            None,
+        )
+
+        self.assertEqual(result, [{'path': '/documents/plan.sdoc', 'content': 'Project plan'}])
+        get_file_id_by_path.assert_called_once_with({'repo_id': 'repo-id'}, '/documents/plan.sdoc')
+        parse_file.assert_called_once_with('/documents/plan.sdoc', 'repo-id', 'obj-id', 10 * 1024 * 1024)
+
     def test_limits_the_number_of_files_read(self):
         query_metadata_rows = Mock()
         get_repo_info = Mock(return_value={'repo_id': 'repo-id'})
@@ -248,3 +270,21 @@ class ReadFilesTest(unittest.TestCase):
         ])
         parse_file.assert_not_called()
         query_metadata_rows.assert_not_called()
+
+    def test_rejects_path_traversal_without_reading_file(self):
+        query_metadata_rows = Mock()
+        get_repo_info = Mock(return_value={'repo_id': 'repo-id'})
+        get_file_id_by_path = Mock()
+        parse_file = Mock()
+        module = load_file_tools(
+            query_metadata_rows,
+            get_repo_info=get_repo_info,
+            get_file_id_by_path=get_file_id_by_path,
+            parse_file=parse_file,
+        )
+
+        result = module.ReadFiles().execute(['/documents/../secret.sdoc'], {'repo_id': 'repo-id'}, None)
+
+        self.assertEqual(result, [{'path': '/documents/../secret.sdoc', 'error': 'Invalid file path'}])
+        get_file_id_by_path.assert_not_called()
+        parse_file.assert_not_called()

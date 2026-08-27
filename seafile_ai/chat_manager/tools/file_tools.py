@@ -221,7 +221,14 @@ class ReadFiles(BasicTool):
                 })
                 continue
 
-            if not isinstance(file_path, str) or not file_path.startswith('/'):
+            if isinstance(file_path, str) and file_path.startswith('<seafile-ai-file>') and file_path.endswith('</seafile-ai-file>'):
+                file_path = file_path[len('<seafile-ai-file>'):-len('</seafile-ai-file>')]
+
+            if (
+                not isinstance(file_path, str)
+                or not file_path.startswith('/')
+                or any(part in ('.', '..') for part in Path(file_path).parts)
+            ):
                 results.append({'path': file_path, 'error': 'Invalid file path'})
                 continue
 
