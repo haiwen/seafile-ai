@@ -13,9 +13,12 @@ from seafile_ai.chat_manager.system_prompts import (
     CHAT_LIST_FILES_TOOL_RULES,
     CHAT_LIST_FILES_METADATA_DISABLED_RULE,
     CHAT_OUTPUT_FORMAT_RULES,
-    CHAT_SEARCH_POLICY,
+    CHAT_COMMUNITY_SEARCH_POLICY,
+    CHAT_PRO_FIRST_TURN_SEARCH_POLICY,
+    CHAT_PRO_SEARCH_POLICY,
     CHAT_SEARCH_REFERENCE_RULES,
     CHAT_SEARCH_TOOLS_EXAMPLES,
+    CHAT_SEASEARCH_UNAVAILABLE_RULE,
 )
 from seafile_ai.repo_metadata.constants import METADATA_TABLE
 from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
@@ -31,25 +34,51 @@ ATTACHMENT_CONTENT_LIMIT = 6000
 SUPPORTED_ATTACHMENT_SUFFIXES = {'.sdoc', '.md', '.markdown', '.docx', '.pdf', '.pptx'}
 ATTACHMENT_METADATA_SERVER_API = MetadataServerAPI('seafile-ai')
 
-def build_chat_tool_prompt(skip_tool_examples=False):
+def build_chat_tool_prompt(
+        skip_tool_examples=False,
+        is_pro_version=False,
+        is_first_turn=False,
+        documents_search_registered=False,
+        seasearch_configured=False):
+    search_policy = CHAT_COMMUNITY_SEARCH_POLICY
+    if is_pro_version and documents_search_registered:
+        search_policy = CHAT_PRO_FIRST_TURN_SEARCH_POLICY if is_first_turn else CHAT_PRO_SEARCH_POLICY
+
     tool_prompt_sections = [
         CHAT_GLOBAL_TOOL_RULES,
         CHAT_LIST_FILES_TOOL_RULES,
         CHAT_LIST_FILES_METADATA_DISABLED_RULE,
-        CHAT_SEARCH_POLICY,
-        CHAT_SEARCH_REFERENCE_RULES,
+        search_policy,
         CHAT_CONTENT_GENERATION_RULES,
     ]
 
-    if not skip_tool_examples:
+    if documents_search_registered:
+        tool_prompt_sections.append(CHAT_SEARCH_REFERENCE_RULES)
+        if not seasearch_configured:
+            tool_prompt_sections.append(CHAT_SEASEARCH_UNAVAILABLE_RULE)
+
+    if not skip_tool_examples and documents_search_registered:
         tool_prompt_sections.append(CHAT_SEARCH_TOOLS_EXAMPLES)
+    if not skip_tool_examples:
         tool_prompt_sections.append(CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES)
 
     return '\n\n'.join(tool_prompt_sections)
 
 
-def build_chat_system_prompts(repo_prompt='', skip_tool_examples=False):
-    tool_prompt = build_chat_tool_prompt(skip_tool_examples=skip_tool_examples)
+def build_chat_system_prompts(
+        repo_prompt='',
+        skip_tool_examples=False,
+        is_pro_version=False,
+        is_first_turn=False,
+        documents_search_registered=False,
+        seasearch_configured=False):
+    tool_prompt = build_chat_tool_prompt(
+        skip_tool_examples=skip_tool_examples,
+        is_pro_version=is_pro_version,
+        is_first_turn=is_first_turn,
+        documents_search_registered=documents_search_registered,
+        seasearch_configured=seasearch_configured,
+    )
     prompts = [
         {'role': 'system', 'content': CHAT_CORE_PROMPT},
         {'role': 'system', 'content': tool_prompt},

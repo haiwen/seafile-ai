@@ -26,9 +26,7 @@ logger = logging.getLogger(__name__)
 class BasicChat:
     def __init__(self, app):
         self.app = app
-        self.search_tools = (
-            DocumentsSearch(),
-        )
+        self.search_tools = (DocumentsSearch(),) if config.IS_PRO_VERSION else ()
         self.directory_tools = (
             ListFiles(),
             ReadFiles(),
@@ -38,10 +36,10 @@ class BasicChat:
         )
 
     def _register_tools(self, tool_executor, context, model=None):
-        for tool in self.search_tools:
-            tool.register(tool_executor, context=context, app=self.app, model=model)
         for tool in self.directory_tools:
             tool.register(tool_executor, context=context)
+        for tool in self.search_tools:
+            tool.register(tool_executor, context=context, app=self.app, model=model)
         for tool in self.content_generators:
             tool.register(tool_executor)
 
@@ -65,6 +63,24 @@ class BasicChat:
                 logger.warning('Failure to build context: %s', error)
         return OpenAIMemory(system_prompts)
 
+    def _is_first_turn(self, session_uuid):
+        if not session_uuid:
+            return True
+        try:
+            with self.app.db_session_class() as db_session:
+                message = (
+                    db_session.query(ChatMessages.id)
+                    .filter(
+                        ChatMessages.session_uuid == session_uuid,
+                        ChatMessages.role.in_(['user', 'assistant']),
+                    )
+                    .first()
+                )
+                return message is None
+        except Exception as error:
+            logger.warning('Failure to determine whether chat session is new: %s', error)
+            return False
+
     def run(self, model, tool_executor, message, attachments, **kwargs):
         raise NotImplementedError()
 
@@ -77,7 +93,14 @@ class StreamingChat(BasicChat):
             llm_client = get_llm_client_by_model_id(self.app.data_logger, model)
             yield SSE.status('Preparing', 'Initializing user input')
 
-            system_prompts = build_chat_system_prompts(context.get('repo_prompt', ''))
+            is_first_turn = self._is_first_turn(context.get('session_uuid'))
+            system_prompts = build_chat_system_prompts(
+                context.get('repo_prompt', ''),
+                is_pro_version=config.IS_PRO_VERSION,
+                is_first_turn=is_first_turn,
+                documents_search_registered=bool(self.search_tools),
+                seasearch_configured=bool(config.SEASEARCH_URL.strip()),
+            )
             memory = self._prepare_chat_memory(system_prompts, context.get('session_uuid'))
 
             user_raw_message = combine_attachments_to_message(attachments, message)

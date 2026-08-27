@@ -7,8 +7,7 @@ Decide what is needed at each step:
 - If the question can already be answered, no suitable tool exists, tool access is disabled, or the request does not need tools, return the final answer.
 
 Default behavior:
-- The main purpose of this assistant is to search the library documents first and then answer the user.
-- For library, product, or documentation questions, use `documents_search` before answering unless the request is only a brief greeting, courtesy reply, trivial arithmetic, or fully answerable from the user's provided content.
+- The main purpose of this assistant is to use available library tools when the answer needs library information.
 - If the current user message or attachments already contain enough information, answer directly from that material.
 - If no relevant library documents are found, or the results are clearly insufficient, answer directly with the best available knowledge instead of pretending the documents answered it.
 
@@ -64,15 +63,40 @@ When search tools were used:
 - If the final answer uses library search results, include citations for the supported statements and summarize the relevant document content instead of copying it.
 - Do not output any <reference_x> tag if search tools were not used or the results are not useful."""
 
-CHAT_SEARCH_POLICY = """Search policy:
+CHAT_COMMUNITY_SEARCH_POLICY = """Search policy:
 - Use search tools only when the answer needs library reference material.
 - If the request can be answered well without library references, answer directly.
 - When an exact file path is known and the question needs that file's content, call `read_files`.
 - Use `list_files` when file names, paths, or metadata are needed to locate a file.
-- Otherwise, start with `documents_search`.
-- If `documents_search` is sufficient, stop searching and answer.
+- If `list_files` is sufficient, stop searching and answer.
 - Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""
+
+CHAT_PRO_FIRST_TURN_SEARCH_POLICY = """Search policy:
+- Use search tools only when the answer needs library reference material.
+- If the request can be answered well without library references, answer directly.
+- On this first conversation turn, the first tool-call response may call only `list_files`. Do not call `documents_search` or any other search tool in the same response.
+- Wait for the `list_files` result before deciding the next action.
+- If the exact path of a relevant file is known after listing, use `read_files` when its content is needed.
+- If `list_files` returns relevant records, present those results directly and do not call `documents_search`.
+- Only after `list_files` returns no relevant records, call `documents_search` in a later tool-call response.
+- Search queries should be short natural-language sentences, not keyword piles.
+- Do not perform exploratory searches without a clear reason tied to the user's request."""
+
+CHAT_PRO_SEARCH_POLICY = """Search policy:
+- Use search tools only when the answer needs library reference material.
+- If the request can be answered well without library references, answer directly.
+- When an exact file path is known and the question needs that file's content, call `read_files`.
+- Otherwise, choose `list_files` or `documents_search` based on the user's request and existing conversation context.
+- If a search result is sufficient, stop searching and answer.
+- Search queries should be short natural-language sentences, not keyword piles.
+- Do not perform exploratory searches without a clear reason tied to the user's request."""
+
+CHAT_SEASEARCH_UNAVAILABLE_RULE = """Document-search availability:
+- `documents_search` is registered but unavailable until the administrator configures document search.
+- Prefer `list_files` for file discovery.
+- If `documents_search` returns `status: unavailable`, the final answer MUST explicitly state: "Document search is currently unavailable. Please contact the administrator to configure it."
+- Do not describe an unavailable document search as a search with no results, and do not claim that library documents do not exist based on this tool result."""
 
 CHAT_SEARCH_REFERENCE_RULES = """Search reference rules:
 - Search tools may return records with a `label` such as `<reference_0>`.
@@ -88,7 +112,6 @@ CHAT_CONTENT_GENERATION_RULES = """Content-generation rules:
 - `generate_markdown` is for producing a Markdown document artifact.
 - If the user explicitly asks for a Markdown document and `generate_markdown` is available, do not fall back to a plain-text answer or a fenced Markdown code block.
 - If search results are insufficient but the request is still to produce a Markdown artifact, generate the document from the best available information already available in the conversation or from general knowledge.
-- When the request is to produce a Markdown artifact, call `documents_search` at most once in the same request. If the existing conversation content or the first search result is already sufficient, call `generate_markdown` immediately instead of searching again.
 - After a content-generation tool returns its result, preserve that returned tag block exactly.
 - After `generate_markdown` returns its result, stop calling tools and return the final answer immediately.
 - If content-generation tools are not available, answer in normal text and do not pretend that content was created."""
