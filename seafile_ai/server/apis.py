@@ -8,6 +8,9 @@ from pathlib import Path
 
 from seafile_ai import config
 from seafile_ai.server.sdoc_review_utils import build_sdoc_ai_context
+from seafile_ai.text_processing.text_processing_manager import (
+    ReviewPayloadTooLargeError, ReviewScopeAmbiguousError,
+)
 from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionException, FormatNotSupportedException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 
@@ -551,6 +554,8 @@ def sdoc_review():
     context = build_sdoc_ai_context(data, username)
     try:
         review = flask_app.app.text_processing_manager.sdoc_review(prompt, document_context, context)
+    except ReviewPayloadTooLargeError as error:
+        return {'error_code': 'review_payload_too_large', 'error_msg': str(error)}, 413
     except ValueError as error:
         return {'error_msg': str(error)}, 400
     except LLMChatCompletionException as error:
@@ -589,6 +594,8 @@ def sdoc_review_plan():
     context = build_sdoc_ai_context(data, username)
     try:
         plan = flask_app.app.text_processing_manager.sdoc_review_plan(prompt, document_context, context)
+    except ReviewPayloadTooLargeError as error:
+        return {'error_code': 'review_payload_too_large', 'error_msg': str(error)}, 413
     except ValueError as error:
         return {'error_msg': str(error)}, 400
     except LLMChatCompletionException as error:
@@ -599,6 +606,40 @@ def sdoc_review_plan():
         return {'error_msg': 'Internal server error.'}, 500
 
     return {'plan': plan}, 200
+
+
+@flask_app.route('/api/v1/sdoc-review-scope/', methods=['POST'])
+def sdoc_review_scope():
+    if not check_auth_token(request):
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Bad request.'}, 400
+
+    prompt = data.get('prompt')
+    document_context = data.get('document_context')
+    if not isinstance(prompt, str) or not prompt.strip():
+        return {'error_msg': 'prompt invalid.'}, 400
+    if not isinstance(document_context, dict) or not isinstance(document_context.get('blocks'), list):
+        return {'error_msg': 'document_context invalid.'}, 400
+
+    try:
+        scope = flask_app.app.text_processing_manager.sdoc_review_scope(prompt, document_context)
+    except ReviewScopeAmbiguousError as error:
+        return {
+            'error_code': 'scope_ambiguous',
+            'candidates': error.candidates,
+        }, 409
+    except ValueError as error:
+        return {'error_msg': str(error)}, 400
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'scope': scope}, 200
 
 
 @flask_app.route('/api/v1/sdoc-review-chunk/', methods=['POST'])
@@ -634,6 +675,8 @@ def sdoc_review_chunk():
     try:
         result = flask_app.app.text_processing_manager.sdoc_review_chunk(
             prompt, document_context, brief, chunk_index, context)
+    except ReviewPayloadTooLargeError as error:
+        return {'error_code': 'review_payload_too_large', 'error_msg': str(error)}, 413
     except ValueError as error:
         return {'error_msg': str(error)}, 400
     except LLMChatCompletionException as error:

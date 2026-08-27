@@ -105,6 +105,17 @@ class SDocReviewChunkingTest(unittest.TestCase):
             ],
         }
 
+    @staticmethod
+    def _brief():
+        return {
+            'goal': 'Improve clarity',
+            'tone': 'concise',
+            'length': 'preserve length',
+            'terminology': ['SDoc'],
+            'heading_strategy': 'preserve headings',
+            'do_not_modify': 'facts',
+        }
+
     def test_numbered_heading_matches_quoted_unnumbered_title(self):
         _titles, target_ids, blocks, lists = self.manager._collect_blocks(
             '改进“现状分析”章节内容', self.context)
@@ -195,6 +206,96 @@ class SDocReviewChunkingTest(unittest.TestCase):
         self.assertEqual(sum(len(chunk['block_ids']) for chunk in plan['chunks']), 9)
         self.assertIsNone(plan['brief'])
         self.manager._generate_revision_brief.assert_not_called()
+
+    def test_review_plan_generates_a_brief_above_chunk_limit(self):
+        brief = self._brief()
+        self.manager._generate_revision_brief = Mock(return_value=brief)
+        context = dict(self.context)
+        context['blocks'] = self.context['blocks'] + [{
+            'block_id': 'extra-1', 'text_node_id': 'extra-text-1',
+            'section_id': 'design', 'type': 'paragraph', 'supported': True,
+            'before_leaf_text': '额外正文',
+        }]
+
+        plan = self.manager.sdoc_review_plan('改进全文', context, {})
+
+        self.assertEqual(sum(len(chunk['block_ids']) for chunk in plan['chunks']), 11)
+        self.assertEqual(plan['brief'], brief)
+        self.manager._generate_revision_brief.assert_called_once()
+
+    def test_review_plan_generates_a_brief_for_twelve_blocks(self):
+        brief = self._brief()
+        self.manager._generate_revision_brief = Mock(return_value=brief)
+        context = dict(self.context)
+        context['blocks'] = self.context['blocks'] + [{
+            'block_id': 'extra-1', 'text_node_id': 'extra-text-1',
+            'section_id': 'design', 'type': 'paragraph', 'supported': True,
+            'before_leaf_text': '额外正文一',
+        }, {
+            'block_id': 'extra-2', 'text_node_id': 'extra-text-2',
+            'section_id': 'design', 'type': 'paragraph', 'supported': True,
+            'before_leaf_text': '额外正文二',
+        }]
+
+        plan = self.manager.sdoc_review_plan('改进全文', context, {})
+
+        self.assertEqual(sum(len(chunk['block_ids']) for chunk in plan['chunks']), 12)
+        self.assertEqual(len(plan['chunks']), 2)
+        self.assertEqual(plan['brief'], brief)
+        self.manager._generate_revision_brief.assert_called_once()
+
+    def test_chunk_requires_a_brief_above_chunk_limit(self):
+        context = dict(self.context)
+        context['blocks'] = self.context['blocks'] + [{
+            'block_id': 'extra-1', 'text_node_id': 'extra-text-1',
+            'section_id': 'design', 'type': 'paragraph', 'supported': True,
+            'before_leaf_text': '额外正文',
+        }]
+
+        with self.assertRaisesRegex(ValueError, 'brief invalid'):
+            self.manager.sdoc_review_chunk('改进全文', context, None, 0, {})
+
+    def test_long_review_rejects_an_incomplete_brief(self):
+        context = dict(self.context)
+        context['blocks'] = self.context['blocks'] + [{
+            'block_id': 'extra-1', 'text_node_id': 'extra-text-1',
+            'section_id': 'design', 'type': 'paragraph', 'supported': True,
+            'before_leaf_text': '额外正文',
+        }]
+        self.manager._generate_revision_brief = Mock(return_value={'tone': 'concise'})
+
+        with self.assertRaisesRegex(ValueError, 'revision brief invalid'):
+            self.manager.sdoc_review_plan('改进全文', context, {})
+
+    def test_duplicate_section_title_requires_clarification(self):
+        context = dict(self.context)
+        context['outline'] = self.context['outline'] + [
+            {'block_id': 'another-current', 'text': '2. 现状分析'},
+        ]
+
+        with self.assertRaises(self.module.ReviewScopeAmbiguousError):
+            self.manager.sdoc_review_scope('润色“现状分析”章节', context)
+
+    def test_oversized_first_block_is_rejected(self):
+        blocks = [{
+            'block_id': 'large', 'section_id': 'current',
+            'before_leaf_text': 'x' * 7000,
+        }]
+
+        with self.assertRaises(self.module.ReviewPayloadTooLargeError):
+            self.manager._chunk_blocks(blocks)
+
+    def test_oversized_first_section_list_context_is_rejected(self):
+        blocks = [{
+            'block_id': 'small', 'section_id': 'current', 'before_leaf_text': 'small',
+        }]
+        lists = [{
+            'block_id': 'large-list', 'section_id': 'current', 'type': 'unordered_list',
+            'items': [{'text': 'x' * 7000}],
+        }]
+
+        with self.assertRaises(self.module.ReviewPayloadTooLargeError):
+            self.manager._chunk_blocks(blocks, lists)
 
 
 if __name__ == '__main__':

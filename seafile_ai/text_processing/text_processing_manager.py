@@ -18,7 +18,22 @@ logger = logging.getLogger(__name__)
 
 SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK = 10
 SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK = 6000
-SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD = 12
+# A review that spans more than one maximum-size chunk needs a global brief
+# so terminology and tone remain consistent between chunks.
+SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD = SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK
+REVISION_BRIEF_REQUIRED_STRING_FIELDS = (
+    'goal', 'tone', 'length', 'heading_strategy', 'do_not_modify',
+)
+
+
+class ReviewScopeAmbiguousError(ValueError):
+    def __init__(self, candidates):
+        super().__init__('review scope is ambiguous')
+        self.candidates = candidates
+
+
+class ReviewPayloadTooLargeError(ValueError):
+    pass
 
 SECTION_NUMBER_PREFIX_PATTERNS = (
     r'^\s*\d+(?:\.\d+)*(?:\s*[.、:：\-]\s*|\s+)',
@@ -157,6 +172,8 @@ class TextProcessingManager:
         if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD:
             outline = (document_context or {}).get('outline') or []
             brief = self._generate_revision_brief(prompt, outline, blocks, context)
+            if not self._is_valid_revision_brief(brief):
+                raise ValueError('revision brief invalid')
         items = []
         for chunk_index, chunk in enumerate(chunks):
             chunk_lists = self._lists_for_chunk(lists, chunks, chunk_index)
@@ -176,6 +193,8 @@ class TextProcessingManager:
         if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD:
             outline = (document_context or {}).get('outline') or []
             brief = self._generate_revision_brief(prompt, outline, blocks, context)
+            if not self._is_valid_revision_brief(brief):
+                raise ValueError('revision brief invalid')
         return {
             'brief': brief,
             'chunks': [
@@ -193,13 +212,51 @@ class TextProcessingManager:
         """
         _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
         chunks = self._chunk_blocks(blocks, lists)
-        if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD and not isinstance(brief, dict):
+        if len(blocks) > SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD and not self._is_valid_revision_brief(brief):
             raise ValueError('brief invalid')
         if chunk_index < 0 or chunk_index >= len(chunks):
             raise ValueError('chunk_index out of range')
         chunk_lists = self._lists_for_chunk(lists, chunks, chunk_index)
         return {'items': self._generate_items(
             prompt, chunks[chunk_index], chunk_lists, brief, context)}
+
+    def sdoc_review_scope(self, prompt, document_context):
+        """Resolve an immutable, model-independent review scope."""
+        section_titles, target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
+        allowed_block_ids = set(target_section_ids)
+        if not target_section_ids:
+            allowed_block_ids.update(section_titles.keys())
+        allowed_block_ids.update(block.get('block_id') for block in blocks if block.get('block_id'))
+        allowed_block_ids.update(list_node.get('block_id') for list_node in lists if list_node.get('block_id'))
+        allowed_text_targets = [
+            {'block_id': block.get('block_id'), 'text_node_id': block.get('text_node_id')}
+            for block in blocks
+            if block.get('block_id') and block.get('text_node_id')
+        ]
+        if target_section_ids:
+            scope_summary = ', '.join(
+                str(section_titles.get(section_id) or section_id)
+                for section_id in sorted(target_section_ids))
+        else:
+            scope_summary = 'Whole document'
+        return {
+            'allowed_block_ids': sorted(allowed_block_ids),
+            'allowed_text_targets': sorted(
+                allowed_text_targets,
+                key=lambda target: (target['block_id'], target['text_node_id'])),
+            'scope_summary': scope_summary,
+        }
+
+    @staticmethod
+    def _is_valid_revision_brief(brief):
+        if not isinstance(brief, dict):
+            return False
+        if any(not isinstance(brief.get(field), str) or not brief[field].strip()
+               for field in REVISION_BRIEF_REQUIRED_STRING_FIELDS):
+            return False
+        terminology = brief.get('terminology')
+        return isinstance(terminology, list) and all(
+            isinstance(term, str) and term.strip() for term in terminology)
 
     @staticmethod
     def _normalize_section_name(value):
@@ -257,6 +314,14 @@ class TextProcessingManager:
         return has_scope_word
 
     @staticmethod
+    def _is_all_sections_request(prompt):
+        normalized_prompt = unicodedata.normalize('NFKC', prompt or '').casefold()
+        return any(marker in normalized_prompt for marker in (
+            '全文', '整篇', '整个文档', '所有章节', '全部章节', '各章节',
+            'whole document', 'entire document', 'all sections',
+        ))
+
+    @staticmethod
     def _belongs_to_target_section(node, target_section_ids):
         if not target_section_ids:
             return True
@@ -290,11 +355,20 @@ class TextProcessingManager:
         # is named in the request. When no header is named, fall back to all
         # supported blocks.
         target_section_ids = set()
+        matching_headers = []
         if isinstance(document_context, dict):
             for header in document_context.get('outline') or []:
                 text = (header.get('text') or '').strip()
                 if len(text) >= 2 and self._prompt_targets_section(prompt, text):
                     target_section_ids.add(header.get('block_id'))
+
+                    matching_headers.append({
+                        'block_id': header.get('block_id'),
+                        'text': text,
+                    })
+
+        if len(matching_headers) > 1 and not self._is_all_sections_request(prompt):
+            raise ReviewScopeAmbiguousError(matching_headers)
 
         if not target_section_ids and self._has_unmatched_explicit_section_scope(prompt):
             raise ValueError('target section not found')
@@ -386,6 +460,9 @@ class TextProcessingManager:
             first_block_for_section = section_id not in sections_with_lists_sent
             section_list_payload_size = list_payload_sizes.get(section_id, 0) if first_block_for_section else 0
             block_payload_size = self._review_block_payload_size(block)
+            if block_payload_size + section_list_payload_size > max_payload_characters:
+                raise ReviewPayloadTooLargeError(
+                    'review scope contains a block that exceeds the payload limit')
             exceeds_limit = chunk and (
                 len(chunk) >= max_per_chunk or
                 payload_size + section_list_payload_size + block_payload_size > max_payload_characters
