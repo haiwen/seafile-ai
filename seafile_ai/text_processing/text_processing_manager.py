@@ -17,7 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK = 10
-SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK = 6000
+# Review requests are executed under a short, request-scoped timeout. Keep a
+# chunk comfortably below the model input budget so that it can still return a
+# structured response before that deadline.
+SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK = 3500
+SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK = 3
+SDOC_REVIEW_MAX_OUTPUT_TOKENS_PER_CHUNK = 1800
 # A review that spans more than one maximum-size chunk needs a global brief
 # so terminology and tone remain consistent between chunks.
 SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD = SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK
@@ -587,7 +592,9 @@ class TextProcessingManager:
                 'or {"kind":"set_block_type","block_id":"...","block_type":"...","after_type":"header2","rationale":"..."} '
                 'or {"kind":"set_list_type","block_id":"...","block_type":"ordered_list","after_type":"unordered_list","rationale":"..."} '
                 'or {"kind":"replace_table_cell_text","block_id":"...","text_node_id":"...","block_type":"table_cell","before_leaf_text":"...","after_text":"...","rationale":"..."}'
-                ']}. If no change is needed, omit it. Never output Slate paths or operations.'
+                ']}. Return at most %d high-value suggestions for this chunk. '
+                'If no change is needed, omit it. Never output Slate paths or operations.'
+                % SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK
             )
         }
         model_blocks = [{
@@ -605,7 +612,10 @@ class TextProcessingManager:
             'role': 'user',
             'content': json.dumps(user_content, ensure_ascii=False),
         }
-        content = self.app.llm_api.run([system_prompt, user_prompt], context, response_format={'type': 'json_object'})
+        content = self.app.llm_api.run(
+            [system_prompt, user_prompt], context,
+            response_format={'type': 'json_object'},
+            max_tokens=SDOC_REVIEW_MAX_OUTPUT_TOKENS_PER_CHUNK)
         if not isinstance(content, str):
             raise ValueError('The model returned an invalid review suggestion.')
         try:
