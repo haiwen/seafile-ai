@@ -12,6 +12,7 @@ from seafile_ai import config
 from seafile_ai.chat_manager.utils import generate_chat_title as generate_chat_title_by_ai
 from seafile_ai.server.sdoc_review_utils import build_sdoc_ai_context
 from seafile_ai.text_processing.text_processing_manager import (
+    ReviewModelOutputTruncatedError, ReviewModelResponseInvalidError,
     ReviewPayloadTooLargeError, ReviewScopeAmbiguousError,
 )
 from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionException, FormatNotSupportedException
@@ -661,6 +662,10 @@ def sdoc_review():
         review = flask_app.app.text_processing_manager.sdoc_review(prompt, document_context, context)
     except ReviewPayloadTooLargeError as error:
         return {'error_code': 'review_payload_too_large', 'error_msg': str(error)}, 413
+    except ReviewModelOutputTruncatedError as error:
+        return {'error_code': 'model_output_truncated', 'error_msg': str(error)}, 502
+    except ReviewModelResponseInvalidError as error:
+        return {'error_code': 'invalid_model_response', 'error_msg': str(error)}, 502
     except ValueError as error:
         return {'error_msg': str(error)}, 400
     except LLMChatCompletionException as error:
@@ -794,6 +799,10 @@ def sdoc_review_chunk():
             prompt, document_context, brief, chunk_index, context)
     except ReviewPayloadTooLargeError as error:
         return {'error_code': 'review_payload_too_large', 'error_msg': str(error)}, 413
+    except ReviewModelOutputTruncatedError as error:
+        return {'error_code': 'model_output_truncated', 'error_msg': str(error)}, 502
+    except ReviewModelResponseInvalidError as error:
+        return {'error_code': 'invalid_model_response', 'error_msg': str(error)}, 502
     except ValueError as error:
         return {'error_msg': str(error)}, 400
     except LLMChatCompletionException as error:

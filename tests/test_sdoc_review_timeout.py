@@ -90,6 +90,26 @@ class SDocReviewTimeoutTest(unittest.TestCase):
         self.assertEqual(result, 'done')
         self.assertEqual(litellm_module.completion.call_args.kwargs['timeout'], 28)
 
+    def test_llm_call_returns_finish_reason_metadata(self):
+        module, litellm_module = load_llm_api()
+        litellm_module.completion.return_value = Mock(
+            choices=[Mock(message=Mock(content='{"items": []}'), finish_reason='stop')],
+            usage=Mock(prompt_tokens=1, completion_tokens=2, total_tokens=3),
+        )
+        api = module.LLMAPI(Mock(), 'test-model', timeout=180)
+
+        result = api.run_with_metadata(
+            [{'role': 'user', 'content': 'Improve this.'}],
+            {'request_timeout_seconds': 28, 'log_data': False},
+            response_format={'type': 'json_object'},
+        )
+
+        self.assertEqual(result, {
+            'content': '{"items": []}',
+            'finish_reason': 'stop',
+            'token_usage': {'input_tokens': 1, 'output_tokens': 2},
+        })
+
 
 if __name__ == '__main__':
     unittest.main()

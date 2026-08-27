@@ -346,16 +346,101 @@ class SDocReviewChunkingTest(unittest.TestCase):
             self.manager._chunk_blocks(blocks, lists)
 
     def test_review_item_generation_limits_output_size(self):
-        self.manager.app.llm_api.run.return_value = '{"items": []}'
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': '{"items": []}',
+            'finish_reason': 'stop',
+        }
 
         self.manager._generate_items('改进全文', [], [], None, {})
 
-        kwargs = self.manager.app.llm_api.run.call_args.kwargs
-        self.assertEqual(
-            kwargs['max_tokens'], self.module.SDOC_REVIEW_MAX_OUTPUT_TOKENS_PER_CHUNK)
+        kwargs = self.manager.app.llm_api.run_with_metadata.call_args.kwargs
+        self.assertNotIn('max_tokens', kwargs)
         self.assertIn(
             'at most %d high-value suggestions' % self.module.SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK,
-            self.manager.app.llm_api.run.call_args.args[0][0]['content'])
+            self.manager.app.llm_api.run_with_metadata.call_args.args[0][0]['content'])
+
+    def test_review_item_generation_accepts_fenced_json(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': 'Here is the requested review:\n```json\n{\"items\": []}\n```',
+            'finish_reason': 'stop',
+        }
+
+        self.assertEqual(
+            self.manager._generate_items('改进全文', [], [], None, {}), [])
+
+    def test_review_item_generation_rejects_noncanonical_suggestion_alias(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': '{"suggestions": []}',
+            'finish_reason': 'stop',
+        }
+
+        with self.assertRaises(self.module.ReviewModelResponseInvalidError):
+            self.manager._generate_items('改进全文', [], [], None, {})
+
+    def test_review_item_generation_rejects_noncanonical_nested_response(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': '{"review": {"changes": []}}',
+            'finish_reason': 'stop',
+        }
+        with self.assertRaises(self.module.ReviewModelResponseInvalidError):
+            self.manager._generate_items('改进全文', [], [], None, {})
+
+    def test_review_item_generation_rejects_top_level_list(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': '[]',
+            'finish_reason': 'stop',
+        }
+        with self.assertRaises(self.module.ReviewModelResponseInvalidError):
+            self.manager._generate_items('改进全文', [], [], None, {})
+
+    def test_review_item_generation_rejects_nested_single_suggestion(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': '{"output": {"proposal": {"kind": "replace_block_text"}}}',
+            'finish_reason': 'stop',
+        }
+
+        with self.assertRaises(self.module.ReviewModelResponseInvalidError):
+            self.manager._generate_items('改进全文', [], [], None, {})
+
+    def test_review_item_generation_rejects_truncated_completion(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': '{"items":[{"kind":"replace_block_text"',
+            'finish_reason': 'length',
+        }
+
+        with self.assertRaises(self.module.ReviewModelOutputTruncatedError):
+            self.manager._generate_items('改进全文', [], [], None, {})
+
+    def test_review_item_generation_hydrates_canonical_text_target(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': (
+                '{"items":[{"kind":"replace_block_text","block_id":"block-1",'
+                '"after_text":"Improved text","rationale":"Clearer"}]}'),
+            'finish_reason': 'stop',
+        }
+        blocks = [{
+            'block_id': 'block-1', 'text_node_id': 'text-1', 'type': 'paragraph',
+            'before_leaf_text': 'Original text',
+        }]
+
+        self.assertEqual(
+            self.manager._generate_items('Improve this', blocks, [], None, {}), [{
+                'kind': 'replace_block_text', 'block_id': 'block-1',
+                'after_text': 'Improved text', 'rationale': 'Clearer',
+                'text_node_id': 'text-1', 'block_type': 'paragraph',
+                'before_leaf_text': 'Original text',
+            }])
+
+    def test_revision_brief_accepts_fenced_json(self):
+        self.manager.app.llm_api.run.return_value = (
+            '```json\n{\"goal\":\"clarity\",\"tone\":\"concise\",'
+            '\"length\":\"preserve\",\"terminology\":[],\"heading_strategy\":\"preserve\",'
+            '\"do_not_modify\":\"facts\"}\n```')
+
+        self.assertEqual(self.manager._generate_revision_brief('改进全文', [], [], {}), {
+            'goal': 'clarity', 'tone': 'concise', 'length': 'preserve',
+            'terminology': [], 'heading_strategy': 'preserve', 'do_not_modify': 'facts',
+        })
 
 
 if __name__ == '__main__':
