@@ -124,6 +124,18 @@ class SDocReviewChunkingTest(unittest.TestCase):
         self.assertEqual(len(blocks), 9)
         self.assertEqual([item['block_id'] for item in lists], ['current-list'])
 
+    def test_numbered_chapter_request_matches_a_numbered_heading(self):
+        _titles, target_ids, blocks, lists = self.manager._collect_blocks(
+            '改进第1章内容', self.context)
+
+        self.assertEqual(target_ids, {'current'})
+        self.assertEqual(len(blocks), 9)
+        self.assertEqual([item['block_id'] for item in lists], ['current-list'])
+
+    def test_unknown_numbered_chapter_does_not_fall_back_to_the_whole_document(self):
+        with self.assertRaisesRegex(ValueError, 'target section not found'):
+            self.manager._collect_blocks('改进第9章内容', self.context)
+
     def test_explicit_unknown_section_does_not_fall_back_to_full_document(self):
         with self.assertRaisesRegex(ValueError, 'target section not found'):
             self.manager._collect_blocks('改进“未知内容”章节', self.context)
@@ -206,6 +218,30 @@ class SDocReviewChunkingTest(unittest.TestCase):
         self.assertEqual(sum(len(chunk['block_ids']) for chunk in plan['chunks']), 9)
         self.assertIsNone(plan['brief'])
         self.manager._generate_revision_brief.assert_not_called()
+
+    def test_character_budget_split_requires_a_brief_even_below_block_threshold(self):
+        brief = self._brief()
+        self.manager._generate_revision_brief = Mock(return_value=brief)
+        context = dict(self.context)
+        context['blocks'] = [
+            {
+                'block_id': 'first', 'text_node_id': 'first-text',
+                'section_id': 'current', 'type': 'paragraph', 'supported': True,
+                'before_leaf_text': '甲' * 3000,
+            },
+            {
+                'block_id': 'second', 'text_node_id': 'second-text',
+                'section_id': 'design', 'type': 'paragraph', 'supported': True,
+                'before_leaf_text': '乙' * 3000,
+            },
+        ]
+        context['lists'] = []
+
+        plan = self.manager.sdoc_review_plan('改进全文', context, {})
+
+        self.assertEqual(len(plan['chunks']), 2)
+        self.assertEqual(plan['brief'], brief)
+        self.manager._generate_revision_brief.assert_called_once()
 
     def test_review_plan_generates_a_brief_above_chunk_limit(self):
         brief = self._brief()
