@@ -21,8 +21,7 @@ SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK = 10
 # chunk comfortably below the model input budget so that it can still return a
 # structured response before that deadline.
 SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK = 3500
-SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK = 3
-SDOC_REVIEW_MAX_OUTPUT_TOKENS_PER_CHUNK = 1800
+SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK = 2
 # A review that spans more than one maximum-size chunk needs a global brief
 # so terminology and tone remain consistent between chunks.
 SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD = SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK
@@ -38,6 +37,14 @@ class ReviewScopeAmbiguousError(ValueError):
 
 
 class ReviewPayloadTooLargeError(ValueError):
+    pass
+
+
+class ReviewModelOutputTruncatedError(ValueError):
+    pass
+
+
+class ReviewModelResponseInvalidError(ValueError):
     pass
 
 SECTION_NUMBER_PREFIX_PATTERNS = (
@@ -545,6 +552,72 @@ class TextProcessingManager:
             result.append(item)
         return result
 
+    @staticmethod
+    def _parse_review_json_object(content):
+        """Parse a model JSON value while tolerating a Markdown code fence.
+
+        Some OpenAI-compatible gateways return a fenced JSON object despite a
+        JSON response format request. The structured fields are still
+        validated by the caller, so accepting this presentation wrapper does
+        not broaden the review protocol.
+        """
+        if not isinstance(content, str):
+            return None
+        value = content.strip()
+        starts = [index for index in (value.find('{'), value.find('[')) if index >= 0]
+        if not starts:
+            return None
+        start = min(starts)
+        try:
+            result, end = json.JSONDecoder().raw_decode(value[start:])
+        except ValueError:
+            return None
+        trailing = value[start + end:].strip()
+        if trailing and trailing != '```':
+            return None
+        return result if isinstance(result, (dict, list)) else None
+
+    @classmethod
+    def _review_items_from_result(cls, result):
+        """Read the canonical structured suggestion list."""
+        if not isinstance(result, dict):
+            return None
+        items = result.get('items')
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            return None
+        return items
+
+    @staticmethod
+    def _hydrate_review_items(items, blocks, lists):
+        """Attach canonical target metadata without asking the model to echo it."""
+        text_targets = {
+            block.get('block_id'): block for block in blocks
+            if isinstance(block, dict) and block.get('block_id')
+        }
+        list_targets = {
+            list_node.get('block_id'): list_node for list_node in lists
+            if isinstance(list_node, dict) and list_node.get('block_id')
+        }
+        hydrated_items = []
+        for item in items:
+            if not isinstance(item, dict):
+                hydrated_items.append(item)
+                continue
+            hydrated = dict(item)
+            target = text_targets.get(hydrated.get('block_id'))
+            if hydrated.get('kind') in ('replace_block_text', 'replace_table_cell_text') and target:
+                hydrated['text_node_id'] = target.get('text_node_id')
+                hydrated['block_type'] = target.get('type')
+                hydrated['before_leaf_text'] = target.get('before_leaf_text')
+            elif hydrated.get('kind') == 'set_block_type' and target:
+                hydrated['block_type'] = target.get('type')
+            elif hydrated.get('kind') == 'set_list_type':
+                list_target = list_targets.get(hydrated.get('block_id'))
+                if list_target:
+                    hydrated['block_type'] = list_target.get('type')
+            hydrated_items.append(hydrated)
+        return hydrated_items
+
     def _generate_revision_brief(self, prompt, outline, blocks, context):
         system_prompt = {
             'role': 'system',
@@ -561,13 +634,7 @@ class TextProcessingManager:
             'content': json.dumps({'request': prompt, 'outline': outline, 'block_count': len(blocks)}, ensure_ascii=False),
         }
         content = self.app.llm_api.run([system_prompt, user_prompt], context, response_format={'type': 'json_object'})
-        if not isinstance(content, str):
-            return None
-        try:
-            brief = json.loads(content)
-        except ValueError:
-            return None
-        return brief if isinstance(brief, dict) else None
+        return self._parse_review_json_object(content)
 
     def _generate_items(self, prompt, blocks, lists, brief, context):
         system_prompt = {
@@ -586,12 +653,13 @@ class TextProcessingManager:
                 'unordered_list, only when the request asks for list conversion; '
                 '(4) "replace_table_cell_text" for rewriting a table cell\'s text, using block_type '
                 '"table_cell" with the cell\'s block_id and text_node_id. '
-                'Use only block_id, text_node_id, type and before_leaf_text supplied in the document. '
-                'Do not invent ids. The object must be: {"items":['
-                '{"kind":"replace_block_text","block_id":"...","text_node_id":"...","block_type":"...","before_leaf_text":"...","after_text":"...","rationale":"..."} '
-                'or {"kind":"set_block_type","block_id":"...","block_type":"...","after_type":"header2","rationale":"..."} '
-                'or {"kind":"set_list_type","block_id":"...","block_type":"ordered_list","after_type":"unordered_list","rationale":"..."} '
-                'or {"kind":"replace_table_cell_text","block_id":"...","text_node_id":"...","block_type":"table_cell","before_leaf_text":"...","after_text":"...","rationale":"..."}'
+                'Use only a supplied block_id; do not invent ids. The server already knows each target\'s '
+                'text node, type and original text, so do not return text_node_id, block_type or '
+                'before_leaf_text. The object must be: {"items":['
+                '{"kind":"replace_block_text","block_id":"...","after_text":"...","rationale":"..."} '
+                'or {"kind":"set_block_type","block_id":"...","after_type":"header2","rationale":"..."} '
+                'or {"kind":"set_list_type","block_id":"...","after_type":"unordered_list","rationale":"..."} '
+                'or {"kind":"replace_table_cell_text","block_id":"...","after_text":"...","rationale":"..."}'
                 ']}. Return at most %d high-value suggestions for this chunk. '
                 'If no change is needed, omit it. Never output Slate paths or operations.'
                 % SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK
@@ -612,19 +680,24 @@ class TextProcessingManager:
             'role': 'user',
             'content': json.dumps(user_content, ensure_ascii=False),
         }
-        content = self.app.llm_api.run(
+        completion = self.app.llm_api.run_with_metadata(
             [system_prompt, user_prompt], context,
-            response_format={'type': 'json_object'},
-            max_tokens=SDOC_REVIEW_MAX_OUTPUT_TOKENS_PER_CHUNK)
-        if not isinstance(content, str):
-            raise ValueError('The model returned an invalid review suggestion.')
-        try:
-            result = json.loads(content)
-        except ValueError as error:
-            raise ValueError('The model returned invalid review JSON.') from error
-        if not isinstance(result, dict) or not isinstance(result.get('items'), list):
-            raise ValueError('The model returned an invalid review suggestion.')
-        return result.get('items') or []
+            response_format={'type': 'json_object'})
+        content = completion.get('content') if isinstance(completion, dict) else None
+        finish_reason = completion.get('finish_reason') if isinstance(completion, dict) else None
+        if finish_reason in ('length', 'max_tokens'):
+            logger.warning('Review model response was truncated: finish_reason=%s', finish_reason)
+            raise ReviewModelOutputTruncatedError('The model response was truncated.')
+        result = self._parse_review_json_object(content)
+        items = self._review_items_from_result(result)
+        if items is None:
+            keys = sorted(str(key) for key in result)[:10] if isinstance(result, dict) else []
+            logger.warning(
+                'Review model returned an invalid suggestion response: '
+                'finish_reason=%s, content_length=%s, top-level keys=%s',
+                finish_reason, len(content) if isinstance(content, str) else None, keys)
+            raise ReviewModelResponseInvalidError('The model returned an invalid review suggestion.')
+        return self._hydrate_review_items(items, blocks, lists)
 
     def sdoc_analyze(self, prompt, document_context, context):
         """Generate a plain-text analysis of the document for mixed-intent requests."""
