@@ -1,10 +1,16 @@
 import json
+from pathlib import Path
+
 from seafile_ai import config
 from seafile_ai.chat_manager.utils.callbacker import ChatCallBacker
 from seafile_ai.repo_metadata.constants import METADATA_TABLE
 from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
-from seafile_ai.repo_metadata.utils import is_repo_metadata_enabled, query_metadata_rows
+from seafile_ai.repo_metadata.utils import get_file_id_by_path, get_repo_info, is_repo_metadata_enabled, query_metadata_rows
+from seafile_ai.utils import FileSizeLimitExceeded, parse_file
 from seafile_ai.utils.tools import BasicTool
+
+
+SUPPORTED_READ_FILE_SUFFIXES = {'.md', '.markdown', '.sdoc', '.docx', '.pdf', '.pptx'}
 
 
 class ListFiles(BasicTool):
@@ -163,3 +169,108 @@ class ListFiles(BasicTool):
             response['warning'] = warning
 
         return response
+
+
+class ReadFiles(BasicTool):
+    tool = {
+        'type': 'function',
+        'function': {
+            'name': 'read_files',
+            'description': (
+                'Read the content of specific files in the current library. '
+                'This tool reads file content, not metadata. '
+                f'Read at most {config.READ_FILES_MAX_FILES} files in one call.'
+            ),
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'file_paths': {
+                        'type': 'array',
+                        'description': 'Exact file paths in the current library.',
+                        'items': {
+                            'type': 'string',
+                        },
+                        'minItems': 1,
+                        'maxItems': config.READ_FILES_MAX_FILES,
+                    },
+                },
+                'required': ['file_paths'],
+            },
+        },
+    }
+
+    def execute(self, file_paths, context, call_back):
+        assert isinstance(file_paths, list), 'file_paths must be a list'
+
+        repo_id = context['repo_id']
+        repo = get_repo_info(repo_id)
+        results = []
+        total_chars = 0
+        for index, file_path in enumerate(file_paths):
+            if index >= config.READ_FILES_MAX_FILES:
+                results.append({
+                    'path': file_path,
+                    'error': f'File limit exceeded (maximum {config.READ_FILES_MAX_FILES} files)',
+                })
+                continue
+
+            if total_chars >= config.READ_FILES_MAX_TOTAL_CHARS:
+                results.append({
+                    'path': file_path,
+                    'error': f'Content limit reached (maximum {config.READ_FILES_MAX_TOTAL_CHARS} characters)',
+                })
+                continue
+
+            if isinstance(file_path, str) and file_path.startswith('<seafile-ai-file>') and file_path.endswith('</seafile-ai-file>'):
+                file_path = file_path[len('<seafile-ai-file>'):-len('</seafile-ai-file>')]
+
+            if (
+                not isinstance(file_path, str)
+                or not file_path.startswith('/')
+                or any(part in ('.', '..') for part in Path(file_path).parts)
+            ):
+                results.append({'path': file_path, 'error': 'Invalid file path'})
+                continue
+
+            if Path(file_path).suffix.lower() not in SUPPORTED_READ_FILE_SUFFIXES:
+                results.append({'path': file_path, 'error': 'Unsupported file type'})
+                continue
+
+            obj_id = get_file_id_by_path(repo, file_path) if repo else None
+            if not obj_id:
+                results.append({'path': file_path, 'error': 'File not found'})
+                continue
+
+            try:
+                content = parse_file(file_path, repo_id, obj_id, config.READ_FILES_MAX_FILE_SIZE)
+            except FileSizeLimitExceeded:
+                results.append({
+                    'path': file_path,
+                    'error': f'File size exceeds {config.READ_FILES_MAX_FILE_SIZE} bytes limit',
+                })
+                continue
+            except Exception as error:
+                results.append({'path': file_path, 'error': str(error)})
+                continue
+
+            remaining_chars = config.READ_FILES_MAX_TOTAL_CHARS - total_chars
+            if len(content) > remaining_chars:
+                results.append({
+                    'path': f'<seafile-ai-file>{file_path}</seafile-ai-file>',
+                    'content': content[:remaining_chars],
+                    'truncated': True,
+                })
+                total_chars = config.READ_FILES_MAX_TOTAL_CHARS
+                continue
+
+            results.append({
+                'path': f'<seafile-ai-file>{file_path}</seafile-ai-file>',
+                'content': content,
+            })
+            total_chars += len(content)
+
+        if isinstance(call_back, ChatCallBacker):
+            call_back('update_execution_detail', {
+                'Files read': sum('content' in item for item in results),
+            })
+        return results
