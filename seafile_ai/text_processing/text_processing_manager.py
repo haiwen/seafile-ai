@@ -708,7 +708,14 @@ class TextProcessingManager:
             'role': 'user',
             'content': json.dumps({'request': prompt, 'outline': outline, 'block_count': len(blocks)}, ensure_ascii=False),
         }
-        content = self.app.llm_api.run([system_prompt, user_prompt], context, response_format={'type': 'json_object'})
+        completion = self.app.llm_api.run_with_metadata(
+            [system_prompt, user_prompt], context,
+            response_format={'type': 'json_object'})
+        content = completion.get('content') if isinstance(completion, dict) else None
+        finish_reason = completion.get('finish_reason') if isinstance(completion, dict) else None
+        if finish_reason not in (None, 'stop'):
+            logger.warning('Revision brief generation did not complete normally: finish_reason=%s', finish_reason)
+            raise ReviewModelOutputTruncatedError('The model response was truncated.')
         return self._parse_review_json_object(content)
 
     def _generate_items(self, prompt, blocks, lists, brief, context):

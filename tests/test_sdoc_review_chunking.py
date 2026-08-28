@@ -470,15 +470,29 @@ class SDocReviewChunkingTest(unittest.TestCase):
             self.manager._generate_items('Improve this', blocks, [], None, {})
 
     def test_revision_brief_accepts_fenced_json(self):
-        self.manager.app.llm_api.run.return_value = (
-            '```json\n{\"goal\":\"clarity\",\"tone\":\"concise\",'
-            '\"length\":\"preserve\",\"terminology\":[],\"heading_strategy\":\"preserve\",'
-            '\"do_not_modify\":\"facts\"}\n```')
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': (
+                '```json\n{\"goal\":\"clarity\",\"tone\":\"concise\",'
+                '\"length\":\"preserve\",\"terminology\":[],\"heading_strategy\":\"preserve\",'
+                '\"do_not_modify\":\"facts\"}\n```'),
+            'finish_reason': 'stop',
+        }
 
         self.assertEqual(self.manager._generate_revision_brief('改进全文', [], [], {}), {
             'goal': 'clarity', 'tone': 'concise', 'length': 'preserve',
             'terminology': [], 'heading_strategy': 'preserve', 'do_not_modify': 'facts',
         })
+
+    def test_revision_brief_rejects_truncated_completion(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': (
+                '{\"goal\":\"clarity\",\"tone\":\"concise\",\"length\":\"preserve\",'
+                '\"terminology\":[],\"heading_strategy\":\"preserve\",\"do_not_modify\":\"facts\"}'),
+            'finish_reason': 'length',
+        }
+
+        with self.assertRaises(self.module.ReviewModelOutputTruncatedError):
+            self.manager._generate_revision_brief('改进全文', [], [], {})
 
 
 if __name__ == '__main__':
