@@ -22,12 +22,17 @@ SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK = 10
 # structured response before that deadline.
 SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK = 3500
 SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK = 2
-# A review that spans more than one maximum-size chunk needs a global brief
-# so terminology and tone remain consistent between chunks.
-SDOC_REVIEW_BRIEF_BLOCK_THRESHOLD = SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK
 REVISION_BRIEF_REQUIRED_STRING_FIELDS = (
     'goal', 'tone', 'length', 'heading_strategy', 'do_not_modify',
 )
+REVIEW_TEXT_KINDS = {'replace_block_text', 'replace_table_cell_text'}
+REVIEW_STRUCTURE_KINDS = {'set_block_type', 'set_list_type'}
+REVIEW_KINDS = REVIEW_TEXT_KINDS | REVIEW_STRUCTURE_KINDS
+REVIEW_HEADING_TYPES = {
+    'paragraph', 'header1', 'header2', 'header3',
+    'header4', 'header5', 'header6',
+}
+REVIEW_LIST_TYPES = {'ordered_list', 'unordered_list'}
 
 
 class ReviewScopeAmbiguousError(ValueError):
@@ -618,6 +623,76 @@ class TextProcessingManager:
             hydrated_items.append(hydrated)
         return hydrated_items
 
+    @staticmethod
+    def _validate_review_items(items, blocks, lists):
+        """Fail closed when the model leaves the frozen chunk protocol."""
+        text_targets = {
+            block.get('block_id'): block for block in blocks
+            if isinstance(block, dict) and block.get('block_id')
+        }
+        list_targets = {
+            node.get('block_id'): node for node in lists
+            if isinstance(node, dict) and node.get('block_id')
+        }
+        if len(items) > SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK:
+            raise ReviewModelResponseInvalidError(
+                'The model returned too many review suggestions.')
+
+        seen_targets = set()
+        for item in items:
+            kind = item.get('kind')
+            block_id = item.get('block_id')
+            if kind not in REVIEW_KINDS or not isinstance(block_id, str) or not block_id:
+                raise ReviewModelResponseInvalidError(
+                    'The model returned an unsupported review suggestion.')
+            if not isinstance(item.get('rationale'), str) or not item['rationale'].strip():
+                raise ReviewModelResponseInvalidError(
+                    'The model returned an incomplete review suggestion.')
+
+            if kind in REVIEW_TEXT_KINDS:
+                if set(item) != {'kind', 'block_id', 'after_text', 'rationale'}:
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid text suggestion.')
+                target = text_targets.get(block_id)
+                if not target or not isinstance(item.get('after_text'), str):
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an out-of-scope text suggestion.')
+                is_table_cell = target.get('type') == 'table_cell'
+                if ((kind == 'replace_table_cell_text') != is_table_cell):
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned a mismatched text suggestion.')
+            elif kind == 'set_block_type':
+                if set(item) != {'kind', 'block_id', 'after_type', 'rationale'}:
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid block type suggestion.')
+                target = text_targets.get(block_id)
+                before_type = target.get('type') if target else None
+                after_type = item.get('after_type')
+                if (before_type not in REVIEW_HEADING_TYPES
+                        or after_type not in REVIEW_HEADING_TYPES
+                        or before_type == after_type):
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid block type transition.')
+            else:
+                if set(item) != {'kind', 'block_id', 'after_type', 'rationale'}:
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid list type suggestion.')
+                target = list_targets.get(block_id)
+                before_type = target.get('type') if target else None
+                after_type = item.get('after_type')
+                if (before_type not in REVIEW_LIST_TYPES
+                        or after_type not in REVIEW_LIST_TYPES
+                        or before_type == after_type):
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid list type transition.')
+
+            target_key = (kind, block_id)
+            if target_key in seen_targets:
+                raise ReviewModelResponseInvalidError(
+                    'The model returned duplicate review suggestions.')
+            seen_targets.add(target_key)
+        return items
+
     def _generate_revision_brief(self, prompt, outline, blocks, context):
         system_prompt = {
             'role': 'system',
@@ -697,6 +772,7 @@ class TextProcessingManager:
                 'finish_reason=%s, content_length=%s, top-level keys=%s',
                 finish_reason, len(content) if isinstance(content, str) else None, keys)
             raise ReviewModelResponseInvalidError('The model returned an invalid review suggestion.')
+        self._validate_review_items(items, blocks, lists)
         return self._hydrate_review_items(items, blocks, lists)
 
     def sdoc_analyze(self, prompt, document_context, context):

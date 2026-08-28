@@ -2,7 +2,6 @@ import logging
 import jwt
 import json
 import hashlib
-import time
 
 from PIL import UnidentifiedImageError
 from flask import Flask, Response, request, stream_with_context
@@ -45,10 +44,13 @@ def _review_plan_digest(value):
     return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
 
-def _encode_review_plan_token(prompt, document_context, plan):
+def _encode_review_plan_token(
+        prompt, document_context, plan, review_task_id, generation_attempt_id):
     payload = {
         'purpose': 'sdoc_review_plan',
-        'exp': int(time.time()) + 300,
+        'schema_version': 'sdoc-review-plan-binding/v1',
+        'review_task_id': review_task_id,
+        'generation_attempt_id': generation_attempt_id,
         'prompt_digest': _review_plan_digest(prompt),
         'context_digest': _review_plan_digest(document_context),
         'brief_digest': _review_plan_digest(plan.get('brief')),
@@ -57,13 +59,18 @@ def _encode_review_plan_token(prompt, document_context, plan):
     return jwt.encode(payload, config.SECRET_KEY, algorithm='HS256')
 
 
-def _review_plan_token_matches(token, prompt, document_context, brief, chunks):
+def _review_plan_token_matches(
+        token, prompt, document_context, brief, chunks,
+        review_task_id, generation_attempt_id):
     try:
         payload = jwt.decode(token, config.SECRET_KEY, algorithms=['HS256'])
     except jwt.InvalidTokenError:
         return False
     return (
         payload.get('purpose') == 'sdoc_review_plan'
+        and payload.get('schema_version') == 'sdoc-review-plan-binding/v1'
+        and payload.get('review_task_id') == review_task_id
+        and payload.get('generation_attempt_id') == generation_attempt_id
         and payload.get('prompt_digest') == _review_plan_digest(prompt)
         and payload.get('context_digest') == _review_plan_digest(document_context)
         and payload.get('brief_digest') == _review_plan_digest(brief)
@@ -619,6 +626,8 @@ def sdoc_review_plan():
 
     prompt = data.get('prompt')
     document_context = data.get('document_context')
+    review_task_id = data.get('review_task_id')
+    generation_attempt_id = data.get('generation_attempt_id')
     username = data.get('username')
     if not isinstance(prompt, str) or not prompt.strip():
         return {'error_msg': 'prompt invalid.'}, 400
@@ -628,6 +637,10 @@ def sdoc_review_plan():
         return {'error_msg': 'document_context.blocks invalid.'}, 400
     if not username:
         return {'error_msg': 'username invalid.'}, 400
+    if not isinstance(review_task_id, str) or not review_task_id:
+        return {'error_msg': 'review_task_id invalid.'}, 400
+    if not isinstance(generation_attempt_id, str) or not generation_attempt_id:
+        return {'error_msg': 'generation_attempt_id invalid.'}, 400
 
     context = build_sdoc_ai_context(data, username)
     try:
@@ -644,7 +657,8 @@ def sdoc_review_plan():
         return {'error_msg': 'Internal server error.'}, 500
 
     plan = dict(plan)
-    plan['plan_token'] = _encode_review_plan_token(prompt, document_context, plan)
+    plan['plan_token'] = _encode_review_plan_token(
+        prompt, document_context, plan, review_task_id, generation_attempt_id)
     return {'plan': plan}, 200
 
 
@@ -696,6 +710,8 @@ def sdoc_review_chunk():
     prompt = data.get('prompt')
     document_context = data.get('document_context')
     plan_token = data.get('plan_token')
+    review_task_id = data.get('review_task_id')
+    generation_attempt_id = data.get('generation_attempt_id')
     if 'brief' not in data:
         return {'error_msg': 'brief invalid.'}, 400
     brief = data.get('brief')
@@ -711,6 +727,10 @@ def sdoc_review_chunk():
         return {'error_msg': 'chunk_index invalid.'}, 400
     if not isinstance(plan_token, str) or not plan_token:
         return {'error_msg': 'plan_token invalid.'}, 400
+    if not isinstance(review_task_id, str) or not review_task_id:
+        return {'error_msg': 'review_task_id invalid.'}, 400
+    if not isinstance(generation_attempt_id, str) or not generation_attempt_id:
+        return {'error_msg': 'generation_attempt_id invalid.'}, 400
     if not username:
         return {'error_msg': 'username invalid.'}, 400
 
@@ -721,7 +741,8 @@ def sdoc_review_chunk():
         if not _review_plan_token_matches(
                 plan_token, prompt, document_context, brief,
                 [{'chunk_index': index, 'block_ids': [block.get('block_id') for block in chunk]}
-                 for index, chunk in enumerate(chunks)]):
+                 for index, chunk in enumerate(chunks)],
+                review_task_id, generation_attempt_id):
             return {'error_msg': 'review plan does not match the request.'}, 409
         result = flask_app.app.text_processing_manager.sdoc_review_chunk(
             prompt, document_context, brief, chunk_index, context)
