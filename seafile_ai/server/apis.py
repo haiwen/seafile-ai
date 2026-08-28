@@ -1,13 +1,15 @@
 import logging
 import jwt
 import json
-import hashlib
 
 from PIL import UnidentifiedImageError
 from flask import Flask, Response, request, stream_with_context
 from pathlib import Path
 
 from seafile_ai import config
+from seafile_ai.server.review_plan_binding import (
+    encode_review_plan_binding, review_plan_binding_matches,
+)
 from seafile_ai.server.sdoc_review_utils import build_sdoc_ai_context
 from seafile_ai.text_processing.text_processing_manager import (
     ReviewModelOutputTruncatedError, ReviewModelResponseInvalidError,
@@ -37,45 +39,6 @@ def check_auth_token(req):
         return False
 
     return True
-
-
-def _review_plan_digest(value):
-    serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
-    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
-
-
-def _encode_review_plan_token(
-        prompt, document_context, plan, review_task_id, generation_attempt_id):
-    payload = {
-        'purpose': 'sdoc_review_plan',
-        'schema_version': 'sdoc-review-plan-binding/v1',
-        'review_task_id': review_task_id,
-        'generation_attempt_id': generation_attempt_id,
-        'prompt_digest': _review_plan_digest(prompt),
-        'context_digest': _review_plan_digest(document_context),
-        'brief_digest': _review_plan_digest(plan.get('brief')),
-        'chunks_digest': _review_plan_digest(plan.get('chunks')),
-    }
-    return jwt.encode(payload, config.SECRET_KEY, algorithm='HS256')
-
-
-def _review_plan_token_matches(
-        token, prompt, document_context, brief, chunks,
-        review_task_id, generation_attempt_id):
-    try:
-        payload = jwt.decode(token, config.SECRET_KEY, algorithms=['HS256'])
-    except jwt.InvalidTokenError:
-        return False
-    return (
-        payload.get('purpose') == 'sdoc_review_plan'
-        and payload.get('schema_version') == 'sdoc-review-plan-binding/v1'
-        and payload.get('review_task_id') == review_task_id
-        and payload.get('generation_attempt_id') == generation_attempt_id
-        and payload.get('prompt_digest') == _review_plan_digest(prompt)
-        and payload.get('context_digest') == _review_plan_digest(document_context)
-        and payload.get('brief_digest') == _review_plan_digest(brief)
-        and payload.get('chunks_digest') == _review_plan_digest(chunks)
-    )
 
 
 @flask_app.route('/api/v1/get-ai-reply', methods=['POST'])
@@ -657,8 +620,9 @@ def sdoc_review_plan():
         return {'error_msg': 'Internal server error.'}, 500
 
     plan = dict(plan)
-    plan['plan_token'] = _encode_review_plan_token(
-        prompt, document_context, plan, review_task_id, generation_attempt_id)
+    plan['plan_token'] = encode_review_plan_binding(
+        config.SECRET_KEY, prompt, document_context, plan,
+        review_task_id, generation_attempt_id)
     return {'plan': plan}, 200
 
 
@@ -738,8 +702,8 @@ def sdoc_review_chunk():
     try:
         _blocks, _lists, chunks = flask_app.app.text_processing_manager.sdoc_review_chunk_manifest(
             prompt, document_context)
-        if not _review_plan_token_matches(
-                plan_token, prompt, document_context, brief,
+        if not review_plan_binding_matches(
+                plan_token, config.SECRET_KEY, prompt, document_context, brief,
                 [{'chunk_index': index, 'block_ids': [block.get('block_id') for block in chunk]}
                  for index, chunk in enumerate(chunks)],
                 review_task_id, generation_attempt_id):

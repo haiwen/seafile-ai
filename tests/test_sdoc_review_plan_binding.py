@@ -1,9 +1,16 @@
+import importlib.util
 import unittest
-from unittest.mock import patch
+from pathlib import Path
 
 import jwt
 
-from seafile_ai.server import apis
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    'test_sdoc_review_plan_binding_module',
+    PROJECT_ROOT / 'seafile_ai/server/review_plan_binding.py')
+binding = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(binding)
 
 
 class SDocReviewPlanBindingTest(unittest.TestCase):
@@ -22,41 +29,38 @@ class SDocReviewPlanBindingTest(unittest.TestCase):
         self.attempt_id = '00000000-0000-4000-8000-000000000002'
 
     def _token(self):
-        return apis._encode_review_plan_token(
-            self.prompt, self.context, self.plan,
+        return binding.encode_review_plan_binding(
+            self.secret, self.prompt, self.context, self.plan,
             self.task_id, self.attempt_id)
 
-    @patch.object(apis.config, 'SECRET_KEY', 'review-plan-binding-secret-at-least-32-bytes')
     def test_binding_has_no_fixed_expiry_and_matches_the_same_attempt(self):
         token = self._token()
         payload = jwt.decode(token, self.secret, algorithms=['HS256'])
 
         self.assertNotIn('exp', payload)
-        self.assertTrue(apis._review_plan_token_matches(
-            token, self.prompt, self.context,
+        self.assertTrue(binding.review_plan_binding_matches(
+            token, self.secret, self.prompt, self.context,
             self.plan['brief'], self.plan['chunks'],
             self.task_id, self.attempt_id))
 
-    @patch.object(apis.config, 'SECRET_KEY', 'review-plan-binding-secret-at-least-32-bytes')
     def test_binding_rejects_another_task_or_attempt(self):
         token = self._token()
 
-        self.assertFalse(apis._review_plan_token_matches(
-            token, self.prompt, self.context,
+        self.assertFalse(binding.review_plan_binding_matches(
+            token, self.secret, self.prompt, self.context,
             self.plan['brief'], self.plan['chunks'],
             '00000000-0000-4000-8000-000000000003', self.attempt_id))
-        self.assertFalse(apis._review_plan_token_matches(
-            token, self.prompt, self.context,
+        self.assertFalse(binding.review_plan_binding_matches(
+            token, self.secret, self.prompt, self.context,
             self.plan['brief'], self.plan['chunks'],
             self.task_id, '00000000-0000-4000-8000-000000000004'))
 
-    @patch.object(apis.config, 'SECRET_KEY', 'review-plan-binding-secret-at-least-32-bytes')
     def test_binding_rejects_changed_plan_content(self):
         token = self._token()
         changed_chunks = [{'chunk_index': 0, 'block_ids': ['block-2']}]
 
-        self.assertFalse(apis._review_plan_token_matches(
-            token, self.prompt, self.context,
+        self.assertFalse(binding.review_plan_binding_matches(
+            token, self.secret, self.prompt, self.context,
             self.plan['brief'], changed_chunks,
             self.task_id, self.attempt_id))
 
