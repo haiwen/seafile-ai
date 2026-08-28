@@ -431,6 +431,44 @@ class SDocReviewChunkingTest(unittest.TestCase):
                 'before_leaf_text': 'Original text',
             }])
 
+    def test_review_item_generation_rejects_unknown_kind(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': (
+                '{"items":[{"kind":"delete_block","block_id":"block-1",'
+                '"rationale":"Remove it"}]}'),
+            'finish_reason': 'stop',
+        }
+        with self.assertRaises(self.module.ReviewModelResponseInvalidError):
+            self.manager._generate_items('Improve this', [], [], None, {})
+
+    def test_review_item_generation_rejects_out_of_chunk_target(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': (
+                '{"items":[{"kind":"replace_block_text","block_id":"outside",'
+                '"after_text":"Changed","rationale":"Clearer"}]}'),
+            'finish_reason': 'stop',
+        }
+        blocks = [{
+            'block_id': 'inside', 'text_node_id': 'text-1', 'type': 'paragraph',
+            'before_leaf_text': 'Original',
+        }]
+        with self.assertRaises(self.module.ReviewModelResponseInvalidError):
+            self.manager._generate_items('Improve this', blocks, [], None, {})
+
+    def test_review_item_generation_rejects_table_kind_for_paragraph(self):
+        self.manager.app.llm_api.run_with_metadata.return_value = {
+            'content': (
+                '{"items":[{"kind":"replace_table_cell_text","block_id":"block-1",'
+                '"after_text":"Changed","rationale":"Clearer"}]}'),
+            'finish_reason': 'stop',
+        }
+        blocks = [{
+            'block_id': 'block-1', 'text_node_id': 'text-1', 'type': 'paragraph',
+            'before_leaf_text': 'Original',
+        }]
+        with self.assertRaises(self.module.ReviewModelResponseInvalidError):
+            self.manager._generate_items('Improve this', blocks, [], None, {})
+
     def test_revision_brief_accepts_fenced_json(self):
         self.manager.app.llm_api.run.return_value = (
             '```json\n{\"goal\":\"clarity\",\"tone\":\"concise\",'
