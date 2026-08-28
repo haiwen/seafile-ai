@@ -7,8 +7,7 @@ Decide what is needed at each step:
 - If the question can already be answered, no suitable tool exists, tool access is disabled, or the request does not need tools, return the final answer.
 
 Default behavior:
-- The main purpose of this assistant is to search the library documents first and then answer the user.
-- For library, product, or documentation questions, use `documents_search` before answering unless the request is only a brief greeting, courtesy reply, trivial arithmetic, or fully answerable from the user's provided content.
+- The main purpose of this assistant is to use available library tools when the answer needs library information.
 - If the current user message or attachments already contain enough information, answer directly from that material.
 - If no relevant library documents are found, or the results are clearly insufficient, answer directly with the best available knowledge instead of pretending the documents answered it.
 
@@ -64,15 +63,31 @@ When search tools were used:
 - If the final answer uses library search results, include citations for the supported statements and summarize the relevant document content instead of copying it.
 - Do not output any <reference_x> tag if search tools were not used or the results are not useful."""
 
-CHAT_SEARCH_POLICY = """Search policy:
+CHAT_COMMUNITY_SEARCH_POLICY = """Search policy:
 - Use search tools only when the answer needs library reference material.
 - If the request can be answered well without library references, answer directly.
 - When an exact file path is known and the question needs that file's content, call `read_files`.
 - Use `list_files` when file names, paths, or metadata are needed to locate a file.
-- Otherwise, start with `documents_search`.
-- If `documents_search` is sufficient, stop searching and answer.
+- If `list_files` is sufficient, stop searching and answer.
 - Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""
+
+CHAT_PRO_SEARCH_POLICY = """Search policy:
+- Use search tools only when the answer needs library reference material.
+- If the request can be answered well without library references, answer directly.
+- When an exact file path is known and the question needs that file's content, call `read_files`.
+- Otherwise, start with `list_files` to find relevant files.
+- If `list_files` returns relevant records, use those results directly or call `read_files` when file content is needed. Do not call `documents_search` when the list-files results are sufficient.
+- Only call `documents_search` when `list_files` returns no relevant records or its results are insufficient to answer the request.
+- If a search result is sufficient, stop searching and answer.
+- Search queries should be short natural-language sentences, not keyword piles.
+- Do not perform exploratory searches without a clear reason tied to the user's request."""
+
+CHAT_SEASEARCH_UNAVAILABLE_RULE = """Document-search availability:
+- `documents_search` is registered but unavailable until the administrator configures document search.
+- Prefer `list_files` for file discovery.
+- If `documents_search` returns `status: unavailable`, the final answer MUST explicitly state: "Document search is currently unavailable. Please contact the administrator to configure it."
+- Do not describe an unavailable document search as a search with no results, and do not claim that library documents do not exist based on this tool result."""
 
 CHAT_SEARCH_REFERENCE_RULES = """Search reference rules:
 - Search tools may return records with a `label` such as `<reference_0>`.
@@ -102,7 +117,15 @@ Final answer: Seafile is an open source cloud storage system for file sync, shar
 
 Example 2
 User: How can I enable WebDAV in Seafile?
-Tool call:
+Step 1 tool call:
+{
+  "name": "list_files",
+  "arguments": {
+    "name_contains": "WebDAV"
+  }
+}
+Step 1 result has no relevant records.
+Step 2 tool call:
 {
   "name": "documents_search",
   "arguments": {
@@ -114,7 +137,15 @@ Final answer: You can enable WebDAV by following the server-side setup and confi
 
 Example 3
 User: Why does LDAP login fail after upgrade?
-Tool call:
+Step 1 tool call:
+{
+  "name": "list_files",
+  "arguments": {
+    "name_contains": "LDAP"
+  }
+}
+Step 1 result has no relevant records.
+Step 2 tool call:
 {
   "name": "documents_search",
   "arguments": {
@@ -159,13 +190,21 @@ Example 2
 User: Summarize the deployment steps and write them into a Markdown document.
 Step 1 tool call:
 {
+  "name": "list_files",
+  "arguments": {
+    "name_contains": "deployment"
+  }
+}
+Step 1 result has no relevant records.
+Step 2 tool call:
+{
   "name": "documents_search",
   "arguments": {
     "query": "Seafile Docker deployment"
   }
 }
-Step 1 result is insufficient.
-Step 2 tool call:
+Step 2 result is insufficient.
+Step 3 tool call:
 {
   "name": "generate_markdown",
   "arguments": {

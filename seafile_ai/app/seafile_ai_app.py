@@ -1,3 +1,5 @@
+import logging
+
 from seafile_ai.image_processing.face_recognition_manager import FaceRecognitionManager
 from seafile_ai.image_processing.image_processing_manager import ImageProcessingManager
 from seafile_ai.chat_manager import StreamingChat
@@ -9,6 +11,8 @@ from seafile_ai.utils.seahub_api import SeahubAPI
 from seafile_ai.data_logging.data_logging import DataLogging
 from seafile_ai.utils.llm_api import LLMAPI
 from seafile_ai.utils.embedding_api import EmbeddingAPI
+
+logger = logging.getLogger(__name__)
 
 class SeafileAIApp(object):
     def __init__(self, config):
@@ -23,11 +27,18 @@ class SeafileAIApp(object):
             config.DEFAULT_LLM_MODEL.get('key'),
             timeout=180,
         )
-        self.embedding_api = EmbeddingAPI(
-            config.EMBEDDING_MODEL.get('model'),
-            config.EMBEDDING_MODEL.get('type', 'openai'),
-            config.EMBEDDING_MODEL.get('url'),
-            config.EMBEDDING_MODEL.get('key'),
+        self.embedding_api = None
+        if config.EMBEDDING_MODEL_CONFIGURED:
+            self.embedding_api = EmbeddingAPI(
+                config.EMBEDDING_MODEL.get('model'),
+                config.EMBEDDING_MODEL.get('type', 'openai'),
+                config.EMBEDDING_MODEL.get('url'),
+                config.EMBEDDING_MODEL.get('key'),
+            )
+        logger.info(
+            'Embedding API %s; document search will use %s',
+            'enabled' if self.embedding_api else 'disabled',
+            'keyword and vector search' if self.embedding_api else 'keyword search only',
         )
         
         self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)

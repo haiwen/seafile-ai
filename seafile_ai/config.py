@@ -132,6 +132,7 @@ LLM_MODEL_TIER_MODELS_MAP = {}
 DEFAULT_LLM_MODEL = {}
 AI_UTILS_TIER = {}
 EMBEDDING_MODEL = {}
+EMBEDDING_MODEL_CONFIGURED = False
 
 # Chat
 CONTEXT_WINDOW_LIMIT = 20
@@ -172,6 +173,7 @@ FACE_EMBEDDING_SERVICE_KEY = ''
 SEAFILE_SERVER_URL = ''
 SEASEARCH_URL = ''
 SEASEARCH_TOKEN = ''
+IS_PRO_VERSION = os.environ.get('IS_PRO_VERSION', 'false').lower() == 'true'
 
 INNER_METADATA_SERVER_URL = 'http://127.0.0.1:8084'
 
@@ -232,15 +234,25 @@ if not isinstance(AI_UTILS_TIER, dict):
     logger.warning('AI_UTILS_TIER must be a mapping; falling back to defaults')
     AI_UTILS_TIER = {}
 EMBEDDING_MODEL = configs.get('EMBEDDING_MODEL', {})
-if not check_llm_validated(EMBEDDING_MODEL):
-    raise ValueError('EMBEDDING_MODEL is not set or invalid')
+if EMBEDDING_MODEL and not check_llm_validated(EMBEDDING_MODEL):
+    logger.warning('EMBEDDING_MODEL is invalid, embedding and vector search will be disabled')
+    EMBEDDING_MODEL = {}
+EMBEDDING_MODEL_CONFIGURED = bool(EMBEDDING_MODEL)
 EMBEDDING_DIMENSIONS = 1024
-try:
-    dimensions = int(EMBEDDING_MODEL.get('dimensions', EMBEDDING_DIMENSIONS))
-    if dimensions > 0:
-        EMBEDDING_DIMENSIONS = dimensions
-except (TypeError, ValueError):
-    pass
+if EMBEDDING_MODEL:
+    try:
+        dimensions = int(EMBEDDING_MODEL.get('dimensions', EMBEDDING_DIMENSIONS))
+        if dimensions > 0:
+            EMBEDDING_DIMENSIONS = dimensions
+    except (TypeError, ValueError):
+        pass
+
+logger.info(
+    'AI configuration loaded: is_pro_version=%s, seasearch_configured=%s, embedding_model_configured=%s',
+    IS_PRO_VERSION,
+    bool(SEASEARCH_URL.strip()),
+    EMBEDDING_MODEL_CONFIGURED,
+)
 
 if LLM_MODELS:
     LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL = get_llm_models_maps(LLM_MODELS)

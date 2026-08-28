@@ -280,6 +280,20 @@ class DocumentsSearch(BasicTool):
 
     def execute(self, query, context, app, model, tool_executor, call_back):
         assert isinstance(query, str), 'Your search query must be a string'
+        if not config.SEASEARCH_URL.strip():
+            logger.info('Document search is unavailable because SeaSearch is not configured')
+            warning = 'Document search is currently unavailable. Please contact the administrator to configure it.'
+            if isinstance(call_back, ChatCallBacker):
+                call_back('update_execution_detail', {
+                    'Status': 'unavailable',
+                    'Reason': warning,
+                })
+            return {
+                'status': 'unavailable',
+                'records': [],
+                'warning': warning,
+            }
+
         sources_results = list(tool_executor.cache.get('sources_results', []))
         existing_source_keys = {
             (source.get('repo_id'), source.get('path'))
