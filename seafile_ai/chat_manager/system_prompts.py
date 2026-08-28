@@ -76,7 +76,9 @@ CHAT_PRO_SEARCH_POLICY = """Search policy:
 - Use search tools only when the answer needs library reference material.
 - If the request can be answered well without library references, answer directly.
 - When an exact file path is known and the question needs that file's content, call `read_files`.
-- Otherwise, choose `list_files` or `documents_search` based on the user's request and existing conversation context.
+- Otherwise, start with `list_files` to find relevant files.
+- If `list_files` returns relevant records, use those results directly or call `read_files` when file content is needed. Do not call `documents_search` when the list-files results are sufficient.
+- Only call `documents_search` when `list_files` returns no relevant records or its results are insufficient to answer the request.
 - If a search result is sufficient, stop searching and answer.
 - Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""
