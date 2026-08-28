@@ -72,17 +72,6 @@ CHAT_COMMUNITY_SEARCH_POLICY = """Search policy:
 - Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""
 
-CHAT_PRO_FIRST_TURN_SEARCH_POLICY = """Search policy:
-- Use search tools only when the answer needs library reference material.
-- If the request can be answered well without library references, answer directly.
-- On this first conversation turn, the first tool-call response may call only `list_files`. Do not call `documents_search` or any other search tool in the same response.
-- Wait for the `list_files` result before deciding the next action.
-- If the exact path of a relevant file is known after listing, use `read_files` when its content is needed.
-- If `list_files` returns relevant records, present those results directly and do not call `documents_search`.
-- Only after `list_files` returns no relevant records, call `documents_search` in a later tool-call response.
-- Search queries should be short natural-language sentences, not keyword piles.
-- Do not perform exploratory searches without a clear reason tied to the user's request."""
-
 CHAT_PRO_SEARCH_POLICY = """Search policy:
 - Use search tools only when the answer needs library reference material.
 - If the request can be answered well without library references, answer directly.
@@ -204,31 +193,6 @@ Final answer:
 I prepared the Markdown document.
 <seafile-ai-markdown file_name="seafile-docker-deployment.md">
 # Deploy Seafile with Docker
-</seafile-ai-markdown>"""
-
-CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES_WITHOUT_SEARCH = """Content-generation example:
-
-User: Put the answer above into a Markdown document.
-Tool call:
-{
-  "name": "generate_markdown",
-  "arguments": {
-    "file_name": "answer.md",
-    "content": "# Title\n\nDocument content"
-  }
-}
-Tool result:
-<seafile-ai-markdown file_name="answer.md">
-# Title
-
-Document content
-</seafile-ai-markdown>
-Final answer:
-I recorded it in a Markdown document.
-<seafile-ai-markdown file_name="answer.md">
-# Title
-
-Document content
 </seafile-ai-markdown>"""
 
 MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT = f'WARNING: You have reached step {MAX_STEPS}. Tool access has been physically disabled for this request. Please provide your final response based on existing information. DO NOT RESPONSE ANY TOOL CALLS IN THIS STEP!!! (Even if the tools list is not empty and tool_choice is not none)'
