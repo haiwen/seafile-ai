@@ -117,7 +117,15 @@ Final answer: Seafile is an open source cloud storage system for file sync, shar
 
 Example 2
 User: How can I enable WebDAV in Seafile?
-Tool call:
+Step 1 tool call:
+{
+  "name": "list_files",
+  "arguments": {
+    "name_contains": "WebDAV"
+  }
+}
+Step 1 result has no relevant records.
+Step 2 tool call:
 {
   "name": "documents_search",
   "arguments": {
@@ -129,7 +137,15 @@ Final answer: You can enable WebDAV by following the server-side setup and confi
 
 Example 3
 User: Why does LDAP login fail after upgrade?
-Tool call:
+Step 1 tool call:
+{
+  "name": "list_files",
+  "arguments": {
+    "name_contains": "LDAP"
+  }
+}
+Step 1 result has no relevant records.
+Step 2 tool call:
 {
   "name": "documents_search",
   "arguments": {
@@ -174,13 +190,21 @@ Example 2
 User: Summarize the deployment steps and write them into a Markdown document.
 Step 1 tool call:
 {
+  "name": "list_files",
+  "arguments": {
+    "name_contains": "deployment"
+  }
+}
+Step 1 result has no relevant records.
+Step 2 tool call:
+{
   "name": "documents_search",
   "arguments": {
     "query": "Seafile Docker deployment"
   }
 }
-Step 1 result is insufficient.
-Step 2 tool call:
+Step 2 result is insufficient.
+Step 3 tool call:
 {
   "name": "generate_markdown",
   "arguments": {
