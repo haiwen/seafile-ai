@@ -206,4 +206,29 @@ I prepared the Markdown document.
 # Deploy Seafile with Docker
 </seafile-ai-markdown>"""
 
+CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES_WITHOUT_SEARCH = """Content-generation example:
+
+User: Put the answer above into a Markdown document.
+Tool call:
+{
+  "name": "generate_markdown",
+  "arguments": {
+    "file_name": "answer.md",
+    "content": "# Title\n\nDocument content"
+  }
+}
+Tool result:
+<seafile-ai-markdown file_name="answer.md">
+# Title
+
+Document content
+</seafile-ai-markdown>
+Final answer:
+I recorded it in a Markdown document.
+<seafile-ai-markdown file_name="answer.md">
+# Title
+
+Document content
+</seafile-ai-markdown>"""
+
 MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT = f'WARNING: You have reached step {MAX_STEPS}. Tool access has been physically disabled for this request. Please provide your final response based on existing information. DO NOT RESPONSE ANY TOOL CALLS IN THIS STEP!!! (Even if the tools list is not empty and tool_choice is not none)'

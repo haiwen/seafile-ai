@@ -9,6 +9,7 @@ from seafile_ai.chat_manager.system_prompts import (
     CHAT_CORE_PROMPT,
     CHAT_CONTENT_GENERATION_RULES,
     CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES,
+    CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES_WITHOUT_SEARCH,
     CHAT_GLOBAL_TOOL_RULES,
     CHAT_LIST_FILES_TOOL_RULES,
     CHAT_LIST_FILES_METADATA_DISABLED_RULE,
@@ -57,10 +58,13 @@ def build_chat_tool_prompt(
         if not seasearch_configured:
             tool_prompt_sections.append(CHAT_SEASEARCH_UNAVAILABLE_RULE)
 
-    if not skip_tool_examples and documents_search_registered:
-        tool_prompt_sections.append(CHAT_SEARCH_TOOLS_EXAMPLES)
     if not skip_tool_examples:
-        tool_prompt_sections.append(CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES)
+        if not (is_pro_version and is_first_turn):
+            if documents_search_registered:
+                tool_prompt_sections.append(CHAT_SEARCH_TOOLS_EXAMPLES)
+            tool_prompt_sections.append(CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES)
+        else:
+            tool_prompt_sections.append(CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES_WITHOUT_SEARCH)
 
     return '\n\n'.join(tool_prompt_sections)
 
