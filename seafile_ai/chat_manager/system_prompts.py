@@ -101,6 +101,7 @@ CHAT_CONTENT_GENERATION_RULES = """Content-generation rules:
 - `generate_markdown` is for producing a Markdown document artifact.
 - If the user explicitly asks for a Markdown document and `generate_markdown` is available, do not fall back to a plain-text answer or a fenced Markdown code block.
 - If search results are insufficient but the request is still to produce a Markdown artifact, generate the document from the best available information already available in the conversation or from general knowledge.
+- When the request is to produce a Markdown artifact, call `documents_search` at most once in the same request. If the existing conversation content or the first search result is already sufficient, call `generate_markdown` immediately instead of searching again.
 - After a content-generation tool returns its result, preserve that returned tag block exactly.
 - After `generate_markdown` returns its result, stop calling tools and return the final answer immediately.
 - If content-generation tools are not available, answer in normal text and do not pretend that content was created."""
