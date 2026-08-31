@@ -27,7 +27,8 @@ def check_auth_token(req):
     return True
 
 
-@flask_app.route('/api/v1/face-embeddings/', methods=['POST'])
+# Face recognition is no longer available.
+# @flask_app.route('/api/v1/face-embeddings/', methods=['POST'])
 def face_embeddings():
     is_valid = check_auth_token(request)
     if not is_valid:

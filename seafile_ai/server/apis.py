@@ -294,7 +294,8 @@ def ocr():
 
     return {'ocr_result': ocr_result}, 200
 
-@flask_app.route('/api/v1/face-batch-embeddings/', methods=['POST'])
+# Face recognition is no longer available.
+# @flask_app.route('/api/v1/face-batch-embeddings/', methods=['POST'])
 def face_batch_embeddings():
     logger.info('face-batch-embeddings API called')
     is_valid = check_auth_token(request)
@@ -320,7 +321,8 @@ def face_batch_embeddings():
     return {'success': True}, 200
 
 
-@flask_app.route('/api/v1/face-cluster/', methods=['POST'])
+# Face recognition is no longer available.
+# @flask_app.route('/api/v1/face-cluster/', methods=['POST'])
 def face_cluster():
     logger.info('face-cluster API called')
     is_valid = check_auth_token(request)
@@ -346,7 +348,8 @@ def face_cluster():
 
     return {'success': True}, 200
 
-@flask_app.route('/api/v1/update-people-cover-photo/', methods=['POST'])
+# Face recognition is no longer available.
+# @flask_app.route('/api/v1/update-people-cover-photo/', methods=['POST'])
 def update_photo_cover():
     logger.info('update-people-cover-photo API called')
     is_valid = check_auth_token(request)
@@ -371,7 +374,8 @@ def update_photo_cover():
 
     return {'success': True}, 200
 
-@flask_app.route('/api/v1/recognize-faces/', methods=['POST'])
+# Face recognition is no longer available.
+# @flask_app.route('/api/v1/recognize-faces/', methods=['POST'])
 def recognize_faces():
     logger.info('recognize-faces API called')
     is_valid = check_auth_token(request)
