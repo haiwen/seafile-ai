@@ -34,6 +34,7 @@ CHAT_LIST_FILES_TOOL_RULES = """List-files tool rules:
 - When the user asks to list, find, or summarize a specific number of files, pass that number as `max_records`. For example, "top 10 files" requires `max_records: 10`.
 - Use `directory` when the user specifies a directory. It searches that directory and its nested directories.
 - Use `name_contains` when the user specifies a file-name keyword.
+- When the user does not specify a number, use a small `max_records` value that is sufficient for the request. Do not list the whole library without a clear reason.
 - Keep `include_dirs` false unless the user explicitly asks for directories."""
 
 CHAT_LIST_FILES_METADATA_DISABLED_RULE = """List-files metadata-disabled rule:
@@ -77,10 +78,10 @@ CHAT_PRO_SEARCH_POLICY = """Search policy:
 - Use search tools only when the answer needs library reference material.
 - If the request can be answered well without library references, answer directly.
 - When an exact file path is known and the question needs that file's content, call `read_files`.
-- Otherwise, start with `list_files` to find relevant files.
-- If `list_files` returns relevant records, use those results directly or call `read_files` when file content is needed. Do not call `documents_search` when the list-files results are sufficient.
-- Only call `documents_search` when `list_files` returns no relevant records or its results are insufficient to answer the request.
-- `documents_search` returns summaries and snippets, not full file content. If the request needs specific facts, detailed steps, or exact passages, select only the relevant search results and call `read_files` with their exact paths before answering. If the returned summaries are already sufficient, answer directly.
+- Use `list_files` for file names, directories, paths, counts, modification metadata, and file browsing.
+- Use `documents_search` for document-topic questions, procedures, troubleshooting, configuration, and terms when the exact file path is unknown.
+- `documents_search` returns summaries and snippets, not full file content. If its results answer the question, answer directly with its references. Only when specific facts, detailed steps, or exact passages are still needed, call `read_files` with the exact paths of only the necessary search results.
+- Do not call `list_files` before `documents_search` for a topic question unless the user explicitly asks to locate, list, or browse files.
 - If a search result is sufficient, stop searching and answer.
 - Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""
@@ -119,15 +120,7 @@ Final answer: Seafile is an open source cloud storage system for file sync, shar
 
 Example 2
 User: How can I enable WebDAV in Seafile?
-Step 1 tool call:
-{
-  "name": "list_files",
-  "arguments": {
-    "name_contains": "WebDAV"
-  }
-}
-Step 1 result has no relevant records.
-Step 2 tool call:
+Tool call:
 {
   "name": "documents_search",
   "arguments": {
@@ -135,26 +128,11 @@ Step 2 tool call:
   }
 }
 Tool result includes `<reference_0>`, path `/manual/webdav.md`, and a relevant summary.
-Step 3 tool call:
-{
-  "name": "read_files",
-  "arguments": {
-    "file_paths": ["/manual/webdav.md"]
-  }
-}
 Final answer: You can enable WebDAV by following the server-side setup and configuration steps documented for Seafile WebDAV<reference_0>.
 
 Example 3
 User: Why does LDAP login fail after upgrade?
-Step 1 tool call:
-{
-  "name": "list_files",
-  "arguments": {
-    "name_contains": "LDAP"
-  }
-}
-Step 1 result has no relevant records.
-Step 2 tool call:
+Tool call:
 {
   "name": "documents_search",
   "arguments": {
@@ -165,6 +143,29 @@ Tool result is insufficient.
 Final answer: I could not find enough evidence in the current library documents to confirm the cause of this LDAP login issue after upgrade.
 
 Example 4
+User: Find the 10 most recently updated files in /design.
+Tool call:
+{
+  "name": "list_files",
+  "arguments": {
+    "directory": "/design",
+    "max_records": 10
+  }
+}
+Final answer: Here are the 10 most recently updated files in /design: ...
+
+Example 5
+User: Summarize /manual/webdav.md.
+Tool call:
+{
+  "name": "read_files",
+  "arguments": {
+    "file_paths": ["/manual/webdav.md"]
+  }
+}
+Final answer: ...
+
+Example 6
 User: Which number is largest in 5, 9, 19, 28, and 3?
 Tool call: none
 Final answer: 28."""
@@ -199,28 +200,20 @@ Example 2
 User: Summarize the deployment steps and write them into a Markdown document.
 Step 1 tool call:
 {
-  "name": "list_files",
-  "arguments": {
-    "name_contains": "deployment"
-  }
-}
-Step 1 result has no relevant records.
-Step 2 tool call:
-{
   "name": "documents_search",
   "arguments": {
     "query": "Seafile Docker deployment"
   }
 }
-Step 2 result includes path `/manual/deployment.md`, but only a summary.
-Step 3 tool call:
+Step 1 result includes path `/manual/deployment.md`, but only a summary.
+Step 2 tool call:
 {
   "name": "read_files",
   "arguments": {
     "file_paths": ["/manual/deployment.md"]
   }
 }
-Step 4 tool call:
+Step 3 tool call:
 {
   "name": "generate_markdown",
   "arguments": {
