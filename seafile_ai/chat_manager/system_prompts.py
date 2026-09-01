@@ -24,6 +24,7 @@ Tool use can continue for up to {MAX_STEPS - 1} steps. Step {MAX_STEPS} must be 
 
 CHAT_GLOBAL_TOOL_RULES = """Global tool rules:
 - Do not call tools when the request can be answered well without them.
+- For general definitions, basic product introductions, and widely known concepts, answer directly unless the user asks for library-specific information, citations, supporting documents, detailed procedures, configuration, or troubleshooting.
 - Use concrete argument values. Do not use variable names, placeholders, or meta descriptions as tool arguments.
 - Do not make speculative, random, or redundant tool calls.
 - Do not fabricate tool results, references, files, records, or execution status.
@@ -119,6 +120,11 @@ Tool call: none
 Final answer: Seafile is an open source cloud storage system for file sync, sharing, and document collaboration.
 
 Example 2
+User: What are Seafile and SeaTable?
+Tool call: none
+Final answer: Seafile is an open source system for file sync, sharing, and document collaboration. SeaTable is a no-code platform for organizing structured data and building business applications.
+
+Example 3
 User: How can I enable WebDAV in Seafile?
 Tool call:
 {
@@ -130,7 +136,7 @@ Tool call:
 Tool result includes `<reference_0>`, path `/manual/webdav.md`, and a relevant summary.
 Final answer: You can enable WebDAV by following the server-side setup and configuration steps documented for Seafile WebDAV<reference_0>.
 
-Example 3
+Example 4
 User: Why does LDAP login fail after upgrade?
 Tool call:
 {
@@ -142,7 +148,7 @@ Tool call:
 Tool result is insufficient.
 Final answer: I could not find enough evidence in the current library documents to confirm the cause of this LDAP login issue after upgrade.
 
-Example 4
+Example 5
 User: Find the 10 most recently updated files in /design.
 Tool call:
 {
@@ -154,7 +160,7 @@ Tool call:
 }
 Final answer: Here are the 10 most recently updated files in /design: ...
 
-Example 5
+Example 6
 User: Summarize /manual/webdav.md.
 Tool call:
 {
@@ -165,7 +171,7 @@ Tool call:
 }
 Final answer: ...
 
-Example 6
+Example 7
 User: Which number is largest in 5, 9, 19, 28, and 3?
 Tool call: none
 Final answer: 28."""
