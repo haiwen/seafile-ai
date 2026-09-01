@@ -55,11 +55,11 @@ class TextProcessingManager:
             return None
 
         system_content = f'''
-            You are a key phrase extractor. I will provide you with a document in Markdown format and a set of reference phrases. You need to complete two tasks in sequence:
-            1、Key Phrase Extraction: Identify a set of up to 10 key phrases from the document. Each key phrase should consist of at most three words, and there should be no semantic overlap between the phrases. The phrases must be common and appear in the document.
-            2、Semantic Similarity and Replacement: For each key phrase identified in task 1, calculate its semantic similarity with each reference phrase. If the similarity exceeds 0.9, replace the key phrase with the corresponding reference phrase.
-            Finally, output the resulting key phrases, separated by commas. Do not include anything other than the key phrases and commas.
-            Reference phrases: {','.join(candidate_tags)}
+            You are a document classifier. Select the single most relevant tag for the document from the candidate tags below.
+            - Only select an exact tag from the candidate tags. Never create, translate, or rewrite a tag.
+            - If no candidate tag is relevant, select no tag.
+            - Return only the selected tag without any additional text or explanations.
+            Candidate tags: {','.join(candidate_tags)}
         '''
 
         system_prompt = {

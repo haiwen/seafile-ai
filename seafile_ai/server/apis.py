@@ -217,6 +217,7 @@ def generate_file_tags():
     obj_id = data.get('obj_id')
     repo_id = data.get('repo_id')
     file_type = data.get('file_type')
+    candidate_tags = data.get('candidate_tags', [])
     scenario = data.get('scenario', 'file-tags')
 
     context = {
@@ -231,20 +232,16 @@ def generate_file_tags():
         return {'error_msg': 'repo_id invalid.'}, 400
     if not file_type or file_type not in ['image', 'doc']:
         return {'error_msg': 'file_type invalid.'}, 400
+    if not isinstance(candidate_tags, list):
+        return {'error_msg': 'candidate_tags invalid.'}, 400
 
     if file_type == 'image':
-        lang = data.get('lang', 'en')
         try:
-            tags = flask_app.app.image_processing_manager.image_tags(repo_id, obj_id, lang, context)
+            tags = flask_app.app.image_processing_manager.image_tags(repo_id, obj_id, candidate_tags, context)
         except Exception as e:
             logger.exception(e)
             return {'error_msg': 'Internal server error.'}, 500
     else:
-        candidate_tags = data.get('candidate_tags', [])
-
-        if not isinstance(candidate_tags, list):
-            return {'error_msg': 'candidate_tags invalid.'}, 400
-
         try:
             tags = flask_app.app.text_processing_manager.doc_tags(repo_id, obj_id, path, candidate_tags, context)
         except Exception as e:
