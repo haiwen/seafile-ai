@@ -14,7 +14,6 @@ from seafile_ai.chat_manager.utils import (
     strip_content_details_from_attachments,
 )
 from seafile_ai.chat_manager.utils.callbacker import ChatCallBacker
-from seafile_ai.utils import remove_sources_content_and_snippets
 from seafile_ai.utils.completion import StreamingCompletionUtils
 from seafile_ai.utils.llm_api import get_llm_client_by_model_id
 from seafile_ai.utils.sse import SSE
@@ -339,7 +338,7 @@ class StreamingChat(BasicChat):
                 completion_retries = []
 
                 answer, sources = get_answer_and_sources(tool_executor, content)
-                yield SSE.results(answer, remove_sources_content_and_snippets(sources), tool_executor.thought_process.details)
+                yield SSE.results(answer, sources, tool_executor.thought_process.details)
                 yield SSE.done()
                 break
         except Exception as error:
