@@ -234,6 +234,8 @@ def generate_file_tags():
         return {'error_msg': 'file_type invalid.'}, 400
     if not isinstance(candidate_tags, list):
         return {'error_msg': 'candidate_tags invalid.'}, 400
+    if not candidate_tags:
+        return {'tags': []}, 200
 
     if file_type == 'image':
         try:
@@ -248,7 +250,15 @@ def generate_file_tags():
             logger.exception(e)
             return {'error_msg': 'Internal server error.'}, 500
 
-    return {'tags': tags}, 200
+    normalized_tags = []
+    if isinstance(tags, list):
+        for tag in tags:
+            if isinstance(tag, str) and tag in candidate_tags and tag not in normalized_tags:
+                normalized_tags.append(tag)
+                if len(normalized_tags) == 10:
+                    break
+
+    return {'tags': normalized_tags}, 200
 
 
 @flask_app.route('/api/v1/ocr/', methods=['POST'])
