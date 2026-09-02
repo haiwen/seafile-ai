@@ -58,10 +58,10 @@ class ImageProcessingManager:
         content = resize_image_binary(file)
         base64_image = base64.b64encode(content).decode('utf-8')
         system_content = f'''
-            You are an image classifier. Select the single most relevant tag for the image from the candidate tags below.
+            You are an image classifier. Select up to 10 relevant tags for the image from the candidate tags below.
             - Only select an exact tag from the candidate tags. Never create, translate, or rewrite a tag.
-            - If no candidate tag is relevant, select no tag.
-            - Return only the selected tag without any additional text or explanations.
+            - If no candidate tags are relevant, select no tags.
+            - Return only the selected tags separated by English commas, without any additional text or explanations.
             Candidate tags: {','.join(candidate_tags)}
         '''
         
@@ -75,7 +75,7 @@ class ImageProcessingManager:
                 "content": [
                     {
                         "type": "text",
-                        "text": "Select the most relevant candidate tag for this image."
+                        "text": "Select up to 10 relevant candidate tags for this image."
                     },
                     {
                         "type": "image_url",
