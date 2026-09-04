@@ -25,18 +25,26 @@ class SeafileAIApp(object):
             timeout=180,
         )
         self.embedding_api = None
-        if config.EMBEDDING_MODEL_CONFIGURED:
+        seasearch_configured = bool(config.SEASEARCH_URL.strip() and config.SEASEARCH_TOKEN.strip())
+        if seasearch_configured and config.EMBEDDING_MODEL_CONFIGURED:
             self.embedding_api = EmbeddingAPI(
                 config.EMBEDDING_MODEL.get('model'),
                 config.EMBEDDING_MODEL.get('type', 'openai'),
                 config.EMBEDDING_MODEL.get('url'),
                 config.EMBEDDING_MODEL.get('key'),
-            )
+        )
         logger.info(
             'Embedding API %s; document search will use %s',
             'enabled' if self.embedding_api else 'disabled',
-            'keyword and vector search' if self.embedding_api else 'keyword search only',
+            'keyword and vector search' if self.embedding_api else (
+                'keyword search only' if seasearch_configured else 'no document search'
+            ),
         )
+        if not seasearch_configured:
+            logger.info(
+                'Document search is disabled because SeaSearch is not configured. '
+                'If you are a Seafile Community Edition user, please ignore this message.'
+            )
         
         # Face recognition is no longer available.
         # self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)

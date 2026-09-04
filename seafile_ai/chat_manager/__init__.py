@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 class BasicChat:
     def __init__(self, app):
         self.app = app
-        self.search_tools = (DocumentsSearch(),) if config.IS_PRO_VERSION else ()
+        self.search_tools = (
+            (DocumentsSearch(),)
+            if config.SEASEARCH_URL.strip() and config.SEASEARCH_TOKEN.strip()
+            else ()
+        )
         self.directory_tools = (
             ListFiles(),
             ReadFiles(),
@@ -76,9 +80,7 @@ class StreamingChat(BasicChat):
 
             system_prompts = build_chat_system_prompts(
                 context.get('repo_prompt', ''),
-                is_pro_version=config.IS_PRO_VERSION,
                 documents_search_registered=bool(self.search_tools),
-                seasearch_configured=bool(config.SEASEARCH_URL.strip()),
             )
             memory = self._prepare_chat_memory(system_prompts, context.get('session_uuid'))
 

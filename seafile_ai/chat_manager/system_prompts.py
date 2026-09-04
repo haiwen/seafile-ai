@@ -62,16 +62,7 @@ When search tools were used:
 - If the final answer uses library search results, include citations for the supported statements and summarize the relevant document content instead of copying it.
 - Do not output any <reference_x> tag if search tools were not used or the results are not useful."""
 
-CHAT_COMMUNITY_SEARCH_POLICY = """Search policy:
-- Use search tools only when the answer needs library reference material.
-- If the request can be answered well without library references, answer directly.
-- When an exact file path is known and the question needs that file's content, call `read_files`.
-- Use `list_files` when file names, paths, or metadata are needed to locate a file.
-- If `list_files` is sufficient, stop searching and answer.
-- Search queries should be short natural-language sentences, not keyword piles.
-- Do not perform exploratory searches without a clear reason tied to the user's request."""
-
-CHAT_PRO_SEARCH_POLICY = """Search policy:
+CHAT_SEARCH_POLICY = """Search policy:
 - Use search tools only when the answer needs library reference material.
 - If the request can be answered well without library references, answer directly.
 - When an exact file path is known and the question needs that file's content, call `read_files`.
@@ -82,12 +73,6 @@ CHAT_PRO_SEARCH_POLICY = """Search policy:
 - If a search result is sufficient, stop searching and answer.
 - Search queries should be short natural-language sentences, not keyword piles.
 - Do not perform exploratory searches without a clear reason tied to the user's request."""
-
-CHAT_SEASEARCH_UNAVAILABLE_RULE = """Document-search availability:
-- `documents_search` is registered but unavailable until the administrator configures document search.
-- Prefer `list_files` for file discovery.
-- If `documents_search` returns `status: unavailable`, the final answer MUST explicitly state: "Document search is currently unavailable. Please contact the administrator to configure it."
-- Do not describe an unavailable document search as a search with no results, and do not claim that library documents do not exist based on this tool result."""
 
 CHAT_SEARCH_REFERENCE_RULES = """Search reference rules:
 - Search tools may return records with a `label` such as `<reference_0>`.
