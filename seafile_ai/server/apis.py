@@ -9,6 +9,8 @@ from pathlib import Path
 from seafile_ai import config
 from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionException, FormatNotSupportedException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
+from seafile_ai.repo_metadata.constants import TAGS_TABLE
+from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
 
 
 logger = logging.getLogger(__name__)
@@ -217,7 +219,6 @@ def generate_file_tags():
     obj_id = data.get('obj_id')
     repo_id = data.get('repo_id')
     file_type = data.get('file_type')
-    candidate_tags = data.get('candidate_tags', [])
     scenario = data.get('scenario', 'file-tags')
 
     context = {
@@ -232,10 +233,24 @@ def generate_file_tags():
         return {'error_msg': 'repo_id invalid.'}, 400
     if not file_type or file_type not in ['image', 'doc']:
         return {'error_msg': 'file_type invalid.'}, 400
-    if not isinstance(candidate_tags, list):
-        return {'error_msg': 'candidate_tags invalid.'}, 400
-    if not candidate_tags:
+    try:
+        metadata_server_api = MetadataServerAPI('seafile-ai')
+        sql = f'SELECT `{TAGS_TABLE.columns.id.name}`, `{TAGS_TABLE.columns.name.name}` FROM `{TAGS_TABLE.name}`'
+        rows = metadata_server_api.query_rows(repo_id, sql).get('results', [])
+        tag_id_name_map = {
+            row[TAGS_TABLE.columns.id.name]: row[TAGS_TABLE.columns.name.name].strip()
+            for row in rows
+            if row.get(TAGS_TABLE.columns.id.name) and isinstance(row.get(TAGS_TABLE.columns.name.name), str)
+            and row[TAGS_TABLE.columns.name.name].strip()
+        }
+    except Exception:
+        logger.exception('Failed to get metadata tags, repo_id=%s', repo_id)
         return {'tags': []}, 200
+
+    if not tag_id_name_map:
+        return {'tags': []}, 200
+
+    candidate_tags = list(tag_id_name_map.values())
 
     if file_type == 'image':
         try:
@@ -250,11 +265,16 @@ def generate_file_tags():
             logger.exception(e)
             return {'error_msg': 'Internal server error.'}, 500
 
+    candidate_tags_by_name = {name: tag_id for tag_id, name in tag_id_name_map.items()}
     normalized_tags = []
     if isinstance(tags, list):
         for tag in tags:
-            if isinstance(tag, str) and tag in candidate_tags and tag not in normalized_tags:
-                normalized_tags.append(tag)
+            if not isinstance(tag, str):
+                continue
+            tag_id = candidate_tags_by_name.get(tag)
+            candidate_tag = {'id': tag_id, 'name': tag} if tag_id else None
+            if candidate_tag and candidate_tag not in normalized_tags:
+                normalized_tags.append(candidate_tag)
                 if len(normalized_tags) == 10:
                     break
 

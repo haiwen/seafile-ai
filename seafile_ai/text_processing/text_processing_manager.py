@@ -1,6 +1,6 @@
 import os
 import logging
-import re
+import json
 import base64
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType, MODEL_REASONING_TIER
@@ -58,8 +58,8 @@ class TextProcessingManager:
             You are a document classifier. Select up to 10 relevant tags for the document from the candidate tags below.
             - Only select an exact tag from the candidate tags. Never create, translate, or rewrite a tag.
             - If no candidate tags are relevant, select no tags.
-            - Return only the selected tags separated by English commas, without any additional text or explanations.
-            Candidate tags: {','.join(candidate_tags)}
+            - Return a JSON object with a "tags" array containing only exact candidate tag names.
+            Candidate tags: {json.dumps(candidate_tags, ensure_ascii=False)}
         '''
 
         system_prompt = {
@@ -73,9 +73,8 @@ class TextProcessingManager:
         messages = [system_prompt, user_prompt]
 
         tier = AI_UTILS_TIER.get('doc_tags', MODEL_REASONING_TIER.LOW.value)
-        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
-        tags = re.split(r'[，,]', res)
-        return [tag.strip() for tag in tags if tag.strip()]
+        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context, json_mode=True)
+        return json.loads(res).get('tags', [])
 
     def translate(self, text, lang, context):
         system_content = f'''
