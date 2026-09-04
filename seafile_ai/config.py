@@ -173,7 +173,6 @@ FACE_EMBEDDING_SERVICE_KEY = ''
 SEAFILE_SERVER_URL = ''
 SEASEARCH_URL = ''
 SEASEARCH_TOKEN = ''
-IS_PRO_VERSION = os.environ.get('IS_PRO_VERSION', 'false').lower() == 'true'
 
 INNER_METADATA_SERVER_URL = 'http://127.0.0.1:8084'
 
@@ -248,9 +247,8 @@ if EMBEDDING_MODEL:
         pass
 
 logger.info(
-    'AI configuration loaded: is_pro_version=%s, seasearch_configured=%s, embedding_model_configured=%s',
-    IS_PRO_VERSION,
-    bool(SEASEARCH_URL.strip()),
+    'AI configuration loaded: seasearch_configured=%s, embedding_model_configured=%s',
+    bool(SEASEARCH_URL.strip() and SEASEARCH_TOKEN.strip()),
     EMBEDDING_MODEL_CONFIGURED,
 )
 

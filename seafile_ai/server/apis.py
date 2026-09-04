@@ -136,7 +136,7 @@ def batch_generate_embeddings():
     if not all(isinstance(content, str) and content for content in contents):
         return {'error_msg': 'contents invalid.'}, 400
     if not flask_app.app.embedding_api:
-        return {'error_msg': 'Embedding model is not configured.'}, 503
+        return {'error_msg': 'Embedding model or Seasearch is not configured in seafile-ai. '}, 503
 
     context = {
         'username': data.get('username'),
