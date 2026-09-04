@@ -9,6 +9,8 @@ from pathlib import Path
 from seafile_ai import config
 from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionException, FormatNotSupportedException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
+from seafile_ai.repo_metadata.constants import TAGS_TABLE
+from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
 
 
 logger = logging.getLogger(__name__)
@@ -231,27 +233,55 @@ def generate_file_tags():
         return {'error_msg': 'repo_id invalid.'}, 400
     if not file_type or file_type not in ['image', 'doc']:
         return {'error_msg': 'file_type invalid.'}, 400
+    try:
+        metadata_server_api = MetadataServerAPI('seafile-ai')
+        sql = f'SELECT `{TAGS_TABLE.columns.id.name}`, `{TAGS_TABLE.columns.name.name}`, `{TAGS_TABLE.columns.color.name}` FROM `{TAGS_TABLE.name}`'
+        rows = metadata_server_api.query_rows(repo_id, sql).get('results', [])
+        tag_id_data_map = {
+            row[TAGS_TABLE.columns.id.name]: {
+                'id': row[TAGS_TABLE.columns.id.name],
+                'name': row[TAGS_TABLE.columns.name.name].strip(),
+                'color': row.get(TAGS_TABLE.columns.color.name, ''),
+            }
+            for row in rows
+            if row.get(TAGS_TABLE.columns.id.name) and isinstance(row.get(TAGS_TABLE.columns.name.name), str)
+            and row[TAGS_TABLE.columns.name.name].strip()
+        }
+    except Exception:
+        logger.exception('Failed to get metadata tags, repo_id=%s', repo_id)
+        return {'tags': []}, 200
+
+    if not tag_id_data_map:
+        return {'tags': []}, 200
+
+    candidate_tags = [tag['name'] for tag in tag_id_data_map.values()]
 
     if file_type == 'image':
-        lang = data.get('lang', 'en')
         try:
-            tags = flask_app.app.image_processing_manager.image_tags(repo_id, obj_id, lang, context)
+            tags = flask_app.app.image_processing_manager.image_tags(repo_id, obj_id, candidate_tags, context)
         except Exception as e:
             logger.exception(e)
             return {'error_msg': 'Internal server error.'}, 500
     else:
-        candidate_tags = data.get('candidate_tags', [])
-
-        if not isinstance(candidate_tags, list):
-            return {'error_msg': 'candidate_tags invalid.'}, 400
-
         try:
             tags = flask_app.app.text_processing_manager.doc_tags(repo_id, obj_id, path, candidate_tags, context)
         except Exception as e:
             logger.exception(e)
             return {'error_msg': 'Internal server error.'}, 500
 
-    return {'tags': tags}, 200
+    candidate_tags_by_name = {tag['name']: tag for tag in tag_id_data_map.values()}
+    normalized_tags = []
+    if isinstance(tags, list):
+        for tag in tags:
+            if not isinstance(tag, str):
+                continue
+            candidate_tag = candidate_tags_by_name.get(tag)
+            if candidate_tag and candidate_tag not in normalized_tags:
+                normalized_tags.append(candidate_tag)
+                if len(normalized_tags) == 10:
+                    break
+
+    return {'tags': normalized_tags}, 200
 
 
 @flask_app.route('/api/v1/ocr/', methods=['POST'])

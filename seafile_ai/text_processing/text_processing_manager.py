@@ -1,6 +1,6 @@
 import os
 import logging
-import re
+import json
 import base64
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType, MODEL_REASONING_TIER
@@ -55,11 +55,11 @@ class TextProcessingManager:
             return None
 
         system_content = f'''
-            You are a key phrase extractor. I will provide you with a document in Markdown format and a set of reference phrases. You need to complete two tasks in sequence:
-            1、Key Phrase Extraction: Identify a set of up to 10 key phrases from the document. Each key phrase should consist of at most three words, and there should be no semantic overlap between the phrases. The phrases must be common and appear in the document.
-            2、Semantic Similarity and Replacement: For each key phrase identified in task 1, calculate its semantic similarity with each reference phrase. If the similarity exceeds 0.9, replace the key phrase with the corresponding reference phrase.
-            Finally, output the resulting key phrases, separated by commas. Do not include anything other than the key phrases and commas.
-            Reference phrases: {','.join(candidate_tags)}
+            You are a document classifier. Select up to 10 relevant tags for the document from the candidate tags below.
+            - Only select an exact tag from the candidate tags. Never create, translate, or rewrite a tag.
+            - If no candidate tags are relevant, select no tags.
+            - Return a JSON object with a "tags" array containing only exact candidate tag names.
+            Candidate tags: {json.dumps(candidate_tags, ensure_ascii=False)}
         '''
 
         system_prompt = {
@@ -73,9 +73,8 @@ class TextProcessingManager:
         messages = [system_prompt, user_prompt]
 
         tier = AI_UTILS_TIER.get('doc_tags', MODEL_REASONING_TIER.LOW.value)
-        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
-        tags = re.split(r'[，,]', res)
-        return [tag.strip() for tag in tags if tag.strip()]
+        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context, json_mode=True)
+        return json.loads(res).get('tags', [])
 
     def translate(self, text, lang, context):
         system_content = f'''
