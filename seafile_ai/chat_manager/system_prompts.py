@@ -60,7 +60,8 @@ When search tools were used:
 - Place citations immediately after the supported statement.
 - Combine multiple citations directly, such as <reference_0><reference_2>.
 - If the final answer uses library search results, include citations for the supported statements and summarize the relevant document content instead of copying it.
-- Do not output any <reference_x> tag if search tools were not used or the results are not useful."""
+- Do not output any <reference_x> tag if search tools were not used or the results are not useful.
+- When listing documents, separate each document name/link and description with exactly one colon (`：` or `:`), such as `1. **Name**：Description.<reference_0>`"""
 
 CHAT_SEARCH_POLICY = """Search policy:
 - Use search tools only when the answer needs library reference material.
