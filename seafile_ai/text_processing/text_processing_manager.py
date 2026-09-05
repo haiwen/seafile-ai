@@ -2,6 +2,8 @@ import os
 import logging
 import json
 import base64
+import json
+import unicodedata
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType, MODEL_REASONING_TIER
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
@@ -12,6 +14,55 @@ from seafile_ai.config import AI_UTILS_TIER
 from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
 
 logger = logging.getLogger(__name__)
+
+
+SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK = 10
+# Review requests are executed under a short, request-scoped timeout. Keep a
+# chunk comfortably below the model input budget so that it can still return a
+# structured response before that deadline.
+SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK = 3500
+SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK = 2
+REVISION_BRIEF_REQUIRED_STRING_FIELDS = (
+    'goal', 'tone', 'length', 'heading_strategy', 'do_not_modify',
+)
+REVIEW_TEXT_KINDS = {'replace_block_text', 'replace_table_cell_text'}
+REVIEW_STRUCTURE_KINDS = {'set_block_type', 'set_list_type'}
+REVIEW_KINDS = REVIEW_TEXT_KINDS | REVIEW_STRUCTURE_KINDS
+REVIEW_HEADING_TYPES = {
+    'paragraph', 'header1', 'header2', 'header3',
+    'header4', 'header5', 'header6',
+}
+REVIEW_LIST_TYPES = {'ordered_list', 'unordered_list'}
+
+
+class ReviewScopeAmbiguousError(ValueError):
+    def __init__(self, candidates):
+        super().__init__('review scope is ambiguous')
+        self.candidates = candidates
+
+
+class ReviewPayloadTooLargeError(ValueError):
+    pass
+
+
+class ReviewModelOutputTruncatedError(ValueError):
+    pass
+
+
+class ReviewModelResponseInvalidError(ValueError):
+    pass
+
+SECTION_NUMBER_PREFIX_PATTERNS = (
+    r'^\s*\d+(?:\.\d+)*(?:\s*[.、:：\-]\s*|\s+)',
+    r'^\s*[（(]?\s*[一二三四五六七八九十百零]+\s*[）)]?\s*[.、:：\-]\s*',
+    r'^\s*第\s*[0-9一二三四五六七八九十百零]+\s*[章节篇部分]\s*[.、:：\-]?\s*',
+)
+SECTION_NUMBER_TOKEN_PATTERNS = (
+    r'^\s*(\d+(?:\.\d+)*)(?:\s*[.、:：\-]\s*|\s+)',
+    r'^\s*[（(]?\s*([一二三四五六七八九十百零]+)\s*[）)]?\s*[.、:：\-]\s*',
+    r'^\s*第\s*([0-9一二三四五六七八九十百零]+)\s*[章节篇部分]',
+)
+SECTION_QUOTE_PATTERN = re.compile(r'[“"\'「『《]([^”"\'」』》]{2,80})[”"\'」』》]')
 
 
 class TextProcessingManager:
@@ -117,6 +168,655 @@ class TextProcessingManager:
         tier = AI_UTILS_TIER.get('writing_assistant', MODEL_REASONING_TIER.MEDIUM.value)
         res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         return res
+
+    def sdoc_review(self, prompt, document_context, context):
+        """Generate a structured list of suggestions, chunked for long documents.
+
+        Kept for backward compatibility and for documents that fit a single
+        chunk. The progressive flow (Seahub orchestration) uses
+        ``sdoc_review_plan`` + ``sdoc_review_chunk`` instead.
+
+        ``document_context`` is the immutable Document Context projection built
+        by SDoc Server: an object with ``snapshot_id``, ``file_uuid``,
+        ``document_incarnation``, ``exact_sdoc_version``, ``projection_version``,
+        ``outline`` and ``blocks``. Each block exposes ``block_id``,
+        ``text_node_id``, ``type``, ``ancestor_path``, ``before_leaf_text`` and a
+        ``supported`` flag. The model only returns semantic fields; canonical
+        hashes and item ids are assigned by Seahub/SDoc Server, never by the model.
+        """
+        _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
+        if not blocks:
+            return {'items': []}
+
+        chunks = self._chunk_blocks(blocks, lists)
+        brief = None
+        if len(chunks) > 1:
+            outline = (document_context or {}).get('outline') or []
+            brief = self._generate_revision_brief(prompt, outline, blocks, context)
+            if not self._is_valid_revision_brief(brief):
+                raise ValueError('revision brief invalid')
+        items = []
+        for chunk_index, chunk in enumerate(chunks):
+            chunk_lists = self._lists_for_chunk(lists, chunks, chunk_index)
+            items.extend(self._generate_items(prompt, chunk, chunk_lists, brief, context))
+        return {'items': self._dedup_items(items)}
+
+    def sdoc_review_plan(self, prompt, document_context, context):
+        """Return the revision brief and chunk plan for a progressive review.
+
+        The plan is deterministic: same document context + prompt produce the
+        same chunk list. ``chunk_index`` is stable across the plan and each
+        subsequent ``sdoc_review_chunk`` call.
+        """
+        blocks, _lists, chunks = self.sdoc_review_chunk_manifest(prompt, document_context)
+        brief = None
+        if len(chunks) > 1:
+            outline = (document_context or {}).get('outline') or []
+            brief = self._generate_revision_brief(prompt, outline, blocks, context)
+            if not self._is_valid_revision_brief(brief):
+                raise ValueError('revision brief invalid')
+        return {
+            'brief': brief,
+            'chunks': [
+                {'chunk_index': index, 'block_ids': [block.get('block_id') for block in chunk]}
+                for index, chunk in enumerate(chunks)
+            ],
+        }
+
+    def sdoc_review_chunk(self, prompt, document_context, brief, chunk_index, context):
+        """Generate suggestions for a single chunk of the document.
+
+        ``brief`` is the revision brief produced by ``sdoc_review_plan`` (may be
+        None for single-chunk documents). ``chunk_index`` must be a valid index
+        from the plan.
+        """
+        blocks, lists, chunks = self.sdoc_review_chunk_manifest(prompt, document_context)
+        if len(chunks) > 1 and not self._is_valid_revision_brief(brief):
+            raise ValueError('brief invalid')
+        if chunk_index < 0 or chunk_index >= len(chunks):
+            raise ValueError('chunk_index out of range')
+        chunk_lists = self._lists_for_chunk(lists, chunks, chunk_index)
+        return {'items': self._generate_items(
+            prompt, chunks[chunk_index], chunk_lists, brief, context)}
+
+    def sdoc_review_chunk_manifest(self, prompt, document_context):
+        """Return the deterministic block/list/chunk manifest without invoking a model."""
+        _section_titles, _target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
+        return blocks, lists, self._chunk_blocks(blocks, lists)
+
+    def sdoc_review_scope(self, prompt, document_context):
+        """Resolve an immutable, model-independent review scope."""
+        section_titles, target_section_ids, blocks, lists = self._collect_blocks(prompt, document_context)
+        allowed_block_ids = set(target_section_ids)
+        if not target_section_ids:
+            allowed_block_ids.update(section_titles.keys())
+        allowed_block_ids.update(block.get('block_id') for block in blocks if block.get('block_id'))
+        allowed_block_ids.update(list_node.get('block_id') for list_node in lists if list_node.get('block_id'))
+        allowed_text_targets = [
+            {'block_id': block.get('block_id'), 'text_node_id': block.get('text_node_id')}
+            for block in blocks
+            if block.get('block_id') and block.get('text_node_id')
+        ]
+        if target_section_ids:
+            scope_summary = ', '.join(
+                str(section_titles.get(section_id) or section_id)
+                for section_id in sorted(target_section_ids))
+        else:
+            scope_summary = 'Whole document'
+        return {
+            'allowed_block_ids': sorted(allowed_block_ids),
+            'allowed_text_targets': sorted(
+                allowed_text_targets,
+                key=lambda target: (target['block_id'], target['text_node_id'])),
+            'scope_summary': scope_summary,
+        }
+
+    @staticmethod
+    def _is_valid_revision_brief(brief):
+        if not isinstance(brief, dict):
+            return False
+        if any(not isinstance(brief.get(field), str) or not brief[field].strip()
+               for field in REVISION_BRIEF_REQUIRED_STRING_FIELDS):
+            return False
+        terminology = brief.get('terminology')
+        return isinstance(terminology, list) and all(
+            isinstance(term, str) and term.strip() for term in terminology)
+
+    @staticmethod
+    def _normalize_section_name(value):
+        value = unicodedata.normalize('NFKC', value or '').strip().casefold()
+        value = value.strip('“”"\'「」『』《》')
+        return re.sub(r'\s+', ' ', value).strip()
+
+    @classmethod
+    def _section_aliases(cls, title):
+        normalized_title = cls._normalize_section_name(title)
+        aliases = {normalized_title} if normalized_title else set()
+        unnumbered_title = unicodedata.normalize('NFKC', title or '')
+        for pattern in SECTION_NUMBER_PREFIX_PATTERNS:
+            updated_title = re.sub(pattern, '', unnumbered_title, count=1)
+            if updated_title != unnumbered_title:
+                unnumbered_title = updated_title
+                break
+        normalized_unnumbered_title = cls._normalize_section_name(unnumbered_title)
+        if normalized_unnumbered_title:
+            aliases.add(normalized_unnumbered_title)
+        return aliases
+
+    @staticmethod
+    def _section_number_aliases(title):
+        normalized_title = unicodedata.normalize('NFKC', title or '').strip().casefold()
+        aliases = set()
+        for pattern in SECTION_NUMBER_TOKEN_PATTERNS:
+            match = re.match(pattern, normalized_title)
+            if not match:
+                continue
+            number = match.group(1).replace(' ', '')
+            if number:
+                aliases.add(number)
+                aliases.add('第%s章' % number)
+            break
+        return aliases
+
+    @classmethod
+    def _prompt_targets_section(cls, prompt, title):
+        normalized_prompt = cls._normalize_section_name(prompt)
+        aliases = cls._section_aliases(title)
+        number_aliases = cls._section_number_aliases(title)
+        quoted_names = {
+            cls._normalize_section_name(match)
+            for match in SECTION_QUOTE_PATTERN.findall(prompt or '')
+        }
+        if aliases.intersection(quoted_names):
+            return True
+        for alias in number_aliases:
+            if alias.startswith('第') and alias in normalized_prompt:
+                return True
+            if re.search(r'(?<![\d.])%s(?![\d.])' % re.escape(alias), normalized_prompt):
+                return True
+        for alias in aliases:
+            if len(alias) >= 4 and alias in normalized_prompt:
+                return True
+            if any(f'{alias}{suffix}' in normalized_prompt for suffix in ('章节', '章', '节', 'section', 'chapter')):
+                return True
+        return False
+
+    @staticmethod
+    def _has_unmatched_explicit_section_scope(prompt):
+        normalized_prompt = unicodedata.normalize('NFKC', prompt or '').casefold()
+        if any(marker in normalized_prompt for marker in (
+                '全文', '整篇', '整个文档', '所有章节', '全部章节', '各章节',
+                'whole document', 'entire document', 'all sections')):
+            return False
+        if any(marker in normalized_prompt for marker in (
+                '章节层级', '章节结构', '标题层级',
+                'chapter structure', 'section structure', 'heading hierarchy')):
+            return False
+        has_scope_word = any(marker in normalized_prompt for marker in (
+            '章节', '章内', '节内', '小节', '标题下', '标题中', '部分内容',
+            'section', 'chapter', 'under the heading',
+        ))
+        has_numbered_scope = bool(re.search(
+            r'第\s*[0-9一二三四五六七八九十百零]+\s*[章节篇部分]', normalized_prompt))
+        return has_scope_word or has_numbered_scope
+
+    @staticmethod
+    def _is_all_sections_request(prompt):
+        normalized_prompt = unicodedata.normalize('NFKC', prompt or '').casefold()
+        return any(marker in normalized_prompt for marker in (
+            '全文', '整篇', '整个文档', '所有章节', '全部章节', '各章节',
+            'whole document', 'entire document', 'all sections',
+        ))
+
+    @staticmethod
+    def _belongs_to_target_section(node, target_section_ids):
+        if not target_section_ids:
+            return True
+        if node.get('section_id') in target_section_ids:
+            return True
+        return any(
+            isinstance(entry, dict)
+            and str(entry.get('type', '')).startswith('header')
+            and entry.get('id') in target_section_ids
+            for entry in (node.get('ancestor_path') or [])
+        )
+
+    @staticmethod
+    def _scope_section_id(node, target_section_ids):
+        if target_section_ids:
+            if node.get('section_id') in target_section_ids:
+                return node.get('section_id')
+            for entry in node.get('ancestor_path') or []:
+                if isinstance(entry, dict) and entry.get('id') in target_section_ids:
+                    return entry.get('id')
+        return node.get('section_id')
+
+    def _collect_blocks(self, prompt, document_context):
+        section_titles = {}
+        if isinstance(document_context, dict):
+            for header in document_context.get('outline') or []:
+                if isinstance(header, dict) and header.get('block_id'):
+                    section_titles[header.get('block_id')] = header.get('text')
+
+        # Deterministic scope resolution: only edit blocks whose section header
+        # is named in the request. When no header is named, fall back to all
+        # supported blocks.
+        target_section_ids = set()
+        matching_headers = []
+        if isinstance(document_context, dict):
+            for header in document_context.get('outline') or []:
+                text = (header.get('text') or '').strip()
+                if len(text) >= 2 and self._prompt_targets_section(prompt, text):
+                    target_section_ids.add(header.get('block_id'))
+
+                    matching_headers.append({
+                        'block_id': header.get('block_id'),
+                        'text': text,
+                    })
+
+        if len(matching_headers) > 1 and not self._is_all_sections_request(prompt):
+            raise ReviewScopeAmbiguousError(matching_headers)
+
+        if not target_section_ids and self._has_unmatched_explicit_section_scope(prompt):
+            raise ValueError('target section not found')
+
+        blocks = []
+        if isinstance(document_context, dict):
+            for block in document_context.get('blocks') or []:
+                if not isinstance(block, dict) or not block.get('supported'):
+                    continue
+                if not self._belongs_to_target_section(block, target_section_ids):
+                    continue
+                scope_section_id = self._scope_section_id(block, target_section_ids)
+                blocks.append({
+                    'block_id': block.get('block_id'),
+                    'text_node_id': block.get('text_node_id'),
+                    'type': block.get('type'),
+                    'section_id': scope_section_id,
+                    'section': section_titles.get(block.get('section_id')),
+                    'scope_section': section_titles.get(scope_section_id),
+                    'before_leaf_text': block.get('before_leaf_text'),
+                    'ancestor_path': block.get('ancestor_path') or [],
+                })
+        lists = []
+        if isinstance(document_context, dict):
+            for list_node in document_context.get('lists') or []:
+                if not isinstance(list_node, dict) or not list_node.get('block_id'):
+                    continue
+                section_id = None
+                for entry in reversed(list_node.get('ancestor_path') or []):
+                    if isinstance(entry, dict) and str(entry.get('type', '')).startswith('header'):
+                        section_id = entry.get('id')
+                        break
+                scoped_list_node = dict(list_node)
+                scoped_list_node['section_id'] = section_id
+                if not self._belongs_to_target_section(scoped_list_node, target_section_ids):
+                    continue
+                lists.append({
+                    'block_id': list_node.get('block_id'),
+                    'type': list_node.get('type'),
+                    'items': list_node.get('items') or [],
+                    'section_id': self._scope_section_id(scoped_list_node, target_section_ids),
+                    'section': section_titles.get(section_id),
+                })
+        return section_titles, target_section_ids, blocks, lists
+
+    @staticmethod
+    def _review_block_payload_size(block):
+        model_block = {
+            'block_id': block.get('block_id'),
+            'text_node_id': block.get('text_node_id'),
+            'type': block.get('type'),
+            'section': block.get('section'),
+            'scope_section': block.get('scope_section'),
+            'before_leaf_text': block.get('before_leaf_text'),
+        }
+        return len(json.dumps(model_block, ensure_ascii=False))
+
+    @staticmethod
+    def _review_list_payload_size(list_node):
+        model_list = {
+            'block_id': list_node.get('block_id'),
+            'type': list_node.get('type'),
+            'items': list_node.get('items') or [],
+            'section': list_node.get('section'),
+        }
+        return len(json.dumps(model_list, ensure_ascii=False))
+
+    def _chunk_blocks(self, blocks, lists=None,
+                      max_per_chunk=SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK,
+                      max_payload_characters=SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK):
+        lists = lists or []
+        list_payload_sizes = {}
+        for list_node in lists:
+            section_id = list_node.get('section_id') or '__none__'
+            list_payload_sizes[section_id] = (
+                list_payload_sizes.get(section_id, 0)
+                + self._review_list_payload_size(list_node)
+            )
+
+        # Preserve document order while packing adjacent small sections into the
+        # same request. Section metadata remains on each block, so semantic
+        # boundaries do not require one model call per heading.
+        chunks = []
+        chunk = []
+        payload_size = 0
+        sections_with_lists_sent = set()
+        for block in blocks:
+            section_id = block.get('section_id') or '__none__'
+            first_block_for_section = section_id not in sections_with_lists_sent
+            section_list_payload_size = list_payload_sizes.get(section_id, 0) if first_block_for_section else 0
+            block_payload_size = self._review_block_payload_size(block)
+            if block_payload_size + section_list_payload_size > max_payload_characters:
+                raise ReviewPayloadTooLargeError(
+                    'review scope contains a block that exceeds the payload limit')
+            exceeds_limit = chunk and (
+                len(chunk) >= max_per_chunk or
+                payload_size + section_list_payload_size + block_payload_size > max_payload_characters
+            )
+            if exceeds_limit:
+                chunks.append(chunk)
+                chunk = []
+                payload_size = 0
+            if first_block_for_section:
+                payload_size += section_list_payload_size
+                sections_with_lists_sent.add(section_id)
+            chunk.append(block)
+            payload_size += block_payload_size
+        if chunk:
+            chunks.append(chunk)
+        return chunks
+
+    @staticmethod
+    def _lists_for_chunk(lists, chunks, chunk_index):
+        if chunk_index < 0 or chunk_index >= len(chunks):
+            return []
+        section_ids = {block.get('section_id') for block in chunks[chunk_index]}
+        previous_section_ids = {
+            block.get('section_id')
+            for chunk in chunks[:chunk_index]
+            for block in chunk
+        }
+        return [
+            list_node for list_node in lists
+            if list_node.get('section_id') in section_ids
+            and list_node.get('section_id') not in previous_section_ids
+        ]
+
+    def _dedup_items(self, items):
+        seen = set()
+        result = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            key = (item.get('block_id'), item.get('text_node_id'), item.get('kind'))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(item)
+        return result
+
+    @staticmethod
+    def _parse_review_json_object(content):
+        """Parse a model JSON value while tolerating a Markdown code fence.
+
+        Some OpenAI-compatible gateways return a fenced JSON object despite a
+        JSON response format request. The structured fields are still
+        validated by the caller, so accepting this presentation wrapper does
+        not broaden the review protocol.
+        """
+        if not isinstance(content, str):
+            return None
+        value = content.strip()
+        starts = [index for index in (value.find('{'), value.find('[')) if index >= 0]
+        if not starts:
+            return None
+        start = min(starts)
+        try:
+            result, end = json.JSONDecoder().raw_decode(value[start:])
+        except ValueError:
+            return None
+        trailing = value[start + end:].strip()
+        if trailing and trailing != '```':
+            return None
+        return result if isinstance(result, (dict, list)) else None
+
+    @classmethod
+    def _review_items_from_result(cls, result):
+        """Read the canonical structured suggestion list."""
+        if not isinstance(result, dict):
+            return None
+        items = result.get('items')
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            return None
+        return items
+
+    @staticmethod
+    def _hydrate_review_items(items, blocks, lists):
+        """Attach canonical target metadata without asking the model to echo it."""
+        text_targets = {
+            block.get('block_id'): block for block in blocks
+            if isinstance(block, dict) and block.get('block_id')
+        }
+        list_targets = {
+            list_node.get('block_id'): list_node for list_node in lists
+            if isinstance(list_node, dict) and list_node.get('block_id')
+        }
+        hydrated_items = []
+        for item in items:
+            if not isinstance(item, dict):
+                hydrated_items.append(item)
+                continue
+            hydrated = dict(item)
+            target = text_targets.get(hydrated.get('block_id'))
+            if hydrated.get('kind') in ('replace_block_text', 'replace_table_cell_text') and target:
+                hydrated['text_node_id'] = target.get('text_node_id')
+                hydrated['block_type'] = target.get('type')
+                hydrated['before_leaf_text'] = target.get('before_leaf_text')
+            elif hydrated.get('kind') == 'set_block_type' and target:
+                hydrated['block_type'] = target.get('type')
+            elif hydrated.get('kind') == 'set_list_type':
+                list_target = list_targets.get(hydrated.get('block_id'))
+                if list_target:
+                    hydrated['block_type'] = list_target.get('type')
+            hydrated_items.append(hydrated)
+        return hydrated_items
+
+    @staticmethod
+    def _validate_review_items(items, blocks, lists):
+        """Fail closed when the model leaves the frozen chunk protocol."""
+        text_targets = {
+            block.get('block_id'): block for block in blocks
+            if isinstance(block, dict) and block.get('block_id')
+        }
+        list_targets = {
+            node.get('block_id'): node for node in lists
+            if isinstance(node, dict) and node.get('block_id')
+        }
+        if len(items) > SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK:
+            raise ReviewModelResponseInvalidError(
+                'The model returned too many review suggestions.')
+
+        seen_targets = set()
+        for item in items:
+            kind = item.get('kind')
+            block_id = item.get('block_id')
+            if kind not in REVIEW_KINDS or not isinstance(block_id, str) or not block_id:
+                raise ReviewModelResponseInvalidError(
+                    'The model returned an unsupported review suggestion.')
+            if not isinstance(item.get('rationale'), str) or not item['rationale'].strip():
+                raise ReviewModelResponseInvalidError(
+                    'The model returned an incomplete review suggestion.')
+
+            if kind in REVIEW_TEXT_KINDS:
+                if set(item) != {'kind', 'block_id', 'after_text', 'rationale'}:
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid text suggestion.')
+                target = text_targets.get(block_id)
+                if not target or not isinstance(item.get('after_text'), str):
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an out-of-scope text suggestion.')
+                is_table_cell = target.get('type') == 'table_cell'
+                if ((kind == 'replace_table_cell_text') != is_table_cell):
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned a mismatched text suggestion.')
+            elif kind == 'set_block_type':
+                if set(item) != {'kind', 'block_id', 'after_type', 'rationale'}:
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid block type suggestion.')
+                target = text_targets.get(block_id)
+                before_type = target.get('type') if target else None
+                after_type = item.get('after_type')
+                if (before_type not in REVIEW_HEADING_TYPES
+                        or after_type not in REVIEW_HEADING_TYPES
+                        or before_type == after_type):
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid block type transition.')
+            else:
+                if set(item) != {'kind', 'block_id', 'after_type', 'rationale'}:
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid list type suggestion.')
+                target = list_targets.get(block_id)
+                before_type = target.get('type') if target else None
+                after_type = item.get('after_type')
+                if (before_type not in REVIEW_LIST_TYPES
+                        or after_type not in REVIEW_LIST_TYPES
+                        or before_type == after_type):
+                    raise ReviewModelResponseInvalidError(
+                        'The model returned an invalid list type transition.')
+
+            target_key = (kind, block_id)
+            if target_key in seen_targets:
+                raise ReviewModelResponseInvalidError(
+                    'The model returned duplicate review suggestions.')
+            seen_targets.add(target_key)
+        return items
+
+    def _generate_revision_brief(self, prompt, outline, blocks, context):
+        system_prompt = {
+            'role': 'system',
+            'content': (
+                'You are an SDoc writing review strategist. Return exactly one JSON object and '
+                'no Markdown. Produce a concise revision brief to keep edits consistent across '
+                'the whole document. The object must be: {"goal":"...","tone":"...","length":"...",'
+                '"terminology":["..."],"heading_strategy":"...","do_not_modify":"..."}. '
+                'Answer in the same language as the user request.'
+            )
+        }
+        user_prompt = {
+            'role': 'user',
+            'content': json.dumps({'request': prompt, 'outline': outline, 'block_count': len(blocks)}, ensure_ascii=False),
+        }
+        completion = self.app.llm_api.run_with_metadata(
+            [system_prompt, user_prompt], context,
+            response_format={'type': 'json_object'})
+        content = completion.get('content') if isinstance(completion, dict) else None
+        finish_reason = completion.get('finish_reason') if isinstance(completion, dict) else None
+        if finish_reason not in (None, 'stop'):
+            logger.warning('Revision brief generation did not complete normally: finish_reason=%s', finish_reason)
+            raise ReviewModelOutputTruncatedError('The model response was truncated.')
+        return self._parse_review_json_object(content)
+
+    def _generate_items(self, prompt, blocks, lists, brief, context):
+        system_prompt = {
+            'role': 'system',
+            'content': (
+                'You are an SDoc writing reviewer. Return exactly one JSON object and no Markdown. '
+                'Suggest edits only for the supplied blocks. Each block has a "section" field naming the '
+                'nearest chapter/section and a "scope_section" field naming the resolved requested '
+                'ancestor. The supplied blocks are the authoritative edit scope and may include '
+                'subsections; never invent or edit blocks outside this input. '
+                'Four kinds of edits are supported: '
+                '(1) "replace_block_text" for rewriting a block\'s text; '
+                '(2) "set_block_type" for changing a paragraph to a heading (header1-header6) or '
+                'changing a heading level, only when the request asks for heading-level changes; '
+                '(3) "set_list_type" for converting an existing list between ordered_list and '
+                'unordered_list, only when the request asks for list conversion; '
+                '(4) "replace_table_cell_text" for rewriting a table cell\'s text, using block_type '
+                '"table_cell" with the cell\'s block_id and text_node_id. '
+                'Use only a supplied block_id; do not invent ids. The server already knows each target\'s '
+                'text node, type and original text, so do not return text_node_id, block_type or '
+                'before_leaf_text. The object must be: {"items":['
+                '{"kind":"replace_block_text","block_id":"...","after_text":"...","rationale":"..."} '
+                'or {"kind":"set_block_type","block_id":"...","after_type":"header2","rationale":"..."} '
+                'or {"kind":"set_list_type","block_id":"...","after_type":"unordered_list","rationale":"..."} '
+                'or {"kind":"replace_table_cell_text","block_id":"...","after_text":"...","rationale":"..."}'
+                ']}. Return at most %d high-value suggestions for this chunk. '
+                'If no change is needed, omit it. Never output Slate paths or operations.'
+                % SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK
+            )
+        }
+        model_blocks = [{
+            'block_id': block.get('block_id'),
+            'text_node_id': block.get('text_node_id'),
+            'type': block.get('type'),
+            'section': block.get('section'),
+            'scope_section': block.get('scope_section'),
+            'before_leaf_text': block.get('before_leaf_text'),
+        } for block in blocks]
+        user_content = {'request': prompt, 'blocks': model_blocks, 'lists': lists}
+        if brief:
+            user_content['revision_brief'] = brief
+        user_prompt = {
+            'role': 'user',
+            'content': json.dumps(user_content, ensure_ascii=False),
+        }
+        completion = self.app.llm_api.run_with_metadata(
+            [system_prompt, user_prompt], context,
+            response_format={'type': 'json_object'})
+        content = completion.get('content') if isinstance(completion, dict) else None
+        finish_reason = completion.get('finish_reason') if isinstance(completion, dict) else None
+        if finish_reason in ('length', 'max_tokens'):
+            logger.warning('Review model response was truncated: finish_reason=%s', finish_reason)
+            raise ReviewModelOutputTruncatedError('The model response was truncated.')
+        result = self._parse_review_json_object(content)
+        items = self._review_items_from_result(result)
+        if items is None:
+            keys = sorted(str(key) for key in result)[:10] if isinstance(result, dict) else []
+            logger.warning(
+                'Review model returned an invalid suggestion response: '
+                'finish_reason=%s, content_length=%s, top-level keys=%s',
+                finish_reason, len(content) if isinstance(content, str) else None, keys)
+            raise ReviewModelResponseInvalidError('The model returned an invalid review suggestion.')
+        self._validate_review_items(items, blocks, lists)
+        return self._hydrate_review_items(items, blocks, lists)
+
+    def sdoc_analyze(self, prompt, document_context, context):
+        """Generate a plain-text analysis of the document for mixed-intent requests."""
+        section_titles = {}
+        if isinstance(document_context, dict):
+            for header in document_context.get('outline') or []:
+                if isinstance(header, dict) and header.get('block_id'):
+                    section_titles[header.get('block_id')] = header.get('text')
+
+        blocks = []
+        if isinstance(document_context, dict):
+            for block in document_context.get('blocks') or []:
+                if not isinstance(block, dict) or not block.get('supported'):
+                    continue
+                blocks.append({
+                    'block_id': block.get('block_id'),
+                    'type': block.get('type'),
+                    'section': section_titles.get(block.get('section_id')),
+                    'before_leaf_text': block.get('before_leaf_text'),
+                })
+
+        system_prompt = {
+            'role': 'system',
+            'content': (
+                'You are an SDoc document analyst. Provide a concise plain-text analysis of the '
+                'document based on the user request. Do not return JSON, edit suggestions or Slate '
+                'operations. Answer in the same language as the user request.'
+            )
+        }
+        user_prompt = {
+            'role': 'user',
+            'content': json.dumps({'request': prompt, 'blocks': blocks}, ensure_ascii=False),
+        }
+        content = self.app.llm_api.run([system_prompt, user_prompt], context)
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError('The model returned no analysis.')
+        return content.strip()
 
     def get_predefined_prompt(self, prefix, writing_type):
         if writing_type == WritingType.ASK:
