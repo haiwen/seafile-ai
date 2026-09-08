@@ -1,5 +1,6 @@
 import logging
 import os
+import posixpath
 
 from sqlalchemy import text
 
@@ -149,6 +150,23 @@ def get_repo_metadata(repo_id):
 def is_repo_metadata_enabled(repo_id):
     metadata = get_repo_metadata(repo_id)
     return bool(metadata and metadata.enabled)
+
+
+def get_file_path_by_uuid(repo_id, file_uuid):
+    with seahub_db_session_class() as session:
+        sql = text("""
+            SELECT parent_path, filename
+            FROM tags_fileuuidmap
+            WHERE uuid = :file_uuid AND repo_id = :repo_id AND is_dir = 0
+            LIMIT 1
+        """)
+        result = session.execute(sql, {
+            'file_uuid': file_uuid.replace('-', '').lower(),
+            'repo_id': repo_id,
+        }).first()
+        if not result:
+            return None
+        return posixpath.join(result.parent_path, result.filename)
 
 
 def get_repo_info(repo_id):
