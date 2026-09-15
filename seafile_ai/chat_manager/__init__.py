@@ -51,7 +51,7 @@ class BasicChat:
         self._register_tools(tool_executor, context, model)
         return self.run(model, tool_executor, message, attachments, context=context)
 
-    def _prepare_chat_memory(self, system_prompts, session_uuid):
+    def _prepare_chat_memory(self, system_prompts, session_uuid, repo_id):
         if session_uuid:
             try:
                 return build_memory_from_db(
@@ -61,6 +61,7 @@ class BasicChat:
                     config.CONTEXT_WINDOW_LIMIT,
                     config.CONTEXT_HISTORY_VALID_TIME,
                     ChatMessages,
+                    repo_id,
                 )
             except Exception as error:
                 logger.warning('Failure to build context: %s', error)
@@ -82,7 +83,7 @@ class StreamingChat(BasicChat):
                 context.get('repo_prompt', ''),
                 documents_search_registered=bool(self.search_tools),
             )
-            memory = self._prepare_chat_memory(system_prompts, context.get('session_uuid'))
+            memory = self._prepare_chat_memory(system_prompts, context.get('session_uuid'), context.get('repo_id'))
 
             user_raw_message = combine_attachments_to_message(attachments, message)
             tool_executor.thought_process.set_task(

@@ -1,10 +1,31 @@
-from sqlalchemy import desc
+import logging
+import re
 from datetime import datetime, timedelta
+
+from sqlalchemy import desc
+
+from seafile_ai import config
 from seafile_ai.chat_manager.utils import (
     combine_attachments_to_message,
     retrieve_origin_reference_format,
     strip_content_details_from_attachments,
 )
+from seafile_ai.repo_metadata.utils import get_file_id_by_path, get_file_path_by_uuid, get_repo_info
+from seafile_ai.utils import FileSizeLimitExceeded, parse_file
+
+
+logger = logging.getLogger(__name__)
+
+MARKDOWN_ARTIFACT_RE = re.compile(
+    r'<seafile-ai-markdown-link\s+url=(?P<link_quote>["\'])'
+    r'[^"\']*?/smart-link/(?P<file_uuid>[-0-9a-f]{36})/[^"\']*(?P=link_quote)\s*>'
+    r'</seafile-ai-markdown-link>\s*'
+    r'<seafile-ai-markdown(?:\s+file_name=(?P<name_quote>["\'])[^"\']*?(?P=name_quote))?\s*>'
+    r'(?P<content>[\s\S]*?)</seafile-ai-markdown>',
+    re.IGNORECASE,
+)
+MARKDOWN_ARTIFACT_UNAVAILABLE = '\n[The current generated document is unavailable.]\n'
+MARKDOWN_ARTIFACT_TRUNCATED = '\n\n[The current generated document was truncated by the refresh content limit.]'
 
 
 class OpenAIMemory:
@@ -95,7 +116,65 @@ class OpenAIMemory:
             }
 
 
-def build_memory_from_db(db_session_class, system_prompts, session_uuid, window_limit, valid_time, message_model):
+def refresh_generated_markdown_artifacts(messages, repo_id):
+    if not repo_id:
+        return messages
+
+    repo = None
+    refreshed_uuids = set()
+    refreshed_chars = 0
+    for message in reversed(messages):
+        if message.get('role') != 'assistant':
+            continue
+
+        content = message.get('content') or ''
+        replacements = []
+        artifact_matches = list(MARKDOWN_ARTIFACT_RE.finditer(content))
+        for artifact_match in reversed(artifact_matches):
+            file_uuid = artifact_match.group('file_uuid')
+            if file_uuid in refreshed_uuids:
+                continue
+            refreshed_uuids.add(file_uuid)
+
+            current_content = MARKDOWN_ARTIFACT_UNAVAILABLE
+            try:
+                if repo is None:
+                    repo = get_repo_info(repo_id)
+                if not repo:
+                    return messages
+                file_path = get_file_path_by_uuid(repo_id, file_uuid)
+                obj_id = get_file_id_by_path(repo, file_path) if file_path else None
+                if obj_id:
+                    remaining_chars = max(config.READ_FILES_MAX_TOTAL_CHARS - refreshed_chars, 0)
+                    if remaining_chars == 0:
+                        current_content = MARKDOWN_ARTIFACT_TRUNCATED
+                    else:
+                        file_content = parse_file(file_path, repo_id, obj_id, config.READ_FILES_MAX_FILE_SIZE)
+                        if isinstance(file_content, str):
+                            current_content = file_content[:remaining_chars]
+                            refreshed_chars += len(current_content)
+                            if len(file_content) > remaining_chars:
+                                current_content += MARKDOWN_ARTIFACT_TRUNCATED
+            except FileSizeLimitExceeded:
+                pass
+            except Exception as error:
+                logger.warning('Failed to refresh generated markdown artifact %s: %s', file_uuid, error)
+
+            replacements.append((
+                artifact_match.start('content'),
+                artifact_match.end('content'),
+                current_content,
+            ))
+
+        for start, end, current_content in sorted(replacements, reverse=True):
+            content = content[:start] + current_content + content[end:]
+        if replacements:
+            message['content'] = content
+
+    return messages
+
+
+def build_memory_from_db(db_session_class, system_prompts, session_uuid, window_limit, valid_time, message_model, repo_id=None):
     memory = OpenAIMemory(system_prompts)
     if not session_uuid:
         return memory
@@ -122,10 +201,9 @@ def build_memory_from_db(db_session_class, system_prompts, session_uuid, window_
             records = records.limit(window_limit)
 
         records = records.all()
-
         records.sort(key=lambda x: x.created_at)
-        
-        for record in records:
-            memory += record.to_dict()
+
+        messages = [record.to_dict() for record in records]
+        memory += refresh_generated_markdown_artifacts(messages, repo_id)
 
     return memory
