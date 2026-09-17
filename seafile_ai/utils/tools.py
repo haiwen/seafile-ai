@@ -9,6 +9,12 @@ from seafile_ai.utils.thought_process_recorder import ThoughtProcessRecorder
 def filter_tool_calls_content(tool_name, results):
     if tool_name == 'read_files':
         return remove_sources_content_and_snippets(deepcopy(results))
+    if tool_name == 'generate_sdoc':
+        return {
+            'status': results.get('status'),
+            'file_name': results.get('file_name'),
+            'requested_directory': results.get('requested_directory'),
+        }
     return results
 
 
@@ -58,6 +64,9 @@ class OpenAIToolExecutor(BasicToolExecutor):
     def get(self):
         return [tool['tool_info'] for tool in self.tools.values()]
 
+    def unregister(self, name):
+        self.tools.pop(name, None)
+
     def execute(self, tool_call, call_back=lambda *args, **kwargs: None):
         function = tool_call['function']
         name = function['name']
@@ -75,4 +84,8 @@ class OpenAIToolExecutor(BasicToolExecutor):
         if 'call_back' in available_params and 'call_back' not in params:
             params['call_back'] = call_back
 
-        return self.tools[name]['func'](**params)
+        self.current_tool_call_id = tool_call.get('id', '')
+        try:
+            return self.tools[name]['func'](**params)
+        finally:
+            self.current_tool_call_id = ''
