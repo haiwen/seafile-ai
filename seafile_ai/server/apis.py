@@ -55,6 +55,7 @@ def get_ai_reply():
     llm_model = data.get('llm_model')
     repo_prompt = data.get('repo_prompt', '')
     scenario = data.get('scenario', 'chat')
+    message_id = data.get('message_id')
 
     if not message:
         return {'error_msg': 'question invalid.'}, 400
@@ -69,6 +70,7 @@ def get_ai_reply():
         'repo_name': repo_name,
         'repo_prompt': repo_prompt,
         'scenario': scenario,
+        'message_id': message_id,
     }
 
     return Response(

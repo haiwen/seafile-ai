@@ -26,12 +26,13 @@ class SSE:
         return SSE.data({'search_found': number})
 
     @staticmethod
-    def results(answer, sources, thought_process):
+    def results(answer, sources, thought_process, artifacts=None):
         return SSE.data({
             'results': {
                 'answer': answer,
                 'sources': sources,
                 'thought_process': thought_process,
+                'artifacts': artifacts or [],
             }
         })
 

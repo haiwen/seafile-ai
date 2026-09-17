@@ -10,6 +10,7 @@ from seafile_ai.chat_manager.system_prompts import (
     CHAT_CONTENT_GENERATION_RULES,
     CHAT_CONTENT_GENERATOR_TOOLS_EXAMPLES,
     CHAT_GLOBAL_TOOL_RULES,
+    CHAT_SKILL_DISCOVERY_RULES,
     CHAT_LIST_FILES_TOOL_RULES,
     CHAT_OUTPUT_FORMAT_RULES,
     CHAT_SEARCH_POLICY,
@@ -35,6 +36,7 @@ def build_chat_tool_prompt(
         documents_search_registered=False):
     tool_prompt_sections = [
         CHAT_GLOBAL_TOOL_RULES,
+        CHAT_SKILL_DISCOVERY_RULES,
         CHAT_LIST_FILES_TOOL_RULES,
         CHAT_SEARCH_POLICY,
         CHAT_CONTENT_GENERATION_RULES,
