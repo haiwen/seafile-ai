@@ -1,9 +1,18 @@
 import unittest
 
-from seafile_ai.chat_manager.skills.sdoc_create import validate_sdoc_draft
+from seafile_ai.chat_manager.skills.sdoc_create import GenerateSdoc, validate_sdoc_draft
 
 
 class SdocCreateSkillTest(unittest.TestCase):
+    def test_tool_schema_describes_supported_block_shapes(self):
+        parameters = GenerateSdoc.tool['function']['parameters']
+        block_schemas = parameters['properties']['blocks']['items']['oneOf']
+
+        self.assertFalse(parameters['additionalProperties'])
+        self.assertEqual(parameters['properties']['blocks']['maxItems'], 200)
+        self.assertEqual(len(block_schemas), 6)
+        self.assertTrue(all(schema['additionalProperties'] is False for schema in block_schemas))
+
     def test_accepts_common_blocks_and_preserves_directory(self):
         draft = validate_sdoc_draft(
             'release-plan',
