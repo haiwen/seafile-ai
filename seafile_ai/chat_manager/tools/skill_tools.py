@@ -26,7 +26,6 @@ class LoadSkill(BasicTool):
         if skill in loaded_skills:
             return {'status': 'already loaded', 'skill': skill}
         loaded_skill = get_skill(skill)
-        tool_executor.unregister('generate_markdown')
         loaded_skill.register_tools(tool_executor, context)
         tool_executor.cache.setdefault('skill_prompts', []).extend(loaded_skill.get_system_prompts())
         loaded_skills[skill] = loaded_skill

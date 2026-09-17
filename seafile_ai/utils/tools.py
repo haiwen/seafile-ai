@@ -64,9 +64,6 @@ class OpenAIToolExecutor(BasicToolExecutor):
     def get(self):
         return [tool['tool_info'] for tool in self.tools.values()]
 
-    def unregister(self, name):
-        self.tools.pop(name, None)
-
     def execute(self, tool_call, call_back=lambda *args, **kwargs: None):
         function = tool_call['function']
         name = function['name']

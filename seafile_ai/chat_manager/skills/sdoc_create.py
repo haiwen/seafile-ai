@@ -1,4 +1,3 @@
-import hashlib
 import json
 import posixpath
 
@@ -20,6 +19,93 @@ MAX_BLOCKS = 200
 MAX_TEXT_LENGTH = 100000
 MAX_TABLE_ROWS = 100
 MAX_TABLE_COLUMNS = 20
+
+TEXT_BLOCK_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'type': {'type': 'string', 'enum': ['paragraph', 'blockquote']},
+        'text': {'type': 'string'},
+    },
+    'required': ['type', 'text'],
+    'additionalProperties': False,
+}
+
+HEADING_BLOCK_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'type': {'type': 'string', 'enum': ['heading']},
+        'level': {'type': 'integer', 'minimum': 1, 'maximum': 6},
+        'text': {'type': 'string'},
+    },
+    'required': ['type', 'level', 'text'],
+    'additionalProperties': False,
+}
+
+CODE_BLOCK_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'type': {'type': 'string', 'enum': ['code_block']},
+        'text': {'type': 'string'},
+        'language': {'type': 'string'},
+    },
+    'required': ['type', 'text', 'language'],
+    'additionalProperties': False,
+}
+
+LIST_BLOCK_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'type': {'type': 'string', 'enum': ['ordered_list', 'unordered_list', 'task_list']},
+        'items': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'minItems': 1,
+        },
+    },
+    'required': ['type', 'items'],
+    'additionalProperties': False,
+}
+
+DIVIDER_BLOCK_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'type': {'type': 'string', 'enum': ['divider']},
+    },
+    'required': ['type'],
+    'additionalProperties': False,
+}
+
+TABLE_BLOCK_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'type': {'type': 'string', 'enum': ['table']},
+        'headers': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'minItems': 1,
+            'maxItems': MAX_TABLE_COLUMNS,
+        },
+        'rows': {
+            'type': 'array',
+            'items': {
+                'type': 'array',
+                'items': {'type': 'string'},
+            },
+            'maxItems': MAX_TABLE_ROWS,
+        },
+    },
+    'required': ['type', 'headers', 'rows'],
+    'additionalProperties': False,
+}
+
+SDOC_BLOCK_SCHEMAS = [
+    TEXT_BLOCK_SCHEMA,
+    HEADING_BLOCK_SCHEMA,
+    CODE_BLOCK_SCHEMA,
+    LIST_BLOCK_SCHEMA,
+    DIVIDER_BLOCK_SCHEMA,
+    TABLE_BLOCK_SCHEMA,
+]
 
 
 def _require_string(value, field, required=True):
@@ -124,17 +210,21 @@ class GenerateSdoc(BasicTool):
                     'requested_directory': {'type': ['string', 'null']},
                     'title': {'type': 'string'},
                     'summary': {'type': 'string'},
-                    'blocks': {'type': 'array'},
+                    'blocks': {
+                        'type': 'array',
+                        'items': {'oneOf': SDOC_BLOCK_SCHEMAS},
+                        'minItems': 1,
+                        'maxItems': MAX_BLOCKS,
+                    },
                 },
                 'required': ['file_name', 'requested_directory', 'title', 'summary', 'blocks'],
+                'additionalProperties': False,
             },
         },
     }
 
     def execute(self, file_name, requested_directory, title, summary, blocks, context, tool_executor):
         draft = validate_sdoc_draft(file_name, requested_directory, title, summary, blocks)
-        action_key = '%s:%s:sdoc-create' % (context.get('session_uuid', ''), context.get('message_id', ''))
-        draft['action_id'] = hashlib.sha256(action_key.encode('utf-8')).hexdigest()
         tool_executor.cache['artifacts'] = [{
             'type': 'sdoc_create_request',
             **draft,
