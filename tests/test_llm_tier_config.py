@@ -71,6 +71,10 @@ class AIUtilsTierConfigTest(unittest.TestCase):
                 config_path = Path(temp_dir) / 'seafile_ai_config.yaml'
                 config_path.write_text(
                     'global:\n'
+                    '  LLM_MODELS:\n'
+                    '    - type: openai\n'
+                    '      model: test-model\n'
+                    '      key: test-key\n'
                     '  EMBEDDING_MODEL:\n'
                     '    type: openai\n'
                     '    model: text-embedding-3-large\n'
