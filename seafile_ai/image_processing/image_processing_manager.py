@@ -2,7 +2,6 @@ import base64
 import logging
 import os
 import json
-from seafile_ai import config
 from seafile_ai.image_processing.utils import resize_image_binary
 from seafile_ai.utils import get_file_content_by_seafobj
 from seafile_ai.utils.constants import LANGUAGE, MODEL_REASONING_TIER
@@ -92,16 +91,6 @@ class ImageProcessingManager:
         result = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context, json_mode=True)
         return json.loads(result).get('tags', [])
 
-    def ocr(self, repo_id, obj_id):
-        if config.OCR_SERVICE_TYPE == 'seafile-ocr':
-            file = get_file_content_by_seafobj(repo_id, obj_id)
-            if not file:
-                return None
-
-            result = self.app.ocr_api.ocr(file)
-            return result.get('ocr_result')
-        else:
-            raise Exception('unknown ocr service type')
     def face_embeddings_without_token(self, repo_id, obj_id, need_face):
         # get iamge by seafobj
         file = get_file_content_by_seafobj(repo_id, obj_id)

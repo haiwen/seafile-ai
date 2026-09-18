@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import sys
 import logging
 from logging import handlers
@@ -25,6 +26,9 @@ class LogConfigurator(object):
 
     def _rotating_config(self):
         # Rotating log
+        log_dir = os.path.dirname(self._logfile)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
         handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
         handler.setLevel(self._level)
         formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(name)s:%(lineno)s %(funcName)s %(message)s')
