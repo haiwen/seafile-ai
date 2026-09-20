@@ -1,75 +1,88 @@
+import json
 import unittest
 
 from seafile_ai.chat_manager.skills.sdoc_create import GenerateSdoc, validate_sdoc_draft
 
 
+def text(value, **marks):
+    return {'type': 'text', 'text': value, **marks}
+
+
 class SdocCreateSkillTest(unittest.TestCase):
-    def test_tool_schema_describes_supported_block_shapes(self):
+    def test_tool_schema_is_closed_and_versioned_by_artifact(self):
         parameters = GenerateSdoc.tool['function']['parameters']
-        block_schemas = parameters['properties']['blocks']['items']['oneOf']
 
         self.assertFalse(parameters['additionalProperties'])
-        self.assertEqual(parameters['properties']['blocks']['maxItems'], 200)
-        self.assertEqual(len(block_schemas), 6)
-        self.assertTrue(all(schema['additionalProperties'] is False for schema in block_schemas))
+        self.assertEqual(parameters['properties']['elements']['maxItems'], 200)
+        self.assertNotIn('$ref', json.dumps(parameters))
 
-    def test_accepts_common_blocks_and_preserves_directory(self):
+    def test_accepts_representative_complex_elements(self):
         draft = validate_sdoc_draft(
             'release-plan',
             '/Plans/2026',
-            'Release plan',
-            'A release plan based on the conversation.',
+            {'children': [text('Release ', bold=True), text('plan')]},
             [
-                {'type': 'heading', 'level': 1, 'text': 'Milestones'},
-                {'type': 'paragraph', 'text': 'Prepare the release.'},
-                {'type': 'task_list', 'items': ['Review', 'Publish']},
-                {'type': 'table', 'headers': ['Task'], 'rows': [['Review']]},
+                {'type': 'paragraph', 'children': [
+                    text('See '),
+                    {'type': 'link', 'href': 'https://example.com', 'title': 'details', 'children': [text('details')]},
+                ]},
+                {'type': 'callout', 'children': [
+                    {'type': 'paragraph', 'children': [text('Important')]},
+                ]},
+                {'type': 'code_block', 'language': 'python', 'text': 'one\ntwo'},
+                {'type': 'table', 'rows': [
+                    {'cells': [{'children': [text('A')]}, {'children': [text('B')]}]},
+                    {'cells': [{'children': [text('C')]}, {'children': [text('D')]}]},
+                ]},
+                {'type': 'multi_column', 'columns': [
+                    {'children': [{'type': 'paragraph', 'children': [text('Left')]}]},
+                    {'children': [{'type': 'paragraph', 'children': [text('Right')]}]},
+                ]},
             ],
+            summary='A release plan.',
         )
 
+        self.assertEqual(draft['schema_version'], 1)
         self.assertEqual(draft['requested_directory'], '/Plans/2026')
-        self.assertEqual(draft['file_name'], 'release-plan')
-        self.assertEqual(len(draft['blocks']), 4)
+        self.assertEqual(len(draft['elements']), 5)
 
-    def test_rejects_unsupported_blocks(self):
-        with self.assertRaisesRegex(ValueError, 'unsupported block type'):
+    def test_generate_sdoc_caches_versioned_artifact(self):
+        class Executor:
+            cache = {}
+
+        result = GenerateSdoc().execute(
+            'plan', None,
+            {'children': [text('Plan')]},
+            [{'type': 'paragraph', 'children': [text('Content')]}],
+            context={}, tool_executor=Executor(), summary='Summary',
+        )
+
+        self.assertEqual(result['status'], 'sdoc creation request prepared')
+        self.assertEqual(Executor.cache['artifacts'][0]['schema_version'], 1)
+        self.assertIn('elements', Executor.cache['artifacts'][0])
+        self.assertNotIn('blocks', Executor.cache['artifacts'][0])
+
+    def test_rejects_deferred_element(self):
+        with self.assertRaisesRegex(ValueError, 'unsupported element type'):
             validate_sdoc_draft(
-                'plan',
-                None,
-                'Plan',
-                'Summary',
-                [{'type': 'image', 'url': 'https://example.com/image.png'}],
+                'plan', None, {'children': [text('Plan')]},
+                [{'type': 'image'}],
             )
 
-    def test_rejects_unknown_block_fields(self):
-        with self.assertRaisesRegex(ValueError, 'unsupported fields'):
+    def test_rejects_internal_reference_token(self):
+        with self.assertRaisesRegex(ValueError, 'citation token invalid'):
             validate_sdoc_draft(
-                'plan',
-                None,
-                'Plan',
-                'Summary',
-                [{'type': 'paragraph', 'text': 'Content', 'url': 'https://example.com'}],
+                'plan', None, {'children': [text('Plan')]},
+                [{'type': 'paragraph', 'children': [text('Source <reference_0>')]}],
             )
 
-    def test_normalizes_missing_directory_to_none(self):
-        draft = validate_sdoc_draft(
-            'plan',
-            '  ',
-            'Plan',
-            'Summary',
-            [{'type': 'paragraph', 'text': 'Content'}],
-        )
+    def test_rejects_unknown_element_fields(self):
+        with self.assertRaisesRegex(ValueError, 'object fields invalid'):
+            validate_sdoc_draft(
+                'plan', None, {'children': [text('Plan')]},
+                [{'type': 'paragraph', 'children': [text('Content')], 'unexpected': True}],
+            )
 
-        self.assertIsNone(draft['requested_directory'])
 
-    def test_splits_a_complete_file_path(self):
-        draft = validate_sdoc_draft(
-            '/Plans/2026/release-plan.sdoc',
-            None,
-            'Plan',
-            'Summary',
-            [{'type': 'paragraph', 'text': 'Content'}],
-        )
-
-        self.assertEqual(draft['requested_directory'], '/Plans/2026')
-        self.assertEqual(draft['file_name'], 'release-plan.sdoc')
+if __name__ == '__main__':
+    unittest.main()
