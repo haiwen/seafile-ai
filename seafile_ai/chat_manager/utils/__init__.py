@@ -5,6 +5,7 @@ import re
 from copy import deepcopy
 from pathlib import Path
 
+from seafile_ai import config
 from seafile_ai.chat_manager.system_prompts import (
     CHAT_CORE_PROMPT,
     CHAT_CONTENT_GENERATION_RULES,
@@ -15,11 +16,15 @@ from seafile_ai.chat_manager.system_prompts import (
     CHAT_SEARCH_POLICY,
     CHAT_SEARCH_REFERENCE_RULES,
     CHAT_SEARCH_TOOLS_EXAMPLES,
+    GENERATE_CHAT_TITLE_PROMPT,
+    GENERATE_CHAT_TITLE_USER_PROMPT,
 )
 from seafile_ai.repo_metadata.constants import METADATA_TABLE
 from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
 from seafile_ai.repo_metadata.utils import get_metadata_by_path
 from seafile_ai.utils import parse_file
+from seafile_ai.utils.constants import MODEL_REASONING_TIER
+from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +34,42 @@ DOCUMENT_ATTACHMENTS_PROMPT = 'Here are some documents in Json format with title
 ATTACHMENT_CONTENT_LIMIT = 6000
 SUPPORTED_ATTACHMENT_SUFFIXES = {'.sdoc', '.md', '.markdown', '.docx', '.pdf', '.pptx'}
 ATTACHMENT_METADATA_SERVER_API = MetadataServerAPI('seafile-ai')
+
+
+def generate_chat_title(app, query, ai_reply, context):
+    try:
+        context = context or {}
+        messages = [
+            {
+                'role': 'system',
+                'content': GENERATE_CHAT_TITLE_PROMPT,
+            },
+            {
+                'role': 'user',
+                'content': GENERATE_CHAT_TITLE_USER_PROMPT.format(query=query, ai_reply=ai_reply),
+            },
+        ]
+        llm_client = get_llm_client_by_model_tier(
+            app.data_logger,
+            config.AI_UTILS_TIER.get('generate_chat_title', MODEL_REASONING_TIER.LOW.value),
+        )
+        response = llm_client.run(
+            messages,
+            context,
+            json_mode=True,
+        )
+        try:
+            result = json.loads(response)
+        except Exception as error:
+            logger.exception('Failed to parse chat title result: %s', error)
+            return ''
+
+        title = result.get('title')
+        return title.strip() if isinstance(title, str) else ''
+    except Exception as error:
+        logger.error('Failed to generate chat title: %s', error)
+        return ''
+
 
 def build_chat_tool_prompt(
         skip_tool_examples=False,

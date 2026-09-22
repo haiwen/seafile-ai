@@ -31,6 +31,28 @@ CHAT_GLOBAL_TOOL_RULES = """Global tool rules:
 - If no suitable tool is available, answer directly with the best available information.
 - If a tool result is already sufficient, stop calling tools and answer."""
 
+GENERATE_CHAT_TITLE_PROMPT = 'You generate concise chat titles. The title language must match the user query.'
+
+GENERATE_CHAT_TITLE_USER_PROMPT = """Generate a concise title for the conversation.
+
+User Query:
+{query}
+
+Assistant Reply:
+{ai_reply}
+
+Requirements:
+1. Keep it concise, 3-8 words if possible.
+2. Do not include quotes, markdown, trailing punctuation, or line breaks.
+3. The title should summarize the conversation topic, not answer the question.
+4. Do NOT include any additional text outside JSON.
+
+Output JSON format:
+{{
+  "title": "..."
+}}
+"""
+
 CHAT_LIST_FILES_TOOL_RULES = """List-files tool rules:
 - When the user asks to list, find, or summarize a specific number of files, pass that number as `max_records`. For example, "top 10 files" requires `max_records: 10`.
 - Use `directory` when the user specifies a directory. It searches that directory and its nested directories.

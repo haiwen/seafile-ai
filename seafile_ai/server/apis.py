@@ -7,6 +7,7 @@ from flask import Flask, Response, request, stream_with_context
 from pathlib import Path
 
 from seafile_ai import config
+from seafile_ai.chat_manager.utils import generate_chat_title as generate_chat_title_by_ai
 from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionException, FormatNotSupportedException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 from seafile_ai.repo_metadata.constants import TAGS_TABLE
@@ -79,6 +80,43 @@ def get_ai_reply():
             'X-Accel-Buffering': 'no',
         }
     )
+
+
+@flask_app.route('/api/v1/generate-chat-title', methods=['POST'])
+def generate_chat_title():
+    is_valid = check_auth_token(request)
+    if not is_valid:
+        return {'error_msg': 'Permission denied'}, 403
+
+    try:
+        data = json.loads(request.data)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Bad request.'}, 400
+
+    query = data.get('query')
+    ai_reply = data.get('ai_reply')
+    repo_id = data.get('repo_id')
+    scenario = data.get('scenario', 'chat')
+
+    if not query:
+        return {'error_msg': 'query invalid.'}, 400
+    if not ai_reply:
+        return {'error_msg': 'ai_reply invalid.'}, 400
+    if not repo_id:
+        return {'error_msg': 'repo_id invalid.'}, 400
+
+    context = {
+        'repo_id': repo_id,
+        'scenario': scenario,
+    }
+    try:
+        title = generate_chat_title_by_ai(flask_app.app, query, ai_reply, context)
+    except Exception as error:
+        logger.exception(error)
+        return {'error_msg': 'Internal server error.'}, 500
+
+    return {'title': title}, 200
 
 
 @flask_app.route('/api/v1/generate-summary', methods=['POST'])
