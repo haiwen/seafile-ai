@@ -1,7 +1,26 @@
+import importlib.util
 import json
+import sys
 import unittest
+from pathlib import Path
+from types import ModuleType
+from unittest.mock import patch
 
-from seafile_ai.chat_manager.skills.sdoc_create import GenerateSdoc, validate_sdoc_draft
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_sdoc_create():
+    tools_module = ModuleType('seafile_ai.utils.tools')
+    tools_module.BasicTool = object
+    spec = importlib.util.spec_from_file_location(
+        'test_sdoc_create_module',
+        PROJECT_ROOT / 'seafile_ai/chat_manager/skills/sdoc_create.py',
+    )
+    module = importlib.util.module_from_spec(spec)
+    with patch.dict(sys.modules, {'seafile_ai.utils.tools': tools_module}):
+        spec.loader.exec_module(module)
+    return module
 
 
 def text(value, **marks):
@@ -9,15 +28,19 @@ def text(value, **marks):
 
 
 class SdocCreateSkillTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_sdoc_create()
+
     def test_tool_schema_is_closed_and_versioned_by_artifact(self):
-        parameters = GenerateSdoc.tool['function']['parameters']
+        parameters = self.module.GenerateSdoc.tool['function']['parameters']
 
         self.assertFalse(parameters['additionalProperties'])
         self.assertEqual(parameters['properties']['elements']['maxItems'], 200)
         self.assertNotIn('$ref', json.dumps(parameters))
 
     def test_accepts_representative_complex_elements(self):
-        draft = validate_sdoc_draft(
+        draft = self.module.validate_sdoc_draft(
             'release-plan',
             '/Plans/2026',
             {'children': [text('Release ', bold=True), text('plan')]},
@@ -50,7 +73,7 @@ class SdocCreateSkillTest(unittest.TestCase):
         class Executor:
             cache = {}
 
-        result = GenerateSdoc().execute(
+        result = self.module.GenerateSdoc().execute(
             'plan', None,
             {'children': [text('Plan')]},
             [{'type': 'paragraph', 'children': [text('Content')]}],
@@ -64,21 +87,21 @@ class SdocCreateSkillTest(unittest.TestCase):
 
     def test_rejects_deferred_element(self):
         with self.assertRaisesRegex(ValueError, 'unsupported element type'):
-            validate_sdoc_draft(
+            self.module.validate_sdoc_draft(
                 'plan', None, {'children': [text('Plan')]},
                 [{'type': 'image'}],
             )
 
     def test_rejects_internal_reference_token(self):
         with self.assertRaisesRegex(ValueError, 'citation token invalid'):
-            validate_sdoc_draft(
+            self.module.validate_sdoc_draft(
                 'plan', None, {'children': [text('Plan')]},
                 [{'type': 'paragraph', 'children': [text('Source <reference_0>')]}],
             )
 
     def test_rejects_unknown_element_fields(self):
         with self.assertRaisesRegex(ValueError, 'object fields invalid'):
-            validate_sdoc_draft(
+            self.module.validate_sdoc_draft(
                 'plan', None, {'children': [text('Plan')]},
                 [{'type': 'paragraph', 'children': [text('Content')], 'unexpected': True}],
             )
