@@ -6,7 +6,7 @@ from seafile_ai import config
 from seafile_ai.db.models import ChatMessages
 from seafile_ai.chat_manager.memory import OpenAIMemory, build_memory_from_db
 from seafile_ai.chat_manager.system_prompts import MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT
-from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, MarkdownGenerator, ReadFiles
+from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, LoadSkill, MarkdownGenerator, ReadFiles
 from seafile_ai.chat_manager.utils import (
     build_chat_system_prompts,
     combine_attachments_to_message,
@@ -37,6 +37,7 @@ class BasicChat:
         self.content_generators = (
             MarkdownGenerator(),
         )
+        self.skill_tools = (LoadSkill(),)
 
     def _register_tools(self, tool_executor, context, model=None):
         for tool in self.directory_tools:
@@ -45,6 +46,8 @@ class BasicChat:
             tool.register(tool_executor, context=context, app=self.app, model=model)
         for tool in self.content_generators:
             tool.register(tool_executor)
+        for tool in self.skill_tools:
+            tool.register(tool_executor, context=context)
 
     def __call__(self, message, attachments, context, model):
         tool_executor = OpenAIToolExecutor()
@@ -320,6 +323,9 @@ class StreamingChat(BasicChat):
                             tool_calls_num,
                         )
 
+                    for skill_prompt in tool_executor.cache.pop('skill_prompts', []):
+                        memory.append({'role': 'system', 'content': skill_prompt})
+
                     tool_executor.thought_process.update_last_group_tokens_usage(token_usage)
                     tool_executor.thought_process.set_last_group_time_usage(time.time() - time_begin)
                     completion_retries = []
@@ -341,7 +347,12 @@ class StreamingChat(BasicChat):
                 completion_retries = []
 
                 answer, sources = get_answer_and_sources(tool_executor, content)
-                yield SSE.results(answer, sources, tool_executor.thought_process.details)
+                yield SSE.results(
+                    answer,
+                    sources,
+                    tool_executor.thought_process.details,
+                    tool_executor.cache.get('artifacts', []),
+                )
                 yield SSE.done()
                 break
         except Exception as error:

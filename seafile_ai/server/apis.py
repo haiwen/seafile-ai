@@ -1,6 +1,7 @@
 import logging
 import jwt
 import json
+import re
 
 from PIL import UnidentifiedImageError
 from flask import Flask, Response, request, stream_with_context
@@ -55,11 +56,16 @@ def get_ai_reply():
     llm_model = data.get('llm_model')
     repo_prompt = data.get('repo_prompt', '')
     scenario = data.get('scenario', 'chat')
+    message_id = data.get('message_id')
 
     if not message:
         return {'error_msg': 'question invalid.'}, 400
     if not repo_id:
         return {'error_msg': 'repo_id invalid.'}, 400
+    if not isinstance(session_uuid, str) or not session_uuid:
+        return {'error_msg': 'session_uuid invalid.'}, 400
+    if not isinstance(message_id, str) or not re.fullmatch(r'[0-9a-f]{4}', message_id):
+        return {'error_msg': 'message_id invalid.'}, 400
     if not isinstance(attachments, list):
         return {'error_msg': 'attachments invalid.'}, 400
 
@@ -69,6 +75,7 @@ def get_ai_reply():
         'repo_name': repo_name,
         'repo_prompt': repo_prompt,
         'scenario': scenario,
+        'message_id': message_id,
     }
 
     return Response(
