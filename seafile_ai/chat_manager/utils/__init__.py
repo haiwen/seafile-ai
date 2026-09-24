@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -16,10 +17,11 @@ from seafile_ai.chat_manager.system_prompts import (
     CHAT_SEARCH_REFERENCE_RULES,
     CHAT_SEARCH_TOOLS_EXAMPLES,
 )
+from seafile_ai.image_processing.utils import resize_image_binary
 from seafile_ai.repo_metadata.constants import METADATA_TABLE
 from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
-from seafile_ai.repo_metadata.utils import get_metadata_by_path
-from seafile_ai.utils import parse_file
+from seafile_ai.repo_metadata.utils import get_file_id_by_path, get_metadata_by_path, get_repo_info
+from seafile_ai.utils import get_file_content_by_seafobj, parse_file
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ INTERNAL_REFERENCE_RE = re.compile(r'<reference_(\d+)>')
 DOCUMENT_ATTACHMENTS_PROMPT = 'Here are some documents in Json format with title, URL or path, and content.\n\n'
 ATTACHMENT_CONTENT_LIMIT = 6000
 SUPPORTED_ATTACHMENT_SUFFIXES = {'.sdoc', '.md', '.markdown', '.docx', '.pdf', '.pptx'}
+IMAGE_ATTACHMENT_SUFFIXES = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.avif'}
 ATTACHMENT_METADATA_SERVER_API = MetadataServerAPI('seafile-ai')
 
 def build_chat_tool_prompt(
@@ -127,6 +130,40 @@ def combine_attachments_to_message(attachments, message):
         json.dumps(attachments, ensure_ascii=False),
         message,
     )
+
+
+def build_image_content_parts(attachments):
+    """Build OpenAI-style image content parts for image attachments in the library."""
+    parts = []
+    for attachment in attachments or []:
+        if not isinstance(attachment, dict):
+            continue
+        name = attachment.get('name') or attachment.get('path') or ''
+        if Path(name).suffix.lower() not in IMAGE_ATTACHMENT_SUFFIXES:
+            continue
+        repo_id = attachment.get('repo_id')
+        path = attachment.get('path')
+        if not repo_id or not path:
+            continue
+        try:
+            repo = get_repo_info(repo_id)
+            obj_id = get_file_id_by_path(repo, path) if repo else None
+            if not obj_id:
+                continue
+            content = get_file_content_by_seafobj(repo_id, obj_id)
+            if not content:
+                continue
+            # 1024px on the long edge keeps text in screenshots readable for the model.
+            resized = resize_image_binary(content, max_long_side=1024)
+            base64_image = base64.b64encode(resized).decode('utf-8')
+        except Exception as error:
+            logger.warning('Failed to build image attachment %s: %s', path, error)
+            continue
+        parts.append({
+            'type': 'image_url',
+            'image_url': {'url': 'data:image/jpeg;base64,%s' % base64_image},
+        })
+    return parts
 
 
 def strip_content_details_from_attachments(attachments):

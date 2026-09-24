@@ -13,15 +13,21 @@ FACES_TMP_DIR = '/tmp'
 FACES_SAVE_PATH = '_Internal/Faces'
 EMBEDDING_UPDATE_LIMIT = 200
 SUPPORTED_IMAGE_FORMATS = ('jpeg', 'jpg', 'heic', 'png', 'bmp', 'tif', 'tiff', 'jfif', 'jpe', 'ppm', 'heic')
-def resize_image_binary(image_binary):
-    
+def resize_image_binary(image_binary, max_long_side=None):
+    """Resize an image binary and re-encode it as JPEG.
+
+    max_long_side=None keeps the original behavior: scale the short side to 512.
+    Passing a value caps the long side instead, so extreme aspect ratios (e.g. long
+    screenshots) don't end up with an oversized long edge. Values are never upscaled.
+    """
+
     img = Image.open(BytesIO(image_binary))
     img = img.convert("RGB")
     width, height = img.size
-    if width <= height:
-        ratio = 512 / width
+    if max_long_side is None:
+        ratio = 512 / width if width <= height else 512 / height
     else:
-        ratio = 512 / height
+        ratio = min(1.0, max_long_side / max(width, height))
 
     new_width = int(width * ratio)
     new_height = int(height * ratio)
