@@ -32,6 +32,7 @@ REFERENCE_MARKER_RE = re.compile(r'\[Reference\s+(\d+)\]')
 INTERNAL_REFERENCE_RE = re.compile(r'<reference_(\d+)>')
 DOCUMENT_ATTACHMENTS_PROMPT = 'Here are some documents in Json format with title, URL or path, and content.\n\n'
 ATTACHMENT_CONTENT_LIMIT = 6000
+CHAT_TITLE_INPUT_LIMIT = 500
 SUPPORTED_ATTACHMENT_SUFFIXES = {'.sdoc', '.md', '.markdown', '.docx', '.pdf', '.pptx'}
 ATTACHMENT_METADATA_SERVER_API = MetadataServerAPI('seafile-ai')
 
@@ -39,6 +40,8 @@ ATTACHMENT_METADATA_SERVER_API = MetadataServerAPI('seafile-ai')
 def generate_chat_title(app, query, ai_reply, context):
     try:
         context = context or {}
+        query = query[:CHAT_TITLE_INPUT_LIMIT]
+        ai_reply = ai_reply[:CHAT_TITLE_INPUT_LIMIT]
         messages = [
             {
                 'role': 'system',
