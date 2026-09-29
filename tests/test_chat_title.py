@@ -13,6 +13,8 @@ TITLE_PROMPT = 'Generate a concise title for the conversation.\n\nUser Query:\n{
 def load_chat_utils(llm_client):
     config_module = ModuleType('seafile_ai.config')
     config_module.AI_UTILS_TIER = {}
+    seafile_ai_module = ModuleType('seafile_ai')
+    seafile_ai_module.config = config_module
     prompts_module = ModuleType('seafile_ai.chat_manager.system_prompts')
     for name in (
             'CHAT_CORE_PROMPT', 'CHAT_CONTENT_GENERATION_RULES',
@@ -43,6 +45,7 @@ def load_chat_utils(llm_client):
     )
     module = importlib.util.module_from_spec(spec)
     with patch.dict(sys.modules, {
+        'seafile_ai': seafile_ai_module,
         'seafile_ai.config': config_module,
         'seafile_ai.chat_manager.system_prompts': prompts_module,
         'seafile_ai.repo_metadata.constants': metadata_constants_module,
