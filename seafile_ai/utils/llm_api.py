@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 import litellm
 
@@ -45,8 +46,10 @@ class LLMAPI:
 
         context = kwargs.pop('context', {})
         try:
-            if 'gpt-5' in self.model_id:
+            gpt_version = re.search(r'\bgpt-(\d+)\b', self.model_id)
+            if gpt_version and int(gpt_version.group(1)) >= 5:
                 kwargs['temperature'] = 1
+            if 'gpt-5' in self.model_id:
                 # Chat Completions cannot combine GPT-5 reasoning with function tools.
                 if kwargs.get('tools'):
                     kwargs['reasoning_effort'] = 'none'
