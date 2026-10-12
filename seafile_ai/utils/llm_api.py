@@ -54,6 +54,7 @@ class LLMAPI:
                 model=self.model,
                 base_url=self.base_url,
                 api_key=self.api_key,
+                custom_llm_provider=self.llm_type,
                 timeout=self.timeout,
                 **kwargs,
             )
