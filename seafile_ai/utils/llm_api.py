@@ -53,6 +53,11 @@ class LLMAPI:
                 # Chat Completions cannot combine GPT-5 reasoning with function tools.
                 if kwargs.get('tools'):
                     kwargs['reasoning_effort'] = 'none'
+            if self.llm_type == 'openai' and 'reasoning_effort' in kwargs:
+                allowed_params = list(kwargs.get('allowed_openai_params') or [])
+                if 'reasoning_effort' not in allowed_params:
+                    allowed_params.append('reasoning_effort')
+                kwargs['allowed_openai_params'] = allowed_params
             response = litellm.completion(
                 model=self.model,
                 base_url=self.base_url,
