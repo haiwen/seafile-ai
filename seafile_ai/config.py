@@ -197,6 +197,14 @@ logger.info(
 
 LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL = get_llm_models_maps(LLM_MODELS)
 
+# Explicit task selection: an unknown model must not fall back to the chat default.
+AI_COVER_MODEL = configs.get('AI_COVER_MODEL', '')
+AI_COVER_MODEL_CONFIG = LLM_MODEL_ID_MODELS_MAP.get(AI_COVER_MODEL)
+if AI_COVER_MODEL_CONFIG and not all(
+        isinstance(AI_COVER_MODEL_CONFIG.get(field), str) and AI_COVER_MODEL_CONFIG[field].strip()
+        for field in ('url', 'key')):
+    AI_COVER_MODEL_CONFIG = None
+
 # Face embedding is no longer supported. These settings are retained temporarily
 # for compatibility and are not used by the application.
 FACE_EMBEDDING_SERVICE_URL = os.getenv('FACE_EMBEDDING_SERVICE_URL', '')
