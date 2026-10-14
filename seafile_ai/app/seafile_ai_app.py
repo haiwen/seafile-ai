@@ -54,8 +54,8 @@ class SeafileAIApp(object):
         self.text_processing_manager = TextProcessingManager(self, config.DEFAULT_LLM_MODEL.get('type', 'openai'))
         self.image_processing_manager = ImageProcessingManager(self)
         self.image_generation_api = (
-            ImageGenerationAPI(config.AI_COVER_MODEL_CONFIG)
-            if config.AI_COVER_MODEL_CONFIG else None
+            ImageGenerationAPI(config.IMAGE_GENERATION_MODEL_CONFIG)
+            if config.IMAGE_GENERATION_MODEL_CONFIG else None
         )
         # self.face_recognition_manager = FaceRecognitionManager(self)
         self.streaming_chat = StreamingChat(self)
