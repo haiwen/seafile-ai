@@ -3,6 +3,8 @@ import base64
 import binascii
 import io
 import json
+import multiprocessing
+from threading import Timer
 import time
 import warnings
 
@@ -22,6 +24,18 @@ class CoverGenerationError(Exception):
         self.status = status
 
 
+def _generate_image(connection, model_config, prompt):
+    try:
+        image = ImageGenerationAPI(model_config)._generate_cover(prompt)
+        connection.send((image, None, None))
+    except CoverGenerationError as error:
+        connection.send((None, str(error), error.status))
+    except Exception:
+        connection.send((None, 'Image generation failed.', 502))
+    finally:
+        connection.close()
+
+
 class ImageGenerationAPI:
     def __init__(self, model_config):
         self.model = model_config['model']
@@ -31,6 +45,50 @@ class ImageGenerationAPI:
     def generate_cover(self, prompt):
         if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= PROMPT_MAX_LENGTH:
             raise CoverGenerationError('Enter a description of up to 2000 characters.', 400)
+        # A read timeout is an inactivity timeout, not a wall-clock deadline.
+        # Isolate blocking DNS/TLS/reads so the caller can terminate them safely.
+        context = multiprocessing.get_context('spawn')
+        receiver, sender = context.Pipe(duplex=False)
+        process = context.Process(target=_generate_image, args=(sender, {
+            'model': self.model, 'url': self.url.rsplit('/responses', 1)[0], 'key': self.key,
+        }, prompt))
+        deadline = time.monotonic() + GENERATION_TIMEOUT
+        watchdog = None
+        try:
+            process.start()
+            sender.close()
+            # Also interrupt a blocked recv if the child stalls mid-result.
+            watchdog = Timer(max(0, deadline - time.monotonic()), process.kill)
+            watchdog.daemon = True
+            watchdog.start()
+            if not receiver.poll(max(0, deadline - time.monotonic())):
+                raise CoverGenerationError('Image generation timed out.', 504)
+            image, error, status = receiver.recv()
+            if time.monotonic() > deadline:
+                raise CoverGenerationError('Image generation timed out.', 504)
+            if error:
+                raise CoverGenerationError(error, status)
+            return image
+        except (EOFError, OSError):
+            if time.monotonic() >= deadline:
+                raise CoverGenerationError('Image generation timed out.', 504) from None
+            raise CoverGenerationError('Image generation failed.') from None
+        finally:
+            if watchdog is not None:
+                watchdog.cancel()
+                watchdog.join()
+            sender.close()
+            receiver.close()
+            if process.pid is not None:
+                if process.is_alive():
+                    process.terminate()
+                process.join(timeout=1)
+                if process.is_alive():
+                    process.kill()
+                    process.join()
+                process.close()
+
+    def _generate_cover(self, prompt):
         body = {
             'model': self.model,
             'input': (
