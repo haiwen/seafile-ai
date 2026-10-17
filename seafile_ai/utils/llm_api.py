@@ -49,10 +49,11 @@ class LLMAPI:
             gpt_version = re.search(r'\bgpt-(\d+)\b', self.model_id)
             if gpt_version and int(gpt_version.group(1)) >= 5:
                 kwargs['temperature'] = 1
-            if 'gpt-5' in self.model_id:
-                # Chat Completions cannot combine GPT-5 reasoning with function tools.
                 if kwargs.get('tools'):
                     kwargs['reasoning_effort'] = 'none'
+            if re.search(r'\bclaude\b', self.model_id, re.IGNORECASE):
+                # Newer Claude models reject temperature, including explicit values.
+                kwargs.pop('temperature', None)
             if self.llm_type == 'openai' and 'reasoning_effort' in kwargs:
                 allowed_params = list(kwargs.get('allowed_openai_params') or [])
                 if 'reasoning_effort' not in allowed_params:
