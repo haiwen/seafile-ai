@@ -50,7 +50,7 @@ class LLMAPI:
             if gpt_version and int(gpt_version.group(1)) >= 5:
                 kwargs['temperature'] = 1
                 if kwargs.get('tools'):
-                    kwargs['reasoning_effort'] = 'none'
+                    kwargs.setdefault('reasoning_effort', 'low')
             if re.search(r'\bclaude\b', self.model_id, re.IGNORECASE):
                 # Newer Claude models reject temperature, including explicit values.
                 kwargs.pop('temperature', None)
