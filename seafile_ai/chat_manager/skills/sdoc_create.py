@@ -1,19 +1,24 @@
 import json
+import logging
 import re
 from urllib.parse import urlparse
 
 from seafile_ai.utils.tools import BasicTool
 
+logger = logging.getLogger(__name__)
+
 
 SDOC_CREATE_PROMPT = """SDoc creation skill:
 - The user explicitly requested a new SDoc file. Create one from the current conversation and available sources.
-- Use `generate_sdoc` exactly once after gathering any needed information. The tool only prepares a request; never claim that a file exists or was created.
+- Use `create_sdoc` after gathering any needed information. It validates and saves a complete SDoc before returning its location.
 - Write the document in the requested language, or the primary language of the latest user request.
 - Preserve user-provided filenames, paths, quoted text, product names, and identifiers.
-- Extract `requested_directory` only from the current user request. Use null when omitted. Never infer it from attachments or search results.
+- All documents are saved in /AI Generated/ in the current library. Pass a filename, not a directory.
 - Use the supported semantic element names and fields exactly. Do not generate IDs, structural nodes, version fields, repository-backed media, or HTML.
 - Never place internal `<reference_N>` tokens in SDoc content. If sources are useful, add a normal plain-text Sources section without internal citation tokens.
-- Tool success means `SDoc creation request prepared`, not that Seahub persisted a file.
+- Only status `created` means the file exists. Summarize it without repeating its full content; the file card displays its location.
+- If status is `unknown`, explain that creation could not be confirmed and ask the user to check /AI Generated/. Never retry creation in this request.
+- If status is `failed`, explain that creation failed. Do not claim success.
 """
 
 SCHEMA_VERSION = 1
@@ -163,12 +168,11 @@ SDOC_PARAMETERS = {
     'type': 'object',
     'properties': {
         'file_name': {'type': 'string'},
-        'requested_directory': {'type': ['string', 'null']},
         'title': {'type': 'object', 'properties': {'children': _children_schema(text_only=True)}, 'required': ['children'], 'additionalProperties': False},
         'summary': {'type': 'string'},
         'elements': {'type': 'array', 'items': {'oneOf': ELEMENT_SCHEMAS}, 'minItems': 1, 'maxItems': MAX_ELEMENTS},
     },
-    'required': ['file_name', 'requested_directory', 'title', 'elements'],
+    'required': ['file_name', 'title', 'elements'],
     'additionalProperties': False,
 }
 
@@ -351,10 +355,8 @@ def _validate_element(value, state, depth=1):
     return result
 
 
-def validate_sdoc_draft(file_name, requested_directory, title, elements, summary=None):
+def validate_sdoc_draft(file_name, title, elements, summary=None):
     file_name = _string(file_name, 'file_name').strip()
-    if requested_directory is not None:
-        requested_directory = _string(requested_directory, 'requested_directory').strip()
     if summary is not None:
         summary = _string(summary, 'summary').strip()
     _exact(title, {'children'})
@@ -366,7 +368,6 @@ def validate_sdoc_draft(file_name, requested_directory, title, elements, summary
     result = {
         'schema_version': SCHEMA_VERSION,
         'file_name': file_name,
-        'requested_directory': requested_directory,
         'title': normalized_title,
         'elements': normalized_elements,
     }
@@ -377,24 +378,53 @@ def validate_sdoc_draft(file_name, requested_directory, title, elements, summary
     return result
 
 
-class GenerateSdoc(BasicTool):
+class CreateSdoc(BasicTool):
     tool = {
         'type': 'function',
         'function': {
-            'name': 'generate_sdoc',
-            'description': 'Prepare a versioned SDoc creation request. Seahub validates and persists it after the final AI response.',
+            'name': 'create_sdoc',
+            'description': 'Validate and create a complete SDoc in /AI Generated/. Return its relative path only after the file has been saved.',
             'parameters': SDOC_PARAMETERS,
         },
     }
 
-    def execute(self, file_name, requested_directory, title, elements, context, tool_executor, summary=None):
-        draft = validate_sdoc_draft(file_name, requested_directory, title, elements, summary=summary)
-        tool_executor.cache['artifacts'] = [{'type': 'sdoc_create_request', **draft}]
-        return {
-            'status': 'sdoc creation request prepared',
-            'file_name': draft['file_name'],
-            'requested_directory': draft['requested_directory'],
-        }
+    def execute(self, file_name, title, elements, context, tool_executor, seahub_api, summary=None):
+        cached = tool_executor.cache.get('sdoc_create_result')
+        if cached:
+            return cached
+        try:
+            draft = validate_sdoc_draft(file_name, title, elements, summary=summary)
+        except (TypeError, ValueError) as error:
+            result = {'type': 'sdoc', 'status': 'failed', 'error_code': 'invalid_artifact'}
+            tool_executor.cache['artifacts'] = [result]
+            return {**result, 'error': str(error)}
+        token = context.get('sdoc_create_token')
+        if not token:
+            result = {'type': 'sdoc', 'status': 'failed', 'error_code': 'create_failed'}
+            tool_executor.cache['artifacts'] = [result]
+            return result
+        # A lost response can follow a successful write. Never retry this mutation.
+        result = {'type': 'sdoc', 'status': 'unknown', 'error_code': 'creation_unconfirmed'}
+        tool_executor.cache['sdoc_create_result'] = result
+        tool_executor.cache['artifacts'] = [result]
+        try:
+            response = seahub_api.create_sdoc({'type': 'sdoc_create_request', **draft}, token)
+            if response.get('status') == 'created':
+                path = response.get('relative_path')
+                if not isinstance(path, str) or not path or '/' in path or '\\' in path or '\x00' in path:
+                    raise ValueError('Invalid created file path')
+            elif response.get('status') != 'failed':
+                raise ValueError('Invalid creation result')
+            result = {key: response[key] for key in (
+                'type', 'schema_version', 'status', 'name', 'relative_path', 'repo_id',
+                'doc_uuid', 'title', 'summary', 'error_code',
+            ) if key in response}
+            result['type'] = 'sdoc'
+        except Exception:
+            logger.warning('SDoc creation result could not be confirmed')
+        tool_executor.cache['sdoc_create_result'] = result
+        tool_executor.cache['artifacts'] = [result]
+        return result
 
 
 class SdocCreateSkill:
@@ -403,5 +433,5 @@ class SdocCreateSkill:
     def get_system_prompts(self):
         return [SDOC_CREATE_PROMPT]
 
-    def register_tools(self, tool_executor, context):
-        GenerateSdoc().register(tool_executor, context=context)
+    def register_tools(self, tool_executor, context, seahub_api):
+        CreateSdoc().register(tool_executor, context=context, seahub_api=seahub_api)

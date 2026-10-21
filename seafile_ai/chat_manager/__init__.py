@@ -47,7 +47,7 @@ class BasicChat:
         for tool in self.content_generators:
             tool.register(tool_executor)
         for tool in self.skill_tools:
-            tool.register(tool_executor, context=context)
+            tool.register(tool_executor, context=context, seahub_api=self.app.seahub_api)
 
     def __call__(self, message, attachments, context, model):
         tool_executor = OpenAIToolExecutor()
@@ -362,6 +362,7 @@ class StreamingChat(BasicChat):
                     'There is an issue with the AI server or web server (LLM or internal server error), please try again later',
                     [],
                     tool_executor.thought_process.details,
+                    tool_executor.cache.get('artifacts', []),
                 )
             except Exception:
                 yield SSE.error(repr(error))
