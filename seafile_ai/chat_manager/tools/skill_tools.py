@@ -21,12 +21,12 @@ class LoadSkill(BasicTool):
         },
     }
 
-    def execute(self, skill, context, tool_executor):
+    def execute(self, skill, context, tool_executor, seahub_api):
         loaded_skills = tool_executor.cache.setdefault('loaded_skills', {})
         if skill in loaded_skills:
             return {'status': 'already loaded', 'skill': skill}
         loaded_skill = get_skill(skill)
-        loaded_skill.register_tools(tool_executor, context)
+        loaded_skill.register_tools(tool_executor, context, seahub_api)
         tool_executor.cache.setdefault('skill_prompts', []).extend(loaded_skill.get_system_prompts())
         loaded_skills[skill] = loaded_skill
         return {'status': 'loaded', 'skill': skill}

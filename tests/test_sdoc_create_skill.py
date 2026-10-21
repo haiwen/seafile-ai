@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -33,16 +33,16 @@ class SdocCreateSkillTest(unittest.TestCase):
         cls.module = load_sdoc_create()
 
     def test_tool_schema_is_closed_and_versioned_by_artifact(self):
-        parameters = self.module.GenerateSdoc.tool['function']['parameters']
+        parameters = self.module.CreateSdoc.tool['function']['parameters']
 
         self.assertFalse(parameters['additionalProperties'])
         self.assertEqual(parameters['properties']['elements']['maxItems'], 200)
         self.assertNotIn('$ref', json.dumps(parameters))
+        self.assertNotIn('requested_directory', parameters['properties'])
 
     def test_accepts_representative_complex_elements(self):
         draft = self.module.validate_sdoc_draft(
             'release-plan',
-            '/Plans/2026',
             {'children': [text('Release ', bold=True), text('plan')]},
             [
                 {'type': 'paragraph', 'children': [
@@ -66,43 +66,81 @@ class SdocCreateSkillTest(unittest.TestCase):
         )
 
         self.assertEqual(draft['schema_version'], 1)
-        self.assertEqual(draft['requested_directory'], '/Plans/2026')
         self.assertEqual(len(draft['elements']), 5)
 
-    def test_generate_sdoc_caches_versioned_artifact(self):
+    def test_create_sdoc_waits_for_creation_and_caches_only_file_reference(self):
         class Executor:
             cache = {}
 
-        result = self.module.GenerateSdoc().execute(
-            'plan', None,
+        api = Mock()
+        api.create_sdoc.return_value = {
+            'type': 'sdoc', 'schema_version': 1, 'status': 'created',
+            'relative_path': 'plan (1).sdoc', 'repo_id': 'repo-id',
+            'elements': [{'text': 'must not be forwarded'}],
+        }
+        executor = Executor()
+        result = self.module.CreateSdoc().execute(
+            'plan',
             {'children': [text('Plan')]},
             [{'type': 'paragraph', 'children': [text('Content')]}],
-            context={}, tool_executor=Executor(), summary='Summary',
+            context={'sdoc_create_token': 'request-token'}, tool_executor=executor,
+            seahub_api=api, summary='Summary',
         )
 
-        self.assertEqual(result['status'], 'sdoc creation request prepared')
+        api.create_sdoc.assert_called_once()
+        draft, token = api.create_sdoc.call_args.args
+        self.assertEqual(token, 'request-token')
+        self.assertEqual(draft['type'], 'sdoc_create_request')
+        self.assertIn('elements', draft)
+        self.assertEqual(result['status'], 'created')
+        self.assertEqual(result['relative_path'], 'plan (1).sdoc')
         self.assertEqual(Executor.cache['artifacts'][0]['schema_version'], 1)
-        self.assertIn('elements', Executor.cache['artifacts'][0])
+        self.assertNotIn('elements', Executor.cache['artifacts'][0])
         self.assertNotIn('blocks', Executor.cache['artifacts'][0])
+        self.module.CreateSdoc().execute('again', {}, [], {}, executor, api)
+        api.create_sdoc.assert_called_once()
+
+    def test_timeout_is_unknown_and_is_not_retried(self):
+        executor = Mock(cache={})
+        api = Mock()
+        api.create_sdoc.side_effect = TimeoutError()
+        tool = self.module.CreateSdoc()
+        args = ('plan', {'children': [text('Plan')]},
+                [{'type': 'paragraph', 'children': [text('Content')]}],
+                {'sdoc_create_token': 'token'}, executor, api)
+        result = tool.execute(*args)
+        self.assertEqual(result['status'], 'unknown')
+        self.assertEqual(tool.execute(*args), result)
+        api.create_sdoc.assert_called_once()
+        self.assertEqual(executor.cache['artifacts'], [result])
+
+    def test_invalid_content_does_not_call_creation_api(self):
+        api = Mock()
+        result = self.module.CreateSdoc().execute(
+            'plan', {'children': [text('Plan')]}, [{'type': 'image'}],
+            {'sdoc_create_token': 'token'}, Mock(cache={}), api,
+        )
+        self.assertEqual(result['status'], 'failed')
+        api.create_sdoc.assert_not_called()
 
     def test_rejects_deferred_element(self):
         with self.assertRaisesRegex(ValueError, 'unsupported element type'):
             self.module.validate_sdoc_draft(
-                'plan', None, {'children': [text('Plan')]},
+                'plan', {'children': [text('Plan')]},
                 [{'type': 'image'}],
             )
 
     def test_rejects_internal_reference_token(self):
         with self.assertRaisesRegex(ValueError, 'citation token invalid'):
             self.module.validate_sdoc_draft(
-                'plan', None, {'children': [text('Plan')]},
+                'plan', {'children': [text('Plan')]},
                 [{'type': 'paragraph', 'children': [text('Source <reference_0>')]}],
             )
 
     def test_rejects_unknown_element_fields(self):
         with self.assertRaisesRegex(ValueError, 'object fields invalid'):
             self.module.validate_sdoc_draft(
-                'plan', None, {'children': [text('Plan')]},
+                'plan', {'children': [text('Plan')]},
                 [{'type': 'paragraph', 'children': [text('Content')], 'unexpected': True}],
             )
 

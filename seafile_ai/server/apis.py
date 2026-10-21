@@ -76,6 +76,7 @@ def get_ai_reply():
         'repo_prompt': repo_prompt,
         'scenario': scenario,
         'message_id': message_id,
+        'sdoc_create_token': data.get('sdoc_create_token'),
     }
 
     return Response(

@@ -71,6 +71,8 @@ class ThoughtProcessRecorder:
     def add_tool_call(self, tool_name, arguments, execution_detail, result=None):
         if not self.actions:
             return
+        if tool_name == 'create_sdoc':
+            arguments = {'file_name': arguments.get('file_name')}
         tool_call = {
             'name': tool_name,
             'arguments': {key: object_to_json_str(value) for key, value in arguments.items()},
