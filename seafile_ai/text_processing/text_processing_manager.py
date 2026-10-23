@@ -2,6 +2,7 @@ import os
 import logging
 import json
 import base64
+import re
 
 from seafile_ai.utils.constants import LLM_INPUT_CHARACTERS_LIMIT, SUMMARY_WORD_LIMIT, WritingType, MODEL_REASONING_TIER
 from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_seafobj, parse_file, FormatNotSupportedException, get_file_ext, \
