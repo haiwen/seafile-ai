@@ -64,6 +64,7 @@ class SDocReviewChunkingTest(unittest.TestCase):
 
     def setUp(self):
         self.manager = self.module.TextProcessingManager(Mock(), 'other')
+        self.module.get_llm_client_by_model_tier.return_value = self.manager.app.llm_api
         self.context = {
             'outline': [
                 {'block_id': 'current', 'text': '1. 现状分析'},

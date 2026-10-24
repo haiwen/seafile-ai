@@ -707,7 +707,8 @@ class TextProcessingManager:
             'role': 'user',
             'content': json.dumps({'request': prompt, 'outline': outline, 'block_count': len(blocks)}, ensure_ascii=False),
         }
-        completion = self.app.llm_api.run_with_metadata(
+        tier = AI_UTILS_TIER.get('sdoc_review', MODEL_REASONING_TIER.LOW.value)
+        completion = get_llm_client_by_model_tier(self.app.data_logger, tier).run_with_metadata(
             [system_prompt, user_prompt], context,
             response_format={'type': 'json_object'})
         content = completion.get('content') if isinstance(completion, dict) else None
@@ -726,21 +727,19 @@ class TextProcessingManager:
                 'nearest chapter/section and a "scope_section" field naming the resolved requested '
                 'ancestor. The supplied blocks are the authoritative edit scope and may include '
                 'subsections; never invent or edit blocks outside this input. '
-                'Four kinds of edits are supported: '
+                'Three kinds of edits are supported: '
                 '(1) "replace_block_text" for rewriting a block\'s text; '
                 '(2) "set_block_type" for changing a paragraph to a heading (header1-header6) or '
                 'changing a heading level, only when the request asks for heading-level changes; '
                 '(3) "set_list_type" for converting an existing list between ordered_list and '
-                'unordered_list, only when the request asks for list conversion; '
-                '(4) "replace_table_cell_text" for rewriting a table cell\'s text, using block_type '
-                '"table_cell" with the cell\'s block_id and text_node_id. '
+                'unordered_list, only when the request asks for list conversion. '
+                'Table cells, document titles and subtitles are read-only. '
                 'Use only a supplied block_id; do not invent ids. The server already knows each target\'s '
                 'text node, type and original text, so do not return text_node_id, block_type or '
                 'before_leaf_text. The object must be: {"items":['
                 '{"kind":"replace_block_text","block_id":"...","after_text":"...","rationale":"..."} '
                 'or {"kind":"set_block_type","block_id":"...","after_type":"header2","rationale":"..."} '
                 'or {"kind":"set_list_type","block_id":"...","after_type":"unordered_list","rationale":"..."} '
-                'or {"kind":"replace_table_cell_text","block_id":"...","after_text":"...","rationale":"..."}'
                 ']}. Return at most %d high-value suggestions for this chunk. '
                 'If no change is needed, omit it. Never output Slate paths or operations.'
                 % SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK
@@ -761,7 +760,8 @@ class TextProcessingManager:
             'role': 'user',
             'content': json.dumps(user_content, ensure_ascii=False),
         }
-        completion = self.app.llm_api.run_with_metadata(
+        tier = AI_UTILS_TIER.get('sdoc_review', MODEL_REASONING_TIER.LOW.value)
+        completion = get_llm_client_by_model_tier(self.app.data_logger, tier).run_with_metadata(
             [system_prompt, user_prompt], context,
             response_format={'type': 'json_object'})
         content = completion.get('content') if isinstance(completion, dict) else None
@@ -792,13 +792,13 @@ class TextProcessingManager:
         blocks = []
         if isinstance(document_context, dict):
             for block in document_context.get('blocks') or []:
-                if not isinstance(block, dict) or not block.get('supported'):
+                if not isinstance(block, dict):
                     continue
                 blocks.append({
                     'block_id': block.get('block_id'),
                     'type': block.get('type'),
                     'section': section_titles.get(block.get('section_id')),
-                    'before_leaf_text': block.get('before_leaf_text'),
+                    'before_leaf_text': block.get('before_leaf_text') or block.get('plain_text') or '',
                 })
 
         system_prompt = {
@@ -813,7 +813,8 @@ class TextProcessingManager:
             'role': 'user',
             'content': json.dumps({'request': prompt, 'blocks': blocks}, ensure_ascii=False),
         }
-        content = self.app.llm_api.run([system_prompt, user_prompt], context)
+        tier = AI_UTILS_TIER.get('sdoc_review', MODEL_REASONING_TIER.LOW.value)
+        content = get_llm_client_by_model_tier(self.app.data_logger, tier).run([system_prompt, user_prompt], context)
         if not isinstance(content, str) or not content.strip():
             raise ValueError('The model returned no analysis.')
         return content.strip()
