@@ -197,6 +197,14 @@ logger.info(
 
 LLM_MODEL_ID_MODELS_MAP, LLM_MODEL_TIER_MODELS_MAP, DEFAULT_LLM_MODEL = get_llm_models_maps(LLM_MODELS)
 
+# An unknown or unconfigured image model must not fall back to the chat default.
+IMAGE_GENERATION_MODEL = configs.get('IMAGE_GENERATION_MODEL', 'gpt-6-luna')
+IMAGE_GENERATION_MODEL_CONFIG = LLM_MODEL_ID_MODELS_MAP.get(IMAGE_GENERATION_MODEL)
+if IMAGE_GENERATION_MODEL_CONFIG and not all(
+        isinstance(IMAGE_GENERATION_MODEL_CONFIG.get(field), str) and IMAGE_GENERATION_MODEL_CONFIG[field].strip()
+        for field in ('url', 'key')):
+    IMAGE_GENERATION_MODEL_CONFIG = None
+
 # Face embedding is no longer supported. These settings are retained temporarily
 # for compatibility and are not used by the application.
 FACE_EMBEDDING_SERVICE_URL = os.getenv('FACE_EMBEDDING_SERVICE_URL', '')
