@@ -6,6 +6,7 @@ from sqlalchemy import desc
 
 from seafile_ai import config
 from seafile_ai.chat_manager.utils import (
+    build_image_content_parts,
     combine_attachments_to_message,
     retrieve_origin_reference_format,
     strip_content_details_from_attachments,
@@ -26,6 +27,36 @@ MARKDOWN_ARTIFACT_RE = re.compile(
 )
 MARKDOWN_ARTIFACT_UNAVAILABLE = '\n[The current generated document is unavailable.]\n'
 MARKDOWN_ARTIFACT_TRUNCATED = '\n\n[The current generated document was truncated by the refresh content limit.]'
+# Image inputs of a historical message. Built once per request, never persisted.
+IMAGE_CONTENT_PARTS_KEY = '_image_content_parts'
+
+
+def restore_history_image_parts(messages, repo_id=None):
+    """Turn the image attachments of the historical user messages back into model input.
+
+    Only the library reference is stored in the database, so a later turn that sends
+    text alone would see the picture as metadata. The parts are built once here and
+    kept on the message dict for the whole request: they are never persisted, and the
+    thought process keeps reading the raw content.
+    """
+    if not repo_id:
+        return
+
+    for message in messages:
+        if message.get('role') != 'user':
+            continue
+
+        # Only the images of the library this chat belongs to are re-read.
+        attachments = [
+            attachment for attachment in message.get('attachments') or []
+            if isinstance(attachment, dict) and attachment.get('repo_id') == repo_id
+        ]
+        if not attachments:
+            continue
+
+        image_parts = build_image_content_parts(attachments, repo_id)
+        if image_parts:
+            message[IMAGE_CONTENT_PARTS_KEY] = image_parts
 
 
 class OpenAIMemory:
@@ -107,12 +138,17 @@ class OpenAIMemory:
                 }
                 continue
 
+            user_content = combine_attachments_to_message(
+                step.get('attachments') or [],
+                step.get('content') or '',
+            )
+            image_parts = step.get(IMAGE_CONTENT_PARTS_KEY)
+            if image_parts:
+                user_content = [{'type': 'text', 'text': user_content}] + image_parts
+
             yield {
                 'role': 'user',
-                'content': combine_attachments_to_message(
-                    step.get('attachments') or [],
-                    step.get('content') or '',
-                ),
+                'content': user_content,
             }
 
 
@@ -204,6 +240,11 @@ def build_memory_from_db(db_session_class, system_prompts, session_uuid, window_
         records.sort(key=lambda x: x.created_at)
 
         messages = [record.to_dict() for record in records]
-        memory += refresh_generated_markdown_artifacts(messages, repo_id)
+        messages = refresh_generated_markdown_artifacts(messages, repo_id)
+
+    # The images themselves live in the library, so they are read after the
+    # database session is closed.
+    restore_history_image_parts(messages, repo_id)
+    memory += messages
 
     return memory

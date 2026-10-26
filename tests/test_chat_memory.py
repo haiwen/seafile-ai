@@ -25,6 +25,7 @@ def load_memory(
     seafile_ai_module.config = config_module
 
     chat_utils_module = ModuleType('seafile_ai.chat_manager.utils')
+    chat_utils_module.build_image_content_parts = Mock(return_value=[])
     chat_utils_module.combine_attachments_to_message = Mock()
     chat_utils_module.retrieve_origin_reference_format = Mock()
     chat_utils_module.strip_content_details_from_attachments = Mock()
