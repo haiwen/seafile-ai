@@ -31,8 +31,13 @@ def load_chat_utils(llm_client):
     metadata_api_module = ModuleType('seafile_ai.repo_metadata.metadata_server_api')
     metadata_api_module.MetadataServerAPI = Mock()
     metadata_utils_module = ModuleType('seafile_ai.repo_metadata.utils')
+    metadata_utils_module.get_file_id_by_path = Mock(return_value='obj-id')
     metadata_utils_module.get_metadata_by_path = Mock()
+    metadata_utils_module.get_repo_info = Mock(return_value={'repo_id': 'repo-id'})
+    image_utils_module = ModuleType('seafile_ai.image_processing.utils')
+    image_utils_module.resize_image_binary = Mock(return_value=b'jpeg-image')
     utils_module = ModuleType('seafile_ai.utils')
+    utils_module.get_file_content_by_seafobj = Mock(return_value=b'image-content')
     utils_module.parse_file = Mock()
     constants_module = ModuleType('seafile_ai.utils.constants')
     constants_module.MODEL_REASONING_TIER = SimpleNamespace(LOW=SimpleNamespace(value='low'))
@@ -48,6 +53,7 @@ def load_chat_utils(llm_client):
         'seafile_ai': seafile_ai_module,
         'seafile_ai.config': config_module,
         'seafile_ai.chat_manager.system_prompts': prompts_module,
+        'seafile_ai.image_processing.utils': image_utils_module,
         'seafile_ai.repo_metadata.constants': metadata_constants_module,
         'seafile_ai.repo_metadata.metadata_server_api': metadata_api_module,
         'seafile_ai.repo_metadata.utils': metadata_utils_module,

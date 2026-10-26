@@ -176,18 +176,22 @@ def combine_attachments_to_message(attachments, message):
     )
 
 
-def build_image_content_parts(attachments):
-    """Build OpenAI-style image content parts for image attachments in the library."""
+def build_image_content_parts(attachments, allowed_repo_id):
+    """Build image parts only from the library authorized for this chat."""
     parts = []
+    if not allowed_repo_id:
+        return parts
     for attachment in attachments or []:
         if not isinstance(attachment, dict):
+            continue
+        repo_id = attachment.get('repo_id')
+        if repo_id != allowed_repo_id:
             continue
         name = attachment.get('name') or attachment.get('path') or ''
         if Path(name).suffix.lower() not in IMAGE_ATTACHMENT_SUFFIXES:
             continue
-        repo_id = attachment.get('repo_id')
         path = attachment.get('path')
-        if not repo_id or not path:
+        if not path:
             continue
         try:
             repo = get_repo_info(repo_id)

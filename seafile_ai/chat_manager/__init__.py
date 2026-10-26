@@ -97,7 +97,7 @@ class StreamingChat(BasicChat):
 
             # Image attachments are passed to the model as multimodal content parts.
             # user_raw_message stays text-only so the thought process stays text-only too.
-            image_content_parts = build_image_content_parts(attachments)
+            image_content_parts = build_image_content_parts(attachments, context.get('repo_id'))
             user_content = (
                 [{'type': 'text', 'text': user_raw_message}] + image_content_parts
                 if image_content_parts else user_raw_message

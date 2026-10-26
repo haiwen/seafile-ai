@@ -39,6 +39,9 @@ def restore_history_image_parts(messages, repo_id=None):
     kept on the message dict for the whole request: they are never persisted, and the
     thought process keeps reading the raw content.
     """
+    if not repo_id:
+        return
+
     for message in messages:
         if message.get('role') != 'user':
             continue
@@ -46,12 +49,12 @@ def restore_history_image_parts(messages, repo_id=None):
         # Only the images of the library this chat belongs to are re-read.
         attachments = [
             attachment for attachment in message.get('attachments') or []
-            if isinstance(attachment, dict) and (not repo_id or attachment.get('repo_id') == repo_id)
+            if isinstance(attachment, dict) and attachment.get('repo_id') == repo_id
         ]
         if not attachments:
             continue
 
-        image_parts = build_image_content_parts(attachments)
+        image_parts = build_image_content_parts(attachments, repo_id)
         if image_parts:
             message[IMAGE_CONTENT_PARTS_KEY] = image_parts
 
