@@ -9,6 +9,7 @@ from seafile_ai.chat_manager.system_prompts import MAX_STEPS_DISABLE_TOOL_CALLS_
 from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, MarkdownGenerator, ReadFiles
 from seafile_ai.chat_manager.utils import (
     build_chat_system_prompts,
+    build_image_content_parts,
     combine_attachments_to_message,
     get_answer_and_sources,
     strip_content_details_from_attachments,
@@ -93,9 +94,17 @@ class StreamingChat(BasicChat):
                 strip_content_details_from_attachments(attachments),
             )
             tool_executor.thought_process.context = memory.context_thought_process
+
+            # Image attachments are passed to the model as multimodal content parts.
+            # user_raw_message stays text-only so the thought process stays text-only too.
+            image_content_parts = build_image_content_parts(attachments)
+            user_content = (
+                [{'type': 'text', 'text': user_raw_message}] + image_content_parts
+                if image_content_parts else user_raw_message
+            )
             memory.append({
                 'role': 'user',
-                'content': user_raw_message,
+                'content': user_content,
             })
 
             current_step = 0
