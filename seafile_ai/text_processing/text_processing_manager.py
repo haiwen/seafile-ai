@@ -21,6 +21,11 @@ SDOC_REVIEW_MAX_BLOCKS_PER_CHUNK = 10
 # chunk comfortably below the model input budget so that it can still return a
 # structured response before that deadline.
 SDOC_REVIEW_MAX_PAYLOAD_CHARACTERS_PER_CHUNK = 3500
+# Independently cap the final serialized system/user messages, not just source
+# projections. Leave room above the 3500-character chunk budget for instructions,
+# a revision brief and JSON wrapping. This is a local character budget, not a
+# provider token limit; never truncate the user's request or frozen context.
+SDOC_REVIEW_MAX_REQUEST_CHARACTERS = 10000
 SDOC_REVIEW_MAX_SUGGESTIONS_PER_CHUNK = 2
 REVISION_BRIEF_REQUIRED_STRING_FIELDS = (
     'goal', 'tone', 'length', 'heading_strategy', 'do_not_modify',
@@ -945,6 +950,14 @@ class TextProcessingManager:
             seen_targets.add(target_key)
         return items
 
+    @staticmethod
+    def _validate_review_model_request(messages):
+        if len(json.dumps(messages, ensure_ascii=False)) > SDOC_REVIEW_MAX_REQUEST_CHARACTERS:
+            raise ReviewPayloadTooLargeError(
+                'The review model request exceeds the %d-character input budget. '
+                'Reduce the request or document context and retry.'
+                % SDOC_REVIEW_MAX_REQUEST_CHARACTERS)
+
     def _generate_revision_brief(self, prompt, outline, blocks, context):
         system_prompt = {
             'role': 'system',
@@ -960,9 +973,11 @@ class TextProcessingManager:
             'role': 'user',
             'content': json.dumps({'request': prompt, 'outline': outline, 'block_count': len(blocks)}, ensure_ascii=False),
         }
+        messages = [system_prompt, user_prompt]
+        self._validate_review_model_request(messages)
         tier = AI_UTILS_TIER.get('sdoc_review', MODEL_REASONING_TIER.LOW.value)
         completion = get_llm_client_by_model_tier(self.app.data_logger, tier).run_with_metadata(
-            [system_prompt, user_prompt], context,
+            messages, context,
             response_format={'type': 'json_object'})
         content = completion.get('content') if isinstance(completion, dict) else None
         finish_reason = completion.get('finish_reason') if isinstance(completion, dict) else None
@@ -1074,9 +1089,11 @@ class TextProcessingManager:
             'role': 'user',
             'content': json.dumps(user_content, ensure_ascii=False),
         }
+        messages = [system_prompt, user_prompt]
+        self._validate_review_model_request(messages)
         tier = AI_UTILS_TIER.get('sdoc_review', MODEL_REASONING_TIER.LOW.value)
         completion = get_llm_client_by_model_tier(self.app.data_logger, tier).run_with_metadata(
-            [system_prompt, user_prompt], context,
+            messages, context,
             response_format={'type': 'json_object'})
         content = completion.get('content') if isinstance(completion, dict) else None
         finish_reason = completion.get('finish_reason') if isinstance(completion, dict) else None

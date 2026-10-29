@@ -561,6 +561,79 @@ class SDocReviewChunkingTest(unittest.TestCase):
         with self.assertRaises(self.module.ReviewPayloadTooLargeError):
             self.manager._chunk_blocks(blocks, lists)
 
+    def test_review_item_request_budget_includes_all_context(self):
+        block = dict(block_id='p', type='paragraph', before_leaf_text='正文')
+        brief = self._brief()
+        brief['goal'] = 'x' * 10000
+        cases = [
+            ('prompt', 'x' * 10000, [block], [], None, None),
+            ('brief', 'Improve', [block], [], brief, None),
+            ('operation', 'Improve', [block], [], None,
+             dict(kind='rewrite', coverage='selective', old_text='x' * 10000)),
+            ('lists', 'Improve', [block],
+             [dict(block_id='list', items=[dict(text='x' * 10000)])], None, None),
+            ('capabilities', 'Improve', [dict(block, capabilities={'detail': 'x' * 10000})],
+             [], None, None),
+        ]
+        for name, prompt, blocks, lists, brief, operation in cases:
+            with self.subTest(component=name):
+                model = self.manager.app.llm_api.run_with_metadata
+                model.reset_mock()
+                model.return_value = dict(content='{"items": []}', finish_reason='stop')
+                with self.assertRaisesRegex(self.module.ReviewPayloadTooLargeError, 'model request'):
+                    self.manager._generate_items(prompt, blocks, lists, brief, {}, operation)
+                model.assert_not_called()
+
+    def test_revision_brief_request_budget_rejects_prompt_and_outline(self):
+        for prompt, outline in [
+                ('x' * 10000, []),
+                ('Improve', [dict(block_id=str(i), text='标题' * 100) for i in range(100)])]:
+            with self.subTest(outline=bool(outline)):
+                model = self.manager.app.llm_api.run_with_metadata
+                model.reset_mock()
+                model.return_value = dict(content=json.dumps(self._brief()), finish_reason='stop')
+                with self.assertRaisesRegex(self.module.ReviewPayloadTooLargeError, 'model request'):
+                    self.manager._generate_revision_brief(prompt, outline, [], {})
+                model.assert_not_called()
+
+    def test_model_request_budget_exact_boundary_counts_serialized_messages(self):
+        for phase in ('items', 'brief'):
+            with self.subTest(phase=phase):
+                model = self.manager.app.llm_api.run_with_metadata
+                result = {'items': []} if phase == 'items' else self._brief()
+                model.return_value = dict(content=json.dumps(result), finish_reason='stop')
+
+                def generate():
+                    if phase == 'items':
+                        return self.manager._generate_items('改进 "正文"\n', [], [], None, {})
+                    return self.manager._generate_revision_brief('改进 "正文"\n', [], [], {})
+
+                generate()
+                messages = copy.deepcopy(model.call_args.args[0])
+                size = len(json.dumps(messages, ensure_ascii=False))
+                with patch.object(self.module, 'SDOC_REVIEW_MAX_REQUEST_CHARACTERS', size, create=True):
+                    generate()
+                    self.assertEqual(model.call_args.args[0], messages)
+                model.reset_mock()
+                with patch.object(self.module, 'SDOC_REVIEW_MAX_REQUEST_CHARACTERS', size - 1, create=True):
+                    with self.assertRaises(self.module.ReviewPayloadTooLargeError):
+                        generate()
+                model.assert_not_called()
+
+    def test_full_request_budget_preserves_normal_source_chunks(self):
+        block = dict(block_id='p', type='paragraph', before_leaf_text='正文' * 1500)
+        self.assertEqual(self.manager._chunk_blocks([block]), [[block]])
+        model = self.manager.app.llm_api.run_with_metadata
+        model.return_value = dict(content='{"items": []}', finish_reason='stop')
+        self.assertEqual(self.manager._generate_items('改进正文', [block], [], self._brief(), {}), [])
+        messages = model.call_args.args[0]
+        size = len(json.dumps(messages, ensure_ascii=False))
+        self.assertGreater(size, 3500)
+        self.assertLessEqual(size, 10000)
+        content = json.loads(messages[1]['content'])
+        self.assertEqual(content['blocks'][0]['before_leaf_text'], block['before_leaf_text'])
+        self.assertEqual(content['revision_brief'], self._brief())
+
     def test_review_item_generation_limits_output_size(self):
         self.manager.app.llm_api.run_with_metadata.return_value = {
             'content': '{"items": []}',
