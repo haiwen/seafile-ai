@@ -37,3 +37,13 @@ class SeahubAPI:
         }
         response = requests.post(url, files=files, data=data, headers=headers, timeout=self.timeout)
         return parse_response(response)
+
+    def create_sdoc(self, draft, token):
+        url = f'{self.server_url}/api/v2.1/ai/chat/sdoc-create/'
+        response = requests.post(url, json=draft,
+                                 headers={'Authorization': 'Token %s' % token},
+                                 timeout=self.timeout)
+        if 400 <= response.status_code < 500:
+            return {'type': 'sdoc', 'status': 'failed', 'error_code': 'create_failed'}
+        response.raise_for_status()
+        return response.json()

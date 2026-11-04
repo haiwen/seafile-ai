@@ -61,7 +61,12 @@ class OpenAIToolExecutor(BasicToolExecutor):
     def execute(self, tool_call, call_back=lambda *args, **kwargs: None):
         function = tool_call['function']
         name = function['name']
+        if name not in self.tools:
+            raise InvalidToolException('Tool is not available for this request')
         params = json.loads(function.get('arguments', '{}'))
+        properties = self.tools[name]['tool_info']['function']['parameters'].get('properties', {})
+        if not isinstance(params, dict) or set(params) - set(properties):
+            raise InvalidToolException('Unexpected tool arguments')
         constant_kwargs = self.tools[name]['constant_kwargs']
         available_params = inspect.signature(self.tools[name]['func']).parameters
         params.update({
@@ -75,4 +80,8 @@ class OpenAIToolExecutor(BasicToolExecutor):
         if 'call_back' in available_params and 'call_back' not in params:
             params['call_back'] = call_back
 
-        return self.tools[name]['func'](**params)
+        self.current_tool_call_id = tool_call.get('id', '')
+        try:
+            return self.tools[name]['func'](**params)
+        finally:
+            self.current_tool_call_id = ''

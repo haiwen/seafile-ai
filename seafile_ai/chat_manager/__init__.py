@@ -7,6 +7,7 @@ from seafile_ai.db.models import ChatMessages
 from seafile_ai.chat_manager.memory import OpenAIMemory, build_memory_from_db
 from seafile_ai.chat_manager.system_prompts import MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT
 from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, MarkdownGenerator, ReadFiles
+from seafile_ai.skills import SkillRegistry
 from seafile_ai.chat_manager.utils import (
     build_chat_system_prompts,
     combine_attachments_to_message,
@@ -47,8 +48,13 @@ class BasicChat:
             tool.register(tool_executor)
 
     def __call__(self, message, attachments, context, model):
+        context = dict(context)
+        skill, message = SkillRegistry.select(message)
+        context['selected_skill_id'] = skill.name if skill else None
+        context['skill_content'] = skill.content if skill else ''
         tool_executor = OpenAIToolExecutor()
         self._register_tools(tool_executor, context, model)
+        SkillRegistry.register_tools(skill, tool_executor, context, self.app.seahub_api)
         return self.run(model, tool_executor, message, attachments, context=context)
 
     def _prepare_chat_memory(self, system_prompts, session_uuid, repo_id):
@@ -83,6 +89,8 @@ class StreamingChat(BasicChat):
                 context.get('repo_prompt', ''),
                 documents_search_registered=bool(self.search_tools),
             )
+            if context.get('skill_content'):
+                system_prompts.append({'role': 'system', 'content': context['skill_content']})
             memory = self._prepare_chat_memory(system_prompts, context.get('session_uuid'), context.get('repo_id'))
 
             user_raw_message = combine_attachments_to_message(attachments, message)
@@ -341,14 +349,22 @@ class StreamingChat(BasicChat):
                 completion_retries = []
 
                 answer, sources = get_answer_and_sources(tool_executor, content)
-                yield SSE.results(answer, sources, tool_executor.thought_process.details)
+                yield SSE.results(
+                    answer,
+                    sources,
+                    tool_executor.thought_process.details,
+                )
                 yield SSE.done()
                 break
         except Exception as error:
             logger.exception('Streaming run AI failure: %s', error)
             try:
+                answer = 'There is an issue with the AI server or web server (LLM or internal server error), please try again later'
+                result_tag = tool_executor.cache.get('sdoc_create_result')
+                if result_tag:
+                    answer += '\n\n' + result_tag
                 yield SSE.results(
-                    'There is an issue with the AI server or web server (LLM or internal server error), please try again later',
+                    answer,
                     [],
                     tool_executor.thought_process.details,
                 )
