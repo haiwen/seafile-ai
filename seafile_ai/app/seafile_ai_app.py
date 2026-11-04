@@ -8,6 +8,7 @@ from seafile_ai.utils.seahub_api import SeahubAPI
 from seafile_ai.data_logging.data_logging import DataLogging
 from seafile_ai.utils.llm_api import LLMAPI
 from seafile_ai.utils.embedding_api import EmbeddingAPI
+from seafile_ai.utils.image_generation_api import ImageGenerationAPI
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,10 @@ class SeafileAIApp(object):
 
         self.text_processing_manager = TextProcessingManager(self, config.DEFAULT_LLM_MODEL.get('type', 'openai'))
         self.image_processing_manager = ImageProcessingManager(self)
+        self.image_generation_api = (
+            ImageGenerationAPI(config.IMAGE_GENERATION_MODEL_CONFIG)
+            if config.IMAGE_GENERATION_MODEL_CONFIG else None
+        )
         # self.face_recognition_manager = FaceRecognitionManager(self)
         self.streaming_chat = StreamingChat(self)
         self.seafile_ai_http_server = SeafileAIHttpServer(self)

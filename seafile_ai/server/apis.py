@@ -12,10 +12,41 @@ from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionExcep
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
 from seafile_ai.repo_metadata.constants import TAGS_TABLE
 from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
+from seafile_ai.utils.image_generation_api import CoverGenerationError
 
 
 logger = logging.getLogger(__name__)
 flask_app = Flask(__name__)
+
+
+@flask_app.route('/api/v1/generate-cover-image/', methods=['GET', 'POST'])
+def generate_cover_image():
+    auth = request.headers.get('Authorization', '').split()
+    if len(auth) != 2 or auth[0].lower() != 'token':
+        return {'error_msg': 'Permission denied'}, 403
+    try:
+        jwt.decode(auth[1], config.SECRET_KEY, algorithms=['HS256'], options={'require': ['exp']})
+    except jwt.InvalidTokenError:
+        return {'error_msg': 'Permission denied'}, 403
+    client = flask_app.app.image_generation_api
+    if request.method == 'GET':
+        return {'available': client is not None}
+    if client is None:
+        return {'error_msg': 'Cover image generation is not configured.'}, 503
+    if request.content_length is None or request.content_length > 16 * 1024:
+        return {'error_msg': 'Bad request.'}, 400
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return {'error_msg': 'Bad request.'}, 400
+    try:
+        image = client.generate_cover(data.get('prompt'))
+    except CoverGenerationError as error:
+        return {'error_msg': str(error)}, error.status
+    except Exception:
+        # Do not log provider payloads, prompts or credentials.
+        logger.error('Unexpected cover image generation failure')
+        return {'error_msg': 'Image generation failed.'}, 502
+    return Response(image, content_type='image/png', headers={'Cache-Control': 'no-store'})
 
 
 def check_auth_token(req):
