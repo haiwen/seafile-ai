@@ -45,6 +45,10 @@ class LLMAPI:
             kwargs.pop('api_key')
 
         context = kwargs.pop('context', {})
+        request_timeout = kwargs.pop('request_timeout_seconds', None)
+        timeout = self.timeout
+        if isinstance(request_timeout, (int, float)) and 0 < request_timeout <= self.timeout:
+            timeout = request_timeout
         try:
             gpt_version = re.search(r'\bgpt-(\d+)\b', self.model_id)
             if gpt_version and int(gpt_version.group(1)) >= 5:
@@ -64,7 +68,7 @@ class LLMAPI:
                 base_url=self.base_url,
                 api_key=self.api_key,
                 custom_llm_provider=self.llm_type,
-                timeout=self.timeout,
+                timeout=timeout,
                 **kwargs,
             )
         except Exception as error:
@@ -81,11 +85,14 @@ class LLMAPI:
         self._logger_usage_from_response(response, context)
         return response
 
-    def run(self, messages, context=None, **kwargs):
+    def _run_completion(self, messages, context=None, **kwargs):
         context = context or {}
         assert isinstance(messages, (list, tuple))
 
         kwargs['messages'] = messages
+        request_timeout = context.get('request_timeout_seconds')
+        if isinstance(request_timeout, (int, float)):
+            kwargs['request_timeout_seconds'] = request_timeout
         if 'temperature' not in kwargs:
             kwargs['temperature'] = 0
         if kwargs.get('json_mode'):
@@ -94,8 +101,28 @@ class LLMAPI:
             response_format.update({'type': 'json_object'})
             kwargs['response_format'] = response_format
 
-        response = self.completion(context=context, **kwargs)
+        return self.completion(context=context, **kwargs)
+
+    def run(self, messages, context=None, **kwargs):
+        response = self._run_completion(messages, context, **kwargs)
         return response.choices[0].message.to_dict() if 'tools' in kwargs else response.choices[0].message.content
+
+    def run_with_metadata(self, messages, context=None, **kwargs):
+        """Return text together with completion metadata needed by callers.
+
+        Most existing features only need the generated text and continue to
+        use ``run``. Long-running structured tasks also need the provider's
+        finish reason so they can distinguish a complete response from JSON
+        that was cut off by an output limit.
+        """
+        response = self._run_completion(messages, context, **kwargs)
+        choice = response.choices[0]
+        finish_reason = getattr(choice, 'finish_reason', None)
+        return {
+            'content': choice.message.content,
+            'finish_reason': finish_reason if isinstance(finish_reason, str) else None,
+            'token_usage': dict(self.last_token_usage),
+        }
 
     def logger_usage(self, token_usage, context, model=None):
         if context.get('log_data') is False:
