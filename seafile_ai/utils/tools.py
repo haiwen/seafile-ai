@@ -9,8 +9,6 @@ from seafile_ai.utils.thought_process_recorder import ThoughtProcessRecorder
 def filter_tool_calls_content(tool_name, results):
     if tool_name == 'read_files':
         return remove_sources_content_and_snippets(deepcopy(results))
-    if tool_name == 'create_sdoc':
-        return {key: results[key] for key in ('status', 'relative_path', 'error_code') if key in results}
     return results
 
 
@@ -63,11 +61,12 @@ class OpenAIToolExecutor(BasicToolExecutor):
     def execute(self, tool_call, call_back=lambda *args, **kwargs: None):
         function = tool_call['function']
         name = function['name']
+        if name not in self.tools:
+            raise InvalidToolException('Tool is not available for this request')
         params = json.loads(function.get('arguments', '{}'))
-        if name in ('load_skill', 'create_sdoc'):
-            properties = self.tools[name]['tool_info']['function']['parameters']['properties']
-            if not isinstance(params, dict) or set(params) - set(properties):
-                raise InvalidToolException('Unexpected tool arguments')
+        properties = self.tools[name]['tool_info']['function']['parameters'].get('properties', {})
+        if not isinstance(params, dict) or set(params) - set(properties):
+            raise InvalidToolException('Unexpected tool arguments')
         constant_kwargs = self.tools[name]['constant_kwargs']
         available_params = inspect.signature(self.tools[name]['func']).parameters
         params.update({

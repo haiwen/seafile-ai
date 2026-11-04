@@ -6,7 +6,8 @@ from seafile_ai import config
 from seafile_ai.db.models import ChatMessages
 from seafile_ai.chat_manager.memory import OpenAIMemory, build_memory_from_db
 from seafile_ai.chat_manager.system_prompts import MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT
-from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, LoadSkill, MarkdownGenerator, ReadFiles
+from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, MarkdownGenerator, ReadFiles
+from seafile_ai.skills import SkillRegistry
 from seafile_ai.chat_manager.utils import (
     build_chat_system_prompts,
     combine_attachments_to_message,
@@ -37,7 +38,6 @@ class BasicChat:
         self.content_generators = (
             MarkdownGenerator(),
         )
-        self.skill_tools = (LoadSkill(),)
 
     def _register_tools(self, tool_executor, context, model=None):
         for tool in self.directory_tools:
@@ -46,12 +46,15 @@ class BasicChat:
             tool.register(tool_executor, context=context, app=self.app, model=model)
         for tool in self.content_generators:
             tool.register(tool_executor)
-        for tool in self.skill_tools:
-            tool.register(tool_executor, context=context, seahub_api=self.app.seahub_api)
 
     def __call__(self, message, attachments, context, model):
+        context = dict(context)
+        skill, message = SkillRegistry.select(message)
+        context['selected_skill_id'] = skill.name if skill else None
+        context['skill_content'] = skill.content if skill else ''
         tool_executor = OpenAIToolExecutor()
         self._register_tools(tool_executor, context, model)
+        SkillRegistry.register_tools(skill, tool_executor, context, self.app.seahub_api)
         return self.run(model, tool_executor, message, attachments, context=context)
 
     def _prepare_chat_memory(self, system_prompts, session_uuid, repo_id):
@@ -86,6 +89,8 @@ class StreamingChat(BasicChat):
                 context.get('repo_prompt', ''),
                 documents_search_registered=bool(self.search_tools),
             )
+            if context.get('skill_content'):
+                system_prompts.append({'role': 'system', 'content': context['skill_content']})
             memory = self._prepare_chat_memory(system_prompts, context.get('session_uuid'), context.get('repo_id'))
 
             user_raw_message = combine_attachments_to_message(attachments, message)
@@ -323,9 +328,6 @@ class StreamingChat(BasicChat):
                             tool_calls_num,
                         )
 
-                    for skill_prompt in tool_executor.cache.pop('skill_prompts', []):
-                        memory.append({'role': 'system', 'content': skill_prompt})
-
                     tool_executor.thought_process.update_last_group_tokens_usage(token_usage)
                     tool_executor.thought_process.set_last_group_time_usage(time.time() - time_begin)
                     completion_retries = []
@@ -351,18 +353,20 @@ class StreamingChat(BasicChat):
                     answer,
                     sources,
                     tool_executor.thought_process.details,
-                    tool_executor.cache.get('artifacts', []),
                 )
                 yield SSE.done()
                 break
         except Exception as error:
             logger.exception('Streaming run AI failure: %s', error)
             try:
+                answer = 'There is an issue with the AI server or web server (LLM or internal server error), please try again later'
+                result_tag = tool_executor.cache.get('sdoc_create_result')
+                if result_tag:
+                    answer += '\n\n' + result_tag
                 yield SSE.results(
-                    'There is an issue with the AI server or web server (LLM or internal server error), please try again later',
+                    answer,
                     [],
                     tool_executor.thought_process.details,
-                    tool_executor.cache.get('artifacts', []),
                 )
             except Exception:
                 yield SSE.error(repr(error))

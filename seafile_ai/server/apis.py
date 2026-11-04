@@ -8,6 +8,7 @@ from flask import Flask, Response, request, stream_with_context
 from pathlib import Path
 
 from seafile_ai import config
+from seafile_ai.skills import SkillRegistry
 from seafile_ai.chat_manager.utils import generate_chat_title as generate_chat_title_by_ai
 from seafile_ai.utils import InvalidWritingTypeException, LLMChatCompletionException, FormatNotSupportedException
 from seafile_ai.utils.constants import LANGUAGE, SUMMARY_SUPPORTED_FILES
@@ -37,6 +38,14 @@ def check_auth_token(req):
     return True
 
 
+@flask_app.route('/api/v1/skills', methods=['GET'])
+def builtin_skills():
+    if not check_auth_token(request):
+        return {'error_msg': 'Permission denied'}, 403
+    return {'skills': [{'name': skill.name, 'description': skill.description}
+                       for skill in SkillRegistry.available_skills()]}
+
+
 @flask_app.route('/api/v1/get-ai-reply', methods=['POST'])
 def get_ai_reply():
     is_valid = check_auth_token(request)
@@ -59,8 +68,12 @@ def get_ai_reply():
     scenario = data.get('scenario', 'chat')
     message_id = data.get('message_id')
 
-    if not message:
+    if not isinstance(message, str) or not message.strip():
         return {'error_msg': 'question invalid.'}, 400
+    try:
+        SkillRegistry.select(message)
+    except ValueError as error:
+        return {'error_msg': str(error)}, 400
     if not repo_id:
         return {'error_msg': 'repo_id invalid.'}, 400
     if not isinstance(session_uuid, str) or not session_uuid:
