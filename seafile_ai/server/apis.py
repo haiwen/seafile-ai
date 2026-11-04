@@ -73,7 +73,8 @@ def get_ai_reply():
     try:
         SkillRegistry.select(message)
     except ValueError as error:
-        return {'error_msg': str(error)}, 400
+        logger.exception('Invalid skill selection input: %s', error)
+        return {'error_msg': 'question invalid.'}, 400
     if not repo_id:
         return {'error_msg': 'repo_id invalid.'}, 400
     if not isinstance(session_uuid, str) or not session_uuid:
