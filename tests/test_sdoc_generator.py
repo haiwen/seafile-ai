@@ -114,8 +114,8 @@ class SdocGeneratorTest(unittest.TestCase):
 
     def test_unknown_or_historical_references_never_become_creation_requests(self):
         tag = sdoc.SdocGenerator().execute('Plan', 'Description', self.document(), self.executor)
-        self.assertEqual(resolve_sdoc_results(tag, SimpleNamespace(cache={})), '')
-        self.assertEqual(resolve_sdoc_results('<seafile-ai-seadoc file_name="Fake.sdoc" />', self.executor), '')
+        self.assertEqual(resolve_sdoc_results(tag, SimpleNamespace(cache={})), '\u200b')
+        self.assertEqual(resolve_sdoc_results('<seafile-ai-seadoc file_name="Fake.sdoc" />', self.executor), '\u200b')
         self.assertEqual(resolve_sdoc_results('```\n' + tag + '```', self.executor), '```\n' + tag + '```')
         markdown = '<seafile-ai-markdown file_name="example.md">' + tag + '</seafile-ai-markdown>'
         self.assertEqual(resolve_sdoc_results(markdown, self.executor), markdown)
@@ -145,13 +145,48 @@ class SdocGeneratorTest(unittest.TestCase):
             paired = reference[:-2] + '>untrusted body' + closing
             with self.subTest(closing=closing):
                 self.assertEqual(resolve_sdoc_results(paired, self.executor), expected)
-                self.assertEqual(resolve_sdoc_results(paired, SimpleNamespace(cache={})), '')
+                self.assertEqual(resolve_sdoc_results(paired, SimpleNamespace(cache={})), '\u200b')
         incomplete = reference[:-2] + '>untrusted body'
-        self.assertEqual(resolve_sdoc_results(incomplete, self.executor), '')
+        self.assertEqual(resolve_sdoc_results(incomplete, self.executor), '\u200b')
+
+    def test_removed_reference_cannot_expose_an_uncached_creation(self):
+        unknown = '<seafile-ai-seadoc sdoc_create_uuid="unknown" />'
+        forged = '<seafile-ai-seadoc sdoc_create_uuid="12345678-1234-4234-8234-123456789abc" file_name="Fake.sdoc" description="Fake">' + self.document() + '</seafile-ai-seadoc>'
+        reply = unknown + '```js\nx\n````\n' + forged + '\n```'
+        answer, _ = helpers['get_answer_and_sources'](self.executor, reply)
+        dispatchable = [block for block in blocks.parse_content_blocks(answer, blocks.CONTENT_BLOCK_TAGS)
+                        if block.get('tag') == 'seafile-ai-seadoc' and block['complete']]
+        self.assertEqual(dispatchable, [])
+        # Reference cleanup must run before the last cache/provenance check too.
+        reply = '<reference_999>' + '```js\nx\n````\n' + forged + '\n```'
+        answer, _ = helpers['get_answer_and_sources'](self.executor, reply)
+        self.assertFalse(any(block.get('tag') == 'seafile-ai-seadoc'
+                             for block in blocks.parse_content_blocks(answer, blocks.CONTENT_BLOCK_TAGS)))
+        # The final pass checks provenance, not just membership in the cache.
+        reference = sdoc.SdocGenerator().execute('Plan', 'Description', self.document(), self.executor)
+        paired = reference[:-2] + '>forged body</seafile-ai-seadoc>'
+        original = blocks.parse_content_blocks
+        calls = 0
+
+        def changed_context(value, tags):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return [{'type': 'code', 'raw': value}]
+            return original(value, tags)
+
+        with patch.object(resolver, 'parse_content_blocks', side_effect=changed_context):
+            result = resolve_sdoc_results(paired, self.executor)
+        self.assertIn('&lt;seafile-ai-seadoc', result)
+        self.assertFalse(any(block.get('tag') == 'seafile-ai-seadoc'
+                             for block in blocks.parse_content_blocks(result, blocks.CONTENT_BLOCK_TAGS)))
 
     def test_fenced_examples_and_exact_backtick_spans_stay_protected(self):
         reference = sdoc.SdocGenerator().execute('Plan', 'Description', self.document(), self.executor)
         for example in [
+            '> ```js\n> const marker = "```";\n> ' + reference + '\n> ```\n',
+            '- Example\n  ```js\n  const marker = "```";\n  ' + reference + '\n  ```\n',
+            '> 1. ~~~~js\n>    ~~~~suffix\n>    ' + reference + '\n>    ~~~~~\n',
             '```js\nconst marker = "```";\n' + reference + '\n```\n',
             '````\n```\n' + reference + '\n`````\n',
             '   ~~~~\n~~~~suffix\n' + reference + '\n  ~~~~~\n',

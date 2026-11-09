@@ -204,7 +204,7 @@ def clean_markdown_references(content, sources):
 
 def get_answer_and_sources(tool_executor, content):
     sources_results = tool_executor.cache.get('sources_results', [])
-    content = resolve_sdoc_results(content or '', tool_executor)
+    content = content or ''
 
     def replace_invalid_reference(match):
         source_index = int(match.group(1))
@@ -231,4 +231,6 @@ def get_answer_and_sources(tool_executor, content):
         source_index = int(origin.split('_')[1][:-1])
         sources.append(sources_results[source_index])
 
-    return clean_markdown_references(content, sources)
+    answer, sources = clean_markdown_references(content, sources)
+    # No Markdown/reference rewrite may run after the creation-boundary check.
+    return resolve_sdoc_results(answer, tool_executor), sources

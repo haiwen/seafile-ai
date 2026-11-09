@@ -18,17 +18,26 @@ def resolve_sdoc_results(answer, tool_executor):
     """Every consumer-visible SDoc must be rebuilt from the current tool cache."""
     cached_results = tool_executor.cache.get('sdoc_create_results', {})
     output = []
+    authorized_ranges = set()
+    length = 0
     for block in parse_content_blocks(answer, CONTENT_BLOCK_TAGS):
         if block['type'] != 'block' or block['tag'] != 'seafile-ai-seadoc':
             output.append(block['raw'])
+            length += len(block['raw'])
             continue
         if not block['complete']:
+            output.append('\u200b')
+            length += 1
             continue
         parser = SdocReferenceParser()
         parser.feed('<seafile-ai-seadoc%s>' % block['attributes'])
         identifier = parser.sdoc_create_uuid
         cached = cached_results.get(identifier)
         if cached is None:
+            # A non-Markdown boundary prevents joining the surrounding syntax.
+            # The final parse below remains necessary: text edits are not tokens.
+            output.append('\u200b')
+            length += 1
             continue
         # Ignore model-supplied metadata, status, and body for every tag variant.
         attributes = ' '.join('%s="%s"' % (key, escape(value, quote=True)) for key, value in (
@@ -36,5 +45,18 @@ def resolve_sdoc_results(answer, tool_executor):
             ('description', cached['description'])))
         body = json.dumps(cached['content'], ensure_ascii=False, allow_nan=False, separators=(',', ':'))
         body = body.replace('&', '\\u0026').replace('<', '\\u003c').replace('>', '\\u003e')
-        output.append('<seafile-ai-seadoc %s>\n%s\n</seafile-ai-seadoc>' % (attributes, body))
-    return ''.join(output)
+        expanded = '<seafile-ai-seadoc %s>\n%s\n</seafile-ai-seadoc>' % (attributes, body)
+        output.append(expanded)
+        authorized_ranges.add((length, length + len(expanded)))
+        length += len(expanded)
+    result = ''.join(output)
+    position = 0
+    for block in parse_content_blocks(result, CONTENT_BLOCK_TAGS):
+        end = position + len(block['raw'])
+        if (block.get('tag') == 'seafile-ai-seadoc' and block['complete'] and
+                not block['self_closing'] and (position, end) not in authorized_ranges):
+            # Fail closed rather than run another rewrite that can expose more
+            # blocks. Provenance is an output range, not a UUID/body comparison.
+            return escape(result, quote=False)
+        position = end
+    return result
