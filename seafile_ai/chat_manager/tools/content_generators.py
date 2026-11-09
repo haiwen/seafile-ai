@@ -57,13 +57,17 @@ class SdocGenerator(BasicTool):
         'type': 'function',
         'function': {
             'name': 'generate_sdoc',
-            'description': 'Generate an editable SeaDoc (.sdoc) document. The validated content is cached internally. Returns a self-closing <seafile-ai-seadoc sdoc_create_uuid="..." ... /> reference; include it verbatim in the final answer, outside code fences. Do not repeat the JSON content. Seahub saves the document after receiving the final answer; do not invent UUIDs, file paths, URLs or creation status.',
+            'description': '''Generate an editable SeaDoc document. SeaDoc is Seafile's rich-text document format, stored in .sdoc files; its content is represented as a tree of element nodes and text leaves.
+
+This tool accepts a simplified SeaDoc authoring format, not the native on-disk document envelope. Supply the document title and supported element nodes described by content. The application generates node IDs, structural child elements, format metadata and editor layout when compiling the native .sdoc document.
+
+The tool validates and caches the document, then returns a self-closing <seafile-ai-seadoc sdoc_create_uuid="..." ... /> reference. Include that reference verbatim in the final answer, outside code fences; do not repeat the JSON content. File persistence occurs after the final answer reaches Seahub, not during this tool call. Do not invent UUIDs, file paths, URLs or creation status.''',
             'parameters': {
                 'type': 'object',
                 'properties': {
                     'file_name': {
                         'type': 'string',
-                        'description': 'The .sdoc filename, not a path. Preserve the user-specified filename and language, appending .sdoc if needed. Otherwise choose a concise filename in the document language.',
+                        'description': 'The .sdoc filename, not a path. Preserve the user-specified name and language when valid; otherwise choose a concise valid name in the document language. The tool trims surrounding whitespace and appends .sdoc if needed. The final filename, including the extension, must fit within 256 UTF-8 bytes. It must not contain consecutive dots (..), path separators, control characters or emoji in the restricted SeaDoc filename ranges; .sdoc alone is invalid. Invalid names raise an error before caching; correct the filename and retry.',
                     },
                     'description': {
                         'type': 'string',
@@ -71,120 +75,281 @@ class SdocGenerator(BasicTool):
                     },
                     'content': {
                         'type': 'string',
-                        'description': '''Generate the document using the following simplified SDoc content format.
+                        'description': '''Simplified SeaDoc authoring format
 
-## Argument encoding and document structure
-- Pass content as a JSON-encoded STRING, not a JSON object, Markdown text, or a fenced code block.
-- The decoded JSON object must contain exactly these two required fields:
-  - title: a nonempty plain-text string. Do not use a title object, children, or formatting marks.
-  - elements: an array of 1-200 body blocks, in reading order.
-- Put the document's main title in title. Do not repeat it as the first body heading unless requested.
-- The JSON examples below show decoded content. When calling the tool, serialize the whole document object into the content string; do not serialize individual blocks separately.
+## 1. Document format
+- Pass content as a JSON-encoded string, not an object argument, Markdown source or a fenced JSON example.
+- The decoded document has exactly two required properties:
+  - title (string): nonempty plain-text document title, without formatting or child nodes.
+  - elements (array): 1-200 top-level element nodes in reading order.
+- The application converts title into the native title element. Do not repeat it as a body heading unless requested.
+- All examples below show decoded JSON. Serialize the complete document once to obtain the content argument; do not serialize individual element nodes.
+- Minimal document:
+  {
+    "title": "Project plan",
+    "elements": [
+      {
+        "type": "paragraph",
+        "children": [
+          { "text": "Prepare the release." }
+        ]
+      }
+    ]
+  }
 
-## Text nodes and inline formatting
-- A text node has these fields:
-  - text (required): a string.
-  - bold, italic, strikethrough, code (optional): boolean formatting marks.
-- Do not give text nodes a type field. Omit unused marks instead of setting them to false.
-- Split differently formatted spans into separate text nodes and preserve spaces between spans.
-- Example for Markdown "This is **important**.":
-  [{"text":"This is "},{"text":"important","bold":true},{"text":"."}]
-- Empty text is allowed, for example {"text":""} in a blank paragraph or table cell.
-- Every children array must contain at least one node, even for blank content.
+## 2. Nodes and rich-text marks
 
-## Supported body blocks and links
-- Paragraph:
-  - Required fields: type="paragraph", children.
-  - children contains text nodes and/or inline links.
-  - Example: {"type":"paragraph","children":[{"text":"Document content."}]}
+### Element nodes
+- An element node represents a semantic part of the document and has a required type property.
+- Its other required properties depend on its type. Do not assume every element node takes children: lists use items, code_block uses text, table uses rows, and divider has no content property in this authoring format.
+- A block-level element belongs in elements. An inline element belongs only in an allowed children array; link is the only supported inline element.
 
-- Heading:
-  - Required fields: type="header1" through "header6", children.
-  - children contains text nodes only; links are not supported here.
-  - Match the Markdown heading level: "## Deployment" becomes:
-    {"type":"header2","children":[{"text":"Deployment"}]}
+### Text leaves
+- A text leaf has text (required, string) and optional rich-text marks. It has no type or children property.
+- Example: { "text": "Document content" }.
+- An empty text leaf { "text": "" } represents blank editable content.
+- Wherever children is specified below, it must be a nonempty array, including for blank content.
 
-- Block quote:
-  - Required fields: type="blockquote", children.
-  - children directly contains text nodes and/or links, NOT paragraph blocks.
-  - Example for Markdown "> A useful note":
-    {"type":"blockquote","children":[{"text":"A useful note"}]}
+### Rich-text marks
+- Supported marks: bold, italic, strikethrough and code (optional, boolean).
+- Omit unused marks. Split differently formatted text into separate leaves, preserving spaces between them.
+- Example for "This is **important**.":
+  [
+    { "text": "This is " },
+    { "text": "important", "bold": true },
+    { "text": "." }
+  ]
+- Other native SeaDoc marks, including underline, colors and fonts, are not supported by this tool.
 
-- Inline link (not a standalone body block):
-  - Required fields: type="link", href, children.
-  - href must be a complete HTTP or HTTPS URL.
-  - children contains text nodes only; nested links are not supported.
-  - Links are supported inside paragraphs, quotes, list items, task items and table cells.
-  - Do not add a title field; the application derives it from the link's text.
-  - Example for Markdown "[Docs](https://example.com/docs)":
-    {"type":"link","href":"https://example.com/docs","children":[{"text":"Docs"}]}
+## 3. Supported element types
+- Top-level: paragraph; header1 through header6; blockquote; ordered_list; unordered_list; check_list_item; code_block; divider; table.
+- Inline: link, supported in paragraphs, blockquotes, list items, task items and table cells. Heading children and link children accept text leaves only.
+- Structural children in native SeaDoc, such as list_item, code_line, table_row and table_cell, are generated by the application. Do not supply them as typed nodes or as top-level element nodes.
+- items, rows and cells below contain simplified structural objects, not native typed element nodes.
+- This is a supported subset and authoring representation of SeaDoc, not the complete native .sdoc schema.
 
-- Ordered or unordered list:
-  - Required fields: type="ordered_list" or "unordered_list", items.
-  - items contains 1-200 item objects. Each item has exactly one field: children.
-  - Each item's children directly contains text nodes and/or links, NOT paragraph blocks.
-  - Lists are flat: do not nest lists or other body blocks inside items.
-  - Use items for the list container, not children.
-  - Example for Markdown "- First item":
-    {"type":"unordered_list","items":[{"children":[{"text":"First item"}]}]}
+## 4. Element structures and examples
 
-- Task item:
-  - Required fields: type="check_list_item", checked, children.
-  - checked is a boolean: false for unchecked, true for completed.
-  - children contains text nodes and/or links.
-  - Each task is a separate body block; do not wrap tasks in a list container.
-  - Example for Markdown "- [ ] Review":
-    {"type":"check_list_item","checked":false,"children":[{"text":"Review"}]}
+### Paragraph — paragraph
+- Purpose: ordinary editable prose.
+- Required properties: type="paragraph"; children (array).
+- Child content: text leaves and/or inline link elements.
+- Example:
+  {
+    "type": "paragraph",
+    "children": [
+      { "text": "Document content." }
+    ]
+  }
 
-- Code block:
-  - Required fields: type="code_block", language, text.
-  - language is a string such as "python"; use "" when unspecified.
-  - text contains the complete code, with JSON-escaped newlines. Do not include Markdown fences.
-  - Do not provide children or individual code-line nodes.
-  - Example: {"type":"code_block","language":"python","text":"print(1)\\nprint(2)"}
+### Heading — header1 through header6
+- Purpose: section headings at levels 1-6. The main document title is supplied separately through title.
+- Required properties: type="header1" through "header6"; children (array).
+- Child content: text leaves only; no links or nested element nodes.
+- Example for a level-two heading:
+  {
+    "type": "header2",
+    "children": [
+      { "text": "Deployment" }
+    ]
+  }
 
-- Horizontal rule:
-  - Only field: type="divider". Do not provide children.
-  - Example for Markdown "---": {"type":"divider"}
+### Blockquote — blockquote
+- Purpose: quoted content, such as a citation or highlighted quotation.
+- Required properties: type="blockquote"; children (array).
+- Child content: text leaves and/or inline link elements directly. Do not provide paragraph children; the application adds the native paragraph wrapper.
+- Example:
+  {
+    "type": "blockquote",
+    "children": [
+      { "text": "A useful quotation." }
+    ]
+  }
 
-- Table:
-  - Required fields: type="table", rows.
-  - rows contains 1-100 row objects. Each row has exactly one field: cells.
-  - cells contains 1-20 cell objects. Every row must contain the SAME number of cells.
-  - Each cell has exactly one field: children, containing text nodes and/or links.
-  - Include the header as the first row. Do not include the Markdown separator row.
-  - Do not add header flags, alignment, column widths, row heights or styles.
-  - Example with a header row and a data row:
-    {"type":"table","rows":[{"cells":[{"children":[{"text":"Name"}]},{"children":[{"text":"Value"}]}]},{"cells":[{"children":[{"text":"Phase"}]},{"children":[{"text":"One"}]}]}]}
+### Link — link (inline)
+- Purpose: a clickable HTTP/HTTPS reference within editable text, not a top-level element.
+- Required properties: type="link"; href (nonempty string); children (array).
+- href must be a complete HTTP or HTTPS URL with a host and no control characters.
+- Child content: text leaves only; links cannot contain other links.
+- Do not supply a link title property; the application derives it from the displayed text.
+- Example inside a paragraph:
+  {
+    "type": "paragraph",
+    "children": [
+      { "text": "See " },
+      {
+        "type": "link",
+        "href": "https://example.com/docs",
+        "children": [
+          { "text": "the documentation" }
+        ]
+      }
+    ]
+  }
 
-## Complete Markdown-to-SDoc example
-The following Markdown:
-# Project plan
+### Lists — ordered_list and unordered_list
+- Purpose: numbered items or bullet-point items.
+- Required properties: type="ordered_list" or "unordered_list"; items (array of 1-200 objects).
+- Each item has exactly one property: children (array of text leaves and/or inline link elements).
+- Lists are flat; no nested lists or other block-level elements. Supply items, not children, on the list element.
+- The application generates the native list_item and paragraph wrappers for each item.
+- Examples:
+  {
+    "type": "ordered_list",
+    "items": [
+      {
+        "children": [
+          { "text": "Prepare the server" }
+        ]
+      },
+      {
+        "children": [
+          { "text": "Start the service" }
+        ]
+      }
+    ]
+  }
 
-This is **phase one**.
+  {
+    "type": "unordered_list",
+    "items": [
+      {
+        "children": [
+          { "text": "Release notes" }
+        ]
+      }
+    ]
+  }
 
-## Deployment
-- Prepare the server
-- Start the service
+### Task item — check_list_item
+- Purpose: an individual task with a completion checkbox.
+- Required properties: type="check_list_item"; checked (boolean); children (array).
+- checked is false for an incomplete task and true for a completed task.
+- Child content: text leaves and/or inline link elements. Each task is a separate top-level element; do not wrap tasks in ordered_list or unordered_list.
+- Example:
+  {
+    "type": "check_list_item",
+    "checked": false,
+    "children": [
+      { "text": "Review the release" }
+    ]
+  }
 
-becomes this decoded document object:
+### Code — code_block
+- Purpose: source code or preformatted text in a selected language.
+- Required properties: type="code_block"; language (string); text (string).
+- Use a language such as "python", or "" when unspecified. text contains the complete source with JSON-escaped newlines, without Markdown fences.
+- Do not supply children or code_line nodes; the application generates the native code-line structure.
+- Example:
+  {
+    "type": "code_block",
+    "language": "python",
+    "text": "print(1)\\nprint(2)"
+  }
+
+### Divider — divider
+- Purpose: a horizontal separator; a void element in native SeaDoc.
+- Required property: type="divider". No other properties are allowed.
+- Do not supply children; the application adds the native empty text-leaf placeholder required by a void element.
+- Example:
+  {
+    "type": "divider"
+  }
+
+### Table — table
+- Purpose: rectangular tabular content.
+- Required properties: type="table"; rows (array of 1-100 objects).
+- Each row has exactly one property: cells (array of 1-20 objects). All rows must have the same number of cells.
+- Each cell has exactly one property: children (nonempty array of text leaves and/or inline link elements).
+- When there is a header, include its values in the first row. Do not include a Markdown separator row or header flags.
+- Do not supply table_row/table_cell types, column widths, alignment or styles; the application adds native structural nodes and layout defaults.
+- Example with a header row and a data row:
+  {
+    "type": "table",
+    "rows": [
+      {
+        "cells": [
+          {
+            "children": [
+              { "text": "Name" }
+            ]
+          },
+          {
+            "children": [
+              { "text": "Value" }
+            ]
+          }
+        ]
+      },
+      {
+        "cells": [
+          {
+            "children": [
+              { "text": "Phase" }
+            ]
+          },
+          {
+            "children": [
+              { "text": "One" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+
+## 5. Complete document example
 {
   "title": "Project plan",
   "elements": [
-    {"type":"paragraph","children":[{"text":"This is "},{"text":"phase one","bold":true},{"text":"."}]},
-    {"type":"header2","children":[{"text":"Deployment"}]},
-    {"type":"unordered_list","items":[{"children":[{"text":"Prepare the server"}]},{"children":[{"text":"Start the service"}]}]}
+    {
+      "type": "paragraph",
+      "children": [
+        { "text": "This is " },
+        { "text": "phase one", "bold": true },
+        { "text": "." }
+      ]
+    },
+    {
+      "type": "header2",
+      "children": [
+        { "text": "Deployment" }
+      ]
+    },
+    {
+      "type": "unordered_list",
+      "items": [
+        {
+          "children": [
+            { "text": "Prepare the server" }
+          ]
+        },
+        {
+          "children": [
+            { "text": "Start the service" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "check_list_item",
+      "checked": false,
+      "children": [
+        { "text": "Verify the deployment" }
+      ]
+    }
   ]
 }
-- In the actual tool call, content must be the JSON string encoding this object, not the object itself.
+- Pass the JSON string encoding this entire object as content.
 
-## Restrictions
-- Supply ONLY the fields documented above. All listed required fields must be present.
-- Never generate IDs, format versions, modification users, styles, widths or other editor metadata; the application supplies them.
-- Do not use images, embeds, formulas, columns, colors, fonts or unsupported element types.
-- Express unsupported formatting as ordinary text using the supported blocks.
+## 6. Constraints and native-format boundary
+- Supply only the documented properties, with every required property present.
+- Do not provide id, version, format_version, last_modify_user, cursors, style or other editor/collaboration metadata. The application compiles this authoring representation into the native .sdoc format and supplies required metadata.
+- Images, embeds, formulas, multi-column layouts and all other unlisted element types are unsupported. Express unsupported content as ordinary text using supported element nodes.
 - Do not include internal citation tokens such as <reference_0>; use descriptive text or actual HTTP/HTTPS links instead.
-- Keep the decoded document's compact JSON encoding (Unicode preserved, no optional whitespace) within 400000 characters and the total inline-node count within 20000. The encoded argument is separately bounded at 2400002 characters.''',
+- The compact JSON encoding of the decoded document, preserving Unicode and omitting optional whitespace, must not exceed 400000 characters. The encoded argument is separately limited to 2400002 characters.
+- The total inline-node count must not exceed 20000, counting both text leaves and inline link elements, including their text children.
+- Terminology and native-format reference: https://haiwen.github.io/seadoc-specification/support-types/ and its linked data-structure pages. Their native examples are reference material, not tool input; the complete accepted input format is defined above.''',
                     },
                 },
                 'required': ['file_name', 'description', 'content'],
@@ -202,6 +367,30 @@ becomes this decoded document object:
     def _string(value, name, nonempty=False):
         if not isinstance(value, str) or (nonempty and not value.strip()):
             raise ValueError('%s must be %sa string' % (name, 'a nonempty ' if nonempty else ''))
+
+    @staticmethod
+    def _validate_file_name(file_name):
+        """Match Seahub's SDoc boundary, including is_valid_dirent_name rules.
+
+        Keep these ranges in sync with seahub/utils/__init__.py. Do not import
+        Seahub here: the content tool must remain service-independent.
+        """
+        if (file_name.lower() == '.sdoc' or '..' in file_name or
+                '/' in file_name or '\\' in file_name or any(ord(char) < 32 for char in file_name)):
+            raise ValueError('file_name must be a valid .sdoc filename without paths, consecutive dots or control characters')
+        emoji_ranges = (
+            (0x1F600, 0x1F64F), (0x1F300, 0x1F5FF), (0x1F680, 0x1F6FF),
+            (0x1F1E0, 0x1F1FF), (0x2600, 0x26FF), (0x2700, 0x27BF),
+            (0x1F900, 0x1F9FF), (0x1FA00, 0x1FAFF),
+        )
+        if any(start <= ord(char) <= end for char in file_name for start, end in emoji_ranges):
+            raise ValueError('file_name contains a restricted emoji character; use ordinary text instead')
+        try:
+            encoded = file_name.encode('utf-8')
+        except UnicodeEncodeError as error:
+            raise ValueError('file_name must be valid UTF-8 text') from error
+        if len(encoded) > 256:
+            raise ValueError('file_name including .sdoc must not exceed 256 UTF-8 bytes')
 
     def _validate_sdoc_content(self, content):
         """Parse and validate content before it can become a file-creation tag."""
@@ -294,10 +483,9 @@ becomes this decoded document object:
         self._string(file_name, 'file_name', True)
         self._string(description, 'description', True)
         file_name = file_name.strip()
-        if '/' in file_name or '\\' in file_name or any(ord(c) < 32 for c in file_name) or file_name in ('.', '..', '.sdoc'):
-            raise ValueError('file_name must be a filename, not a path')
         if not file_name.lower().endswith('.sdoc'):
             file_name += '.sdoc'
+        self._validate_file_name(file_name)
         document = self._validate_sdoc_content(content)
         identifier = str(uuid.uuid4())
         tool_executor.cache.setdefault('sdoc_create_results', {})[identifier] = {

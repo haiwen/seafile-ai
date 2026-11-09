@@ -137,6 +137,54 @@ class SdocGeneratorTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             sdoc.SdocGenerator()._validate_sdoc_content(' ' * (sdoc.MAX_CONTENT_LENGTH + 1))
 
+    def test_final_filename_rules_fail_before_caching_and_allow_retry(self):
+        invalid = ['v1..2', '😀计划', '界' * 85, 'a' * 252, '.SDOC',
+                   'bad\x00name', '\ud800', 'folder/name', 'folder\\name']
+        for name in invalid:
+            with self.subTest(name=repr(name)):
+                with self.assertRaises(ValueError):
+                    sdoc.SdocGenerator().execute(name, 'Description', self.document(), self.executor)
+                self.assertEqual(self.executor.cache, {})
+        valid = ['计划', 'Plan.SDOC', '界' * 83 + 'aa', 'a' * 251, 'Résumé', '报告.第一版']
+        for name in valid:
+            with self.subTest(name=name):
+                executor = SimpleNamespace(cache={})
+                sdoc.SdocGenerator().execute('  ' + name + '  ', 'Description', self.document(), executor)
+                cached = next(iter(executor.cache['sdoc_create_results'].values()))
+                expected = name if name.lower().endswith('.sdoc') else name + '.sdoc'
+                self.assertEqual(cached['file_name'], expected)
+                self.assertLessEqual(len(expected.encode('utf-8')), 256)
+        sdoc.SdocGenerator().execute('Corrected', 'Description', self.document(), self.executor)
+        self.assertEqual(len(self.executor.cache['sdoc_create_results']), 1)
+
+    def test_filename_rules_match_real_seahub_predicate(self):
+        source_path = Path(__file__).resolve().parents[2] / 'seahub/seahub/utils/__init__.py'
+        if not source_path.exists():
+            self.skipTest('Requires adjacent Seahub checkout for real filename predicate')
+        tree = ast.parse(source_path.read_text())
+        predicate = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'is_valid_dirent_name')
+        scope = {}
+        exec(compile(ast.Module(body=[predicate], type_ignores=[]), str(source_path), 'exec'), scope)
+        real_predicate = scope['is_valid_dirent_name']
+        names = ['v1..2', '😀计划', '界' * 85, '界' * 83 + 'aa', 'a' * 251, 'a' * 252,
+                 '计划', 'Plan.SDOC', '.SDOC', '\ud800', 'bad\x01name', 'folder/name', 'folder\\name']
+        for start, end in [(0x1F600, 0x1F64F), (0x1F300, 0x1F5FF), (0x1F680, 0x1F6FF),
+                           (0x1F1E0, 0x1F1FF), (0x2600, 0x26FF), (0x2700, 0x27BF),
+                           (0x1F900, 0x1F9FF), (0x1FA00, 0x1FAFF)]:
+            names.extend('Plan' + chr(codepoint) for codepoint in (start - 1, start, end, end + 1))
+        for name in names:
+            final = name if name.lower().endswith('.sdoc') else name + '.sdoc'
+            expected = (real_predicate(final) and final.lower() != '.sdoc' and
+                        not any(ord(char) < 32 for char in final))
+            executor = SimpleNamespace(cache={})
+            with self.subTest(name=repr(name)):
+                if expected:
+                    sdoc.SdocGenerator().execute(name, 'Description', self.document(), executor)
+                else:
+                    with self.assertRaises(ValueError):
+                        sdoc.SdocGenerator().execute(name, 'Description', self.document(), executor)
+                    self.assertEqual(executor.cache, {})
+
     def test_closing_variants_require_current_cache(self):
         reference = sdoc.SdocGenerator().execute('Plan', 'Description', self.document(), self.executor)
         expected = resolve_sdoc_results(reference, self.executor)
