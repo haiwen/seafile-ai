@@ -149,6 +149,18 @@ class SdocGeneratorTest(unittest.TestCase):
         incomplete = reference[:-2] + '>untrusted body'
         self.assertEqual(resolve_sdoc_results(incomplete, self.executor), '')
 
+    def test_fenced_examples_and_exact_backtick_spans_stay_protected(self):
+        reference = sdoc.SdocGenerator().execute('Plan', 'Description', self.document(), self.executor)
+        for example in [
+            '```js\nconst marker = "```";\n' + reference + '\n```\n',
+            '````\n```\n' + reference + '\n`````\n',
+            '   ~~~~\n~~~~suffix\n' + reference + '\n  ~~~~~\n',
+            '``start `\n' + reference + '\n``` still code ``',
+        ]:
+            self.assertEqual(resolve_sdoc_results(example, self.executor), example)
+            self.assertEqual(resolve_sdoc_results(example + reference, self.executor),
+                             example + resolve_sdoc_results(reference, self.executor))
+
     def test_length_uses_canonical_decoded_json_not_transport_escapes(self):
         document = {'title': 'Boundary', 'elements': [{'type': 'code_block', 'language': '', 'text': ''}]}
         base_length = len(json.dumps(document, ensure_ascii=False, separators=(',', ':')))
