@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from seafile_ai import config
+from seafile_ai.chat_manager.utils.sdoc import resolve_sdoc_results
 from seafile_ai.chat_manager.system_prompts import (
     CHAT_CORE_PROMPT,
     CHAT_CONTENT_GENERATION_RULES,
@@ -203,7 +204,7 @@ def clean_markdown_references(content, sources):
 
 def get_answer_and_sources(tool_executor, content):
     sources_results = tool_executor.cache.get('sources_results', [])
-    content = content or ''
+    content = resolve_sdoc_results(content or '', tool_executor)
 
     def replace_invalid_reference(match):
         source_index = int(match.group(1))

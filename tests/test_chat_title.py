@@ -38,6 +38,10 @@ def load_chat_utils(llm_client):
     constants_module.MODEL_REASONING_TIER = SimpleNamespace(LOW=SimpleNamespace(value='low'))
     llm_api_module = ModuleType('seafile_ai.utils.llm_api')
     llm_api_module.get_llm_client_by_model_tier = Mock(return_value=llm_client)
+    sdoc_spec = importlib.util.spec_from_file_location(
+        'test_chat_title_sdoc_module', PROJECT_ROOT / 'seafile_ai/chat_manager/utils/sdoc.py')
+    sdoc_module = importlib.util.module_from_spec(sdoc_spec)
+    sdoc_spec.loader.exec_module(sdoc_module)
 
     spec = importlib.util.spec_from_file_location(
         'test_chat_title_utils_module',
@@ -48,6 +52,7 @@ def load_chat_utils(llm_client):
         'seafile_ai': seafile_ai_module,
         'seafile_ai.config': config_module,
         'seafile_ai.chat_manager.system_prompts': prompts_module,
+        'seafile_ai.chat_manager.utils.sdoc': sdoc_module,
         'seafile_ai.repo_metadata.constants': metadata_constants_module,
         'seafile_ai.repo_metadata.metadata_server_api': metadata_api_module,
         'seafile_ai.repo_metadata.utils': metadata_utils_module,
