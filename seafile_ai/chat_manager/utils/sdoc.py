@@ -1,13 +1,8 @@
 import json
-import re
 from html import escape
 from html.parser import HTMLParser
 
-
-SDOC_TAG_RE = re.compile(
-    r'<seafile-ai-seadoc\b(?P<attributes>(?:[^>"\']|"[^"]*"|\'[^\']*\')*?)'
-    r'(?:\s*/>|>[\s\S]*?</seafile-ai-seadoc>)'
-)
+from seafile_ai.chat_manager.utils.content_blocks import CONTENT_BLOCK_TAGS, parse_content_blocks
 
 
 class SdocReferenceParser(HTMLParser):
@@ -20,26 +15,26 @@ class SdocReferenceParser(HTMLParser):
 
 
 def resolve_sdoc_results(answer, tool_executor):
-    """Expand references using only content validated and cached by this request's tool."""
+    """Every consumer-visible SDoc must be rebuilt from the current tool cache."""
     cached_results = tool_executor.cache.get('sdoc_create_results', {})
-
-    def replace(match):
+    output = []
+    for block in parse_content_blocks(answer, CONTENT_BLOCK_TAGS):
+        if block['type'] != 'block' or block['tag'] != 'seafile-ai-seadoc':
+            output.append(block['raw'])
+            continue
+        if not block['complete']:
+            continue
         parser = SdocReferenceParser()
-        parser.feed('<seafile-ai-seadoc%s>' % match.group('attributes'))
+        parser.feed('<seafile-ai-seadoc%s>' % block['attributes'])
         identifier = parser.sdoc_create_uuid
         cached = cached_results.get(identifier)
         if cached is None:
-            return ''
-        # Never use model-supplied metadata or content, even when it changes the tag shape.
+            continue
+        # Ignore model-supplied metadata, status, and body for every tag variant.
         attributes = ' '.join('%s="%s"' % (key, escape(value, quote=True)) for key, value in (
             ('sdoc_create_uuid', identifier), ('file_name', cached['file_name']),
             ('description', cached['description'])))
-        body = json.dumps(cached['content'], ensure_ascii=False, allow_nan=False)
+        body = json.dumps(cached['content'], ensure_ascii=False, allow_nan=False, separators=(',', ':'))
         body = body.replace('&', '\\u0026').replace('<', '\\u003c').replace('>', '\\u003e')
-        return '<seafile-ai-seadoc %s>\n%s\n</seafile-ai-seadoc>' % (attributes, body)
-
-    pattern = re.compile(
-        r'(?P<code>```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`\n]*`+|'
-        r'<seafile-ai-markdown\b[^>]*>[\s\S]*?</seafile-ai-markdown>)|' + SDOC_TAG_RE.pattern
-    )
-    return pattern.sub(lambda match: match.group(0) if match.group('code') else replace(match), answer)
+        output.append('<seafile-ai-seadoc %s>\n%s\n</seafile-ai-seadoc>' % (attributes, body))
+    return ''.join(output)

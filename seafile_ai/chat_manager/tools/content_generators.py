@@ -184,7 +184,7 @@ becomes this decoded document object:
 - Do not use images, embeds, formulas, columns, colors, fonts or unsupported element types.
 - Express unsupported formatting as ordinary text using the supported blocks.
 - Do not include internal citation tokens such as <reference_0>; use descriptive text or actual HTTP/HTTPS links instead.
-- Keep the content string within 400000 characters and the total inline-node count within 20000.''',
+- Keep the decoded document's compact JSON encoding (Unicode preserved, no optional whitespace) within 400000 characters and the total inline-node count within 20000. The encoded argument is separately bounded at 2400002 characters.''',
                     },
                 },
                 'required': ['file_name', 'description', 'content'],
@@ -206,7 +206,8 @@ becomes this decoded document object:
     def _validate_sdoc_content(self, content):
         """Parse and validate content before it can become a file-creation tag."""
         self._string(content, 'content', True)
-        if len(content) > MAX_CONTENT_LENGTH:
+        # Bound parsing separately from the decoded, canonical content limit.
+        if len(content) > MAX_CONTENT_LENGTH * 6 + 2:
             raise ValueError('SDoc content is too large')
         if re.search(r'<reference_\d+>', content):
             raise ValueError('SDoc content must not contain internal citation tokens')
@@ -214,6 +215,8 @@ becomes this decoded document object:
             document = json.loads(content)
         except (ValueError, RecursionError) as error:
             raise ValueError('content must be a JSON object string') from error
+        if len(json.dumps(document, ensure_ascii=False, allow_nan=False, separators=(',', ':'))) > MAX_CONTENT_LENGTH:
+            raise ValueError('SDoc content is too large')
         self._keys(document, ('title', 'elements'))
         self._string(document['title'], 'title', True)
         if re.search(r'<reference_\d+>', json.dumps(document, ensure_ascii=False)):

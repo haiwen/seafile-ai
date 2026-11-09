@@ -20,7 +20,13 @@ with patch.dict(sys.modules, {'seafile_ai.utils.tools': basic_tools}):
 resolver_spec = importlib.util.spec_from_file_location(
     'test_sdoc_results', Path(__file__).resolve().parents[1] / 'seafile_ai/chat_manager/utils/sdoc.py')
 resolver = importlib.util.module_from_spec(resolver_spec)
-resolver_spec.loader.exec_module(resolver)
+blocks_spec = importlib.util.spec_from_file_location(
+    'seafile_ai.chat_manager.utils.content_blocks',
+    Path(__file__).resolve().parents[1] / 'seafile_ai/chat_manager/utils/content_blocks.py')
+blocks = importlib.util.module_from_spec(blocks_spec)
+blocks_spec.loader.exec_module(blocks)
+with patch.dict(sys.modules, {'seafile_ai.chat_manager.utils.content_blocks': blocks}):
+    resolver_spec.loader.exec_module(resolver)
 resolve_sdoc_results = resolver.resolve_sdoc_results
 
 source = ast.parse((Path(__file__).resolve().parents[1] / 'seafile_ai/chat_manager/utils/__init__.py').read_text())
@@ -130,6 +136,33 @@ class SdocGeneratorTest(unittest.TestCase):
         self.assertEqual(self.executor.cache, {})
         with self.assertRaises(ValueError):
             sdoc.SdocGenerator()._validate_sdoc_content(' ' * (sdoc.MAX_CONTENT_LENGTH + 1))
+
+    def test_closing_variants_require_current_cache(self):
+        reference = sdoc.SdocGenerator().execute('Plan', 'Description', self.document(), self.executor)
+        expected = resolve_sdoc_results(reference, self.executor)
+        for closing in ['</seafile-ai-seadoc >', '</seafile-ai-seadoc\n>', '</seafile-ai-seadoc\t>',
+                        '</seafile-ai-seadoc/>', '</seafile-ai-seadoc ignored="yes">']:
+            paired = reference[:-2] + '>untrusted body' + closing
+            with self.subTest(closing=closing):
+                self.assertEqual(resolve_sdoc_results(paired, self.executor), expected)
+                self.assertEqual(resolve_sdoc_results(paired, SimpleNamespace(cache={})), '')
+        incomplete = reference[:-2] + '>untrusted body'
+        self.assertEqual(resolve_sdoc_results(incomplete, self.executor), '')
+
+    def test_length_uses_canonical_decoded_json_not_transport_escapes(self):
+        document = {'title': 'Boundary', 'elements': [{'type': 'code_block', 'language': '', 'text': ''}]}
+        base_length = len(json.dumps(document, ensure_ascii=False, separators=(',', ':')))
+        document['elements'][0]['text'] = '<' * (sdoc.MAX_CONTENT_LENGTH - base_length)
+        content = json.dumps(document, ensure_ascii=False)
+        reference = sdoc.SdocGenerator().execute('Boundary', 'Test', content, self.executor)
+        expanded = resolve_sdoc_results(reference, self.executor)
+        self.assertGreater(len(expanded), sdoc.MAX_CONTENT_LENGTH)
+        self.assertEqual(json.loads(expanded.split('>', 1)[1].rsplit('</', 1)[0]), document)
+        document['elements'][0]['text'] += 'x'
+        with self.assertRaises(ValueError):
+            sdoc.SdocGenerator()._validate_sdoc_content(json.dumps(document))
+        with self.assertRaises(ValueError):
+            sdoc.SdocGenerator()._validate_sdoc_content(' ' * (sdoc.MAX_CONTENT_LENGTH * 6 + 3))
 
 
 if __name__ == '__main__':

@@ -41,7 +41,12 @@ def load_chat_utils(llm_client):
     sdoc_spec = importlib.util.spec_from_file_location(
         'test_chat_title_sdoc_module', PROJECT_ROOT / 'seafile_ai/chat_manager/utils/sdoc.py')
     sdoc_module = importlib.util.module_from_spec(sdoc_spec)
-    sdoc_spec.loader.exec_module(sdoc_module)
+    blocks_spec = importlib.util.spec_from_file_location(
+        'seafile_ai.chat_manager.utils.content_blocks', PROJECT_ROOT / 'seafile_ai/chat_manager/utils/content_blocks.py')
+    blocks_module = importlib.util.module_from_spec(blocks_spec)
+    blocks_spec.loader.exec_module(blocks_module)
+    with patch.dict(sys.modules, {'seafile_ai.chat_manager.utils.content_blocks': blocks_module}):
+        sdoc_spec.loader.exec_module(sdoc_module)
 
     spec = importlib.util.spec_from_file_location(
         'test_chat_title_utils_module',
