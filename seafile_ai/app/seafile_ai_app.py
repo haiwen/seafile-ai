@@ -6,7 +6,6 @@ from seafile_ai.text_processing.text_processing_manager import TextProcessingMan
 from seafile_ai.db import init_db_session_class
 from seafile_ai.utils.seahub_api import SeahubAPI
 from seafile_ai.data_logging.data_logging import DataLogging
-from seafile_ai.utils.llm_api import CompletionAPI
 from seafile_ai.utils.embedding_api import EmbeddingAPI
 
 logger = logging.getLogger(__name__)
@@ -16,14 +15,6 @@ class SeafileAIApp(object):
         self.config = config
         self.db_session_class = init_db_session_class()
         self.data_logger = DataLogging(config.REDIS_HOST, config.REDIS_PORT, config.REDIS_PASSWORD)
-        self.llm_api = CompletionAPI(
-            self.data_logger,
-            config.DEFAULT_LLM_MODEL.get('model'),
-            config.DEFAULT_LLM_MODEL.get('type', 'openai'),
-            config.DEFAULT_LLM_MODEL.get('url'),
-            config.DEFAULT_LLM_MODEL.get('key'),
-            timeout=180,
-        )
         self.embedding_api = None
         seasearch_configured = bool(config.SEASEARCH_URL.strip() and config.SEASEARCH_TOKEN.strip())
         if seasearch_configured and config.EMBEDDING_MODEL_CONFIGURED:
