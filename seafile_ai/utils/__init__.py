@@ -8,6 +8,7 @@ from urllib.parse import quote as urlquote
 from urllib.parse import urlparse
 from pathlib import Path
 from io import BytesIO
+from zipfile import ZipFile
 from PIL import Image
 
 from pdfminer.high_level import extract_text
@@ -20,6 +21,9 @@ from seafobj import fs_mgr
 logger = logging.getLogger(__name__)
 
 ZERO_OBJ_ID = '0000000000000000000000000000000000000000'
+DOCX_MAX_MEMBER_SIZE = 32 * 1024 * 1024
+DOCX_MAX_UNCOMPRESSED_SIZE = 128 * 1024 * 1024
+
 def parse_response(response):
     if response.status_code >= 400 or response.status_code < 200:
         raise ConnectionError(response.status_code, response.text)
@@ -104,6 +108,15 @@ def parse_file_content(file_name, doc):
 
     return parser_mapping.get(file_ext, lambda x: '')(doc)
 def docx2md(file):
+    # Check ZIP metadata before Mammoth allocates decompressed XML and its tree.
+    with ZipFile(BytesIO(file)) as archive:
+        total = 0
+        for member in archive.infolist():
+            total += member.file_size
+            if (member.file_size > DOCX_MAX_MEMBER_SIZE
+                    or total > DOCX_MAX_UNCOMPRESSED_SIZE):
+                raise FileSizeLimitExceeded(
+                    'DOCX uncompressed content is too large to process.')
     ignore_images = lambda _: []
     result = mammoth.convert_to_markdown(BytesIO(file), convert_image=ignore_images)
     return result.value.replace('\\', '')
