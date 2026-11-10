@@ -232,6 +232,12 @@ class SdocGeneratorTest(unittest.TestCase):
     def test_fenced_examples_and_exact_backtick_spans_stay_protected(self):
         reference = sdoc.SdocGenerator().execute('Plan', 'Description', self.document(), self.executor)
         for example in [
+            '    ' + reference + '\n',
+            '\t' + reference + '\n',
+            '```\n    ```\n' + reference + '\n```\n',
+            '```\n\t```\n' + reference + '\n```\n',
+            '- Example\n  ```\n      ```\n  ' + reference + '\n  ```\n',
+            '> ```\n>     ```\n> ' + reference + '\n> ```\n',
             '> ```js\n> const marker = "```";\n> ' + reference + '\n> ```\n',
             '- Example\n  ```js\n  const marker = "```";\n  ' + reference + '\n  ```\n',
             '> 1. ~~~~js\n>    ~~~~suffix\n>    ' + reference + '\n>    ~~~~~\n',
