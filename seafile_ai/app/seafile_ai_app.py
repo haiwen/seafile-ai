@@ -6,7 +6,7 @@ from seafile_ai.text_processing.text_processing_manager import TextProcessingMan
 from seafile_ai.db import init_db_session_class
 from seafile_ai.utils.seahub_api import SeahubAPI
 from seafile_ai.data_logging.data_logging import DataLogging
-from seafile_ai.utils.embedding_api import EmbeddingAPI
+from seafile_ai.utils.llm_api import EmbeddingAPI
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +19,12 @@ class SeafileAIApp(object):
         seasearch_configured = bool(config.SEASEARCH_URL.strip() and config.SEASEARCH_TOKEN.strip())
         if seasearch_configured and config.EMBEDDING_MODEL_CONFIGURED:
             self.embedding_api = EmbeddingAPI(
+                self.data_logger,
                 config.EMBEDDING_MODEL.get('model'),
                 config.EMBEDDING_MODEL.get('type', 'openai'),
                 config.EMBEDDING_MODEL.get('url'),
                 config.EMBEDDING_MODEL.get('key'),
-        )
+            )
         logger.info(
             'Embedding API %s; document search will use %s',
             'enabled' if self.embedding_api else 'disabled',
@@ -41,7 +42,7 @@ class SeafileAIApp(object):
         # self.face_embedding_api = FaceEmbeddingAPI(config.FACE_EMBEDDING_SERVICE_URL, config.FACE_EMBEDDING_SERVICE_KEY)
         self.seahub_api = SeahubAPI(config.SEAFILE_SERVER_URL, config.SECRET_KEY)
 
-        self.text_processing_manager = TextProcessingManager(self, config.DEFAULT_LLM_MODEL.get('type', 'openai'))
+        self.text_processing_manager = TextProcessingManager(self)
         self.image_processing_manager = ImageProcessingManager(self)
         # self.face_recognition_manager = FaceRecognitionManager(self)
         self.streaming_chat = StreamingChat(self)
