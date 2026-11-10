@@ -11,7 +11,7 @@ from seafile_ai.search.repo_file_search_adapter import RepoFileSearchAdapter
 from seafile_ai.search.seasearch_api import SeaSearchAPI
 from seafile_ai.search.summary_vector_search_adapter import SummaryVectorSearchAdapter
 from seafile_ai.utils.constants import MODEL_REASONING_TIER
-from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
+from seafile_ai.utils.llm_api import get_completion_client_by_model_tier
 from seafile_ai.utils.tools import BasicTool
 
 logger = logging.getLogger(__name__)
@@ -71,34 +71,32 @@ def merge_search_candidates(*branches):
 class DocumentsSearch(BasicTool):
     tool = {
         'type': 'function',
-        'function': {
-            'name': 'documents_search',
-            'description': (
-                'This is the default search tool for library documents and document-based knowledge questions. '
-                'Use short search keywords or a concise query to find relevant documents. '
-                'Preserve important product names, config keys, file names, and error terms from the user request. '
-                'The relevance decreases from the beginning to the end. '
-                f'Results include labels such as <reference_0>. {_SEARCH_TOOLS_RESULT_FORMAT}. '
-                'Results contain AI summaries or matched snippets, not file content. '
-                'Use read_files with the returned exact path when the file content is needed. '
-                'Do not make random or overly broad searches. '
-                'If the search results are insufficient, do not pretend that the library documents answered the question.'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'query': {
-                        'type': 'string',
-                        'description': (
-                            'The query should stay close to the user wording and usually be short keywords or a concise phrase. '
-                            'Keep exact technical terms when they matter, such as product names, file names, config keys, '
-                            'feature names, and error messages. For example, use "WebDAV", "LDAP", "seafile.conf", '
-                            'or "repo token" directly when they are the important search terms.'
-                        ),
-                    },
+        'name': 'documents_search',
+        'description': (
+            'This is the default search tool for library documents and document-based knowledge questions. '
+            'Use short search keywords or a concise query to find relevant documents. '
+            'Preserve important product names, config keys, file names, and error terms from the user request. '
+            'The relevance decreases from the beginning to the end. '
+            f'Results include labels such as <reference_0>. {_SEARCH_TOOLS_RESULT_FORMAT}. '
+            'Results contain AI summaries or matched snippets, not file content. '
+            'Use read_files with the returned exact path when the file content is needed. '
+            'Do not make random or overly broad searches. '
+            'If the search results are insufficient, do not pretend that the library documents answered the question.'
+        ),
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'query': {
+                    'type': 'string',
+                    'description': (
+                        'The query should stay close to the user wording and usually be short keywords or a concise phrase. '
+                        'Keep exact technical terms when they matter, such as product names, file names, config keys, '
+                        'feature names, and error messages. For example, use "WebDAV", "LDAP", "seafile.conf", '
+                        'or "repo token" directly when they are the important search terms.'
+                    ),
                 },
-                'required': ['query'],
             },
+            'required': ['query'],
         },
     }
 
@@ -169,7 +167,7 @@ class DocumentsSearch(BasicTool):
         token_usage = {}
         try:
             tier = AI_UTILS_TIER.get('rerank', MODEL_REASONING_TIER.LOW.value)
-            rerank_llm = get_llm_client_by_model_tier(app.data_logger, tier)
+            rerank_llm = get_completion_client_by_model_tier(app.data_logger, tier)
             rerank_model = rerank_llm.model_id
             rerank_context = dict(context)
             rerank_context['scenario'] = 'rerank'

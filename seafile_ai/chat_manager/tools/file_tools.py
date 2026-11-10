@@ -16,51 +16,49 @@ SUPPORTED_READ_FILE_SUFFIXES = {'.md', '.markdown', '.sdoc', '.docx', '.pdf', '.
 class ListFiles(BasicTool):
     tool = {
         'type': 'function',
-        'function': {
-            'name': 'list_files',
-            'description': (
-                'List files and directories in the current library. '
-                'Return up to the configured maximum number of metadata records as JSON. '
-                'This tool returns metadata, not file content. '
-                'Set include_dirs to true only when the user asks for directories. '
-                'IMPORTANT: Each returned record contains a `path` field wrapped in '
-                '<seafile-ai-file>...</seafile-ai-file> tags. When mentioning file paths '
-                'in your final answer, you MUST output the `path` field verbatim without '
-                'stripping the tags, converting it to Markdown links, or wrapping it in backticks. '
-                'Do not apply these tags to search results from documents_search; use <reference_N> labels instead.'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'name_contains': {
-                        'type': 'string',
-                        'description': (
-                            'Case-insensitive text contained in the file or directory name. '
-                            'Use this when the user asks to find files by name instead of listing the whole library.'
-                        ),
-                    },
-                    'directory': {
-                        'type': 'string',
-                        'description': (
-                            'Absolute directory path whose contents and nested subdirectories should be searched, '
-                            'for example "/a/b/c". Omit this to search the whole library.'
-                        ),
-                    },
-                    'include_dirs': {
-                        'type': 'boolean',
-                        'description': (
-                            'Whether to include directories in the results. '
-                            'Set to false to return only files. Default is false.'
-                        ),
-                    },
-                    'max_records': {
-                        'type': 'integer',
-                        'description': (
-                            f'Maximum number of records to return, from 1 to {config.DEFAULT_LIST_FILES_MAX_RECORDS}. '
-                            'When the user asks for a specific number of files, such as "top 10" or "前10个", '
-                            'you MUST set this to that number. Otherwise omit it to use the configured default.'
-                        ),
-                    },
+        'name': 'list_files',
+        'description': (
+            'List files and directories in the current library. '
+            'Return up to the configured maximum number of metadata records as JSON. '
+            'This tool returns metadata, not file content. '
+            'Set include_dirs to true only when the user asks for directories. '
+            'IMPORTANT: Each returned record contains a `path` field wrapped in '
+            '<seafile-ai-file>...</seafile-ai-file> tags. When mentioning file paths '
+            'in your final answer, you MUST output the `path` field verbatim without '
+            'stripping the tags, converting it to Markdown links, or wrapping it in backticks. '
+            'Do not apply these tags to search results from documents_search; use <reference_N> labels instead.'
+        ),
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'name_contains': {
+                    'type': 'string',
+                    'description': (
+                        'Case-insensitive text contained in the file or directory name. '
+                        'Use this when the user asks to find files by name instead of listing the whole library.'
+                    ),
+                },
+                'directory': {
+                    'type': 'string',
+                    'description': (
+                        'Absolute directory path whose contents and nested subdirectories should be searched, '
+                        'for example "/a/b/c". Omit this to search the whole library.'
+                    ),
+                },
+                'include_dirs': {
+                    'type': 'boolean',
+                    'description': (
+                        'Whether to include directories in the results. '
+                        'Set to false to return only files. Default is false.'
+                    ),
+                },
+                'max_records': {
+                    'type': 'integer',
+                    'description': (
+                        f'Maximum number of records to return, from 1 to {config.DEFAULT_LIST_FILES_MAX_RECORDS}. '
+                        'When the user asks for a specific number of files, such as "top 10" or "前10个", '
+                        'you MUST set this to that number. Otherwise omit it to use the configured default.'
+                    ),
                 },
             },
         },
@@ -174,28 +172,26 @@ class ListFiles(BasicTool):
 class ReadFiles(BasicTool):
     tool = {
         'type': 'function',
-        'function': {
-            'name': 'read_files',
-            'description': (
-                'Read the content of specific files in the current library. '
-                'This tool reads file content, not metadata. '
-                f'Read at most {config.READ_FILES_MAX_FILES} files in one call.'
-            ),
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'file_paths': {
-                        'type': 'array',
-                        'description': 'Exact file paths in the current library.',
-                        'items': {
-                            'type': 'string',
-                        },
-                        'minItems': 1,
-                        'maxItems': config.READ_FILES_MAX_FILES,
+        'name': 'read_files',
+        'description': (
+            'Read the content of specific files in the current library. '
+            'This tool reads file content, not metadata. '
+            f'Read at most {config.READ_FILES_MAX_FILES} files in one call.'
+        ),
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'file_paths': {
+                    'type': 'array',
+                    'description': 'Exact file paths in the current library.',
+                    'items': {
+                        'type': 'string',
                     },
+                    'minItems': 1,
+                    'maxItems': config.READ_FILES_MAX_FILES,
                 },
-                'required': ['file_paths'],
             },
+            'required': ['file_paths'],
         },
     }
 

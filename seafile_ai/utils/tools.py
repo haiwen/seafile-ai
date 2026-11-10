@@ -46,9 +46,11 @@ class OpenAIToolExecutor(BasicToolExecutor):
         self.tools = {}
 
     def register(self, func, tool_info, **constant_kwargs):
-        name = tool_info.get('function', {}).get('name')
+        name = tool_info.get('name')
         if not name:
             raise InvalidToolException(tool_info)
+        tool_info = dict(tool_info)
+        tool_info.setdefault('strict', False)
         self.tools[name] = {
             'func': func,
             'constant_kwargs': constant_kwargs,
@@ -59,9 +61,8 @@ class OpenAIToolExecutor(BasicToolExecutor):
         return [tool['tool_info'] for tool in self.tools.values()]
 
     def execute(self, tool_call, call_back=lambda *args, **kwargs: None):
-        function = tool_call['function']
-        name = function['name']
-        params = json.loads(function.get('arguments', '{}'))
+        name = tool_call['name']
+        params = json.loads(tool_call.get('arguments') or '{}')
         constant_kwargs = self.tools[name]['constant_kwargs']
         available_params = inspect.signature(self.tools[name]['func']).parameters
         params.update({

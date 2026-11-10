@@ -24,7 +24,7 @@ from seafile_ai.repo_metadata.metadata_server_api import MetadataServerAPI
 from seafile_ai.repo_metadata.utils import get_metadata_by_path
 from seafile_ai.utils import parse_file
 from seafile_ai.utils.constants import MODEL_REASONING_TIER
-from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
+from seafile_ai.utils.llm_api import get_completion_client_by_model_tier
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def generate_chat_title(app, query, ai_reply, context):
                 'content': GENERATE_CHAT_TITLE_USER_PROMPT.format(query=query, ai_reply=ai_reply),
             },
         ]
-        llm_client = get_llm_client_by_model_tier(
+        llm_client = get_completion_client_by_model_tier(
             app.data_logger,
             config.AI_UTILS_TIER.get('generate_chat_title', MODEL_REASONING_TIER.LOW.value),
         )

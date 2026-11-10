@@ -9,7 +9,7 @@ from seafile_ai.utils.tools import filter_tool_calls_content
 logger = logging.getLogger(__name__)
 
 
-class BasicCompletionUtils:
+class BasicChatUtils:
     @classmethod
     def build_completion_retry_entry(cls, step_number, current_retry, reason, time_usage, token_usage=None, error=None):
         entry = {
@@ -36,8 +36,8 @@ class BasicCompletionUtils:
 
     @classmethod
     def execute_tool_with_retry(cls, tool_executor, tool_call, call_backer_factory, memory):
-        tool_name = tool_call['function']['name']
-        arguments = tool_call['function']['arguments']
+        tool_name = tool_call['name']
+        arguments = tool_call['arguments']
         if isinstance(arguments, str):
             arguments = json.loads(arguments or '{}')
 
@@ -54,9 +54,9 @@ class BasicCompletionUtils:
                     filter_tool_calls_content(tool_name, tool_output),
                 )
                 memory.append({
-                    'role': 'tool',
-                    'tool_call_id': tool_call['id'],
-                    'content': json.dumps(tool_output, ensure_ascii=False),
+                    'type': 'function_call_output',
+                    'call_id': tool_call['call_id'],
+                    'output': json.dumps(tool_output, ensure_ascii=False),
                 })
                 return
             except Exception as error:
@@ -74,69 +74,18 @@ class BasicCompletionUtils:
                     'message': retry_errors[-1],
                 })
                 memory.append({
-                    'role': 'tool',
-                    'tool_call_id': tool_call['id'],
-                    'content': retry_errors[-1],
+                    'type': 'function_call_output',
+                    'call_id': tool_call['call_id'],
+                    'output': retry_errors[-1],
                 })
                 return
 
 
-class StreamingCompletionUtils(BasicCompletionUtils):
-    @classmethod
-    def safe_model_dump(cls, chunk):
-        if hasattr(chunk, 'model_dump'):
-            try:
-                return chunk.model_dump(exclude_none=True)
-            except Exception:
-                pass
-        if hasattr(chunk, 'dict'):
-            try:
-                return chunk.dict(exclude_none=True)
-            except Exception:
-                pass
-        return repr(chunk)
-
-    @classmethod
-    def ensure_tool_call_slot(cls, tool_calls, tool_call_index, tool_call_id=None):
-        if tool_call_index is None:
-            tool_call_index = len(tool_calls)
-        while len(tool_calls) <= tool_call_index:
-            tool_calls.append({
-                'id': f'call_{len(tool_calls)}',
-                'type': 'function',
-                'function': {
-                    'name': '',
-                    'arguments': '',
-                },
-            })
-        if tool_call_id:
-            tool_calls[tool_call_index]['id'] = tool_call_id
-        return tool_call_index
-
-    @classmethod
-    def collect_delta_content(cls, delta_content):
-        if isinstance(delta_content, str):
-            return delta_content
-        if not isinstance(delta_content, list):
-            return ''
-
-        content_parts = []
-        for part in delta_content:
-            if isinstance(part, dict):
-                text = part.get('text')
-                if isinstance(text, str):
-                    content_parts.append(text)
-                    continue
-                if part.get('type') == 'text' and isinstance(part.get('content'), str):
-                    content_parts.append(part['content'])
-            elif hasattr(part, 'text') and isinstance(part.text, str):
-                content_parts.append(part.text)
-        return ''.join(content_parts)
-
+class StreamingChatUtils(BasicChatUtils):
     @classmethod
     def execute_tool_with_retry(cls, tool_executor, tool_call, call_backer_factory, memory, current_tool_call_id, total_tool_calls_num):
-        tool_name = tool_call['function']['name']
-        arguments = tool_call['function']['arguments']
+        tool_name = tool_call['name']
+        arguments = tool_call['arguments']
         if isinstance(arguments, str):
             arguments = json.loads(arguments or '{}')
 
@@ -159,9 +108,9 @@ class StreamingCompletionUtils(BasicCompletionUtils):
                     filter_tool_calls_content(tool_name, tool_output),
                 )
                 memory.append({
-                    'role': 'tool',
-                    'tool_call_id': tool_call['id'],
-                    'content': json.dumps(tool_output, ensure_ascii=False),
+                    'type': 'function_call_output',
+                    'call_id': tool_call['call_id'],
+                    'output': json.dumps(tool_output, ensure_ascii=False),
                 })
                 return
             except Exception as error:
@@ -179,8 +128,8 @@ class StreamingCompletionUtils(BasicCompletionUtils):
                     'message': retry_errors[-1],
                 })
                 memory.append({
-                    'role': 'tool',
-                    'tool_call_id': tool_call['id'],
-                    'content': retry_errors[-1],
+                    'type': 'function_call_output',
+                    'call_id': tool_call['call_id'],
+                    'output': retry_errors[-1],
                 })
                 return
