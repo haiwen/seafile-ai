@@ -41,6 +41,7 @@ class BasicLLMAPI:
 
 
 from seafile_ai.utils.llm_api.completion import CompletionAPI
+from seafile_ai.utils.llm_api.embedding import EmbeddingAPI
 from seafile_ai.utils.llm_api.responses import ResponsesAPI, ResponsesResult
 from seafile_ai.utils.llm_api.responses.constants import STREAM_TEXT_DELTA, STREAM_COMPLETED
 

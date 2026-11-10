@@ -31,19 +31,40 @@ def load_llm_api(tier_models, default_model, id_models=None):
     constants_module.MODEL_USAGE_STATISTIC_CHANNEL_NAME = 'model-usage'
     litellm_module = ModuleType('litellm')
 
-    return load_module(
-        'seafile_ai.utils.llm_api',
-        PROJECT_ROOT / 'seafile_ai/utils/llm_api/__init__.py',
-        {
-            'seafile_ai.config': config_module,
-            'seafile_ai.utils': utils_module,
-            'seafile_ai.utils.constants': constants_module,
-            'litellm': litellm_module,
-        },
-    )
+    with patch.dict(sys.modules):
+        for name in list(sys.modules):
+            if name.startswith('seafile_ai.utils.llm_api.'):
+                del sys.modules[name]
+        return load_module(
+            'seafile_ai.utils.llm_api',
+            PROJECT_ROOT / 'seafile_ai/utils/llm_api/__init__.py',
+            {
+                'seafile_ai.config': config_module,
+                'seafile_ai.utils': utils_module,
+                'seafile_ai.utils.constants': constants_module,
+                'litellm': litellm_module,
+            },
+        )
 
 
 class LLMModelTierTest(unittest.TestCase):
+    def test_loads_fresh_clients_when_submodules_are_cached(self):
+        previous = load_llm_api({}, {})
+        cached_modules = {
+            f'seafile_ai.utils.llm_api.{name}': getattr(previous, name)
+            for name in ('completion', 'embedding', 'responses')
+        }
+
+        with patch.dict(sys.modules, cached_modules):
+            current = load_llm_api({}, {})
+            for name, module in cached_modules.items():
+                self.assertIs(sys.modules[name], module)
+
+        for name in ('CompletionAPI', 'EmbeddingAPI', 'ResponsesAPI'):
+            with self.subTest(client=name):
+                self.assertTrue(issubclass(getattr(current, name), current.BasicLLMAPI))
+        self.assertIsNot(current.completion.litellm, previous.completion.litellm)
+
     def test_selects_tier_model_or_default(self):
         default_model = {'model': 'default-model', 'type': 'openai', 'key': 'default-key'}
         module = load_llm_api(
