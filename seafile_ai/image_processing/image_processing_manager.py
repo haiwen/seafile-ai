@@ -6,7 +6,7 @@ from seafile_ai.image_processing.utils import resize_image_binary
 from seafile_ai.utils import get_file_content_by_seafobj
 from seafile_ai.utils.constants import LANGUAGE, MODEL_REASONING_TIER
 from seafile_ai.config import AI_UTILS_TIER
-from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
+from seafile_ai.utils.llm_api import get_completion_client_by_model_tier
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class ImageProcessingManager:
         elif capture_time and address:
             messages[0]["content"][0]["text"] = f"Please describe the contents of this picture in {LANGUAGE[lang]}. This picture was taken at {address} on {capture_time}.Focus solely on the objects and details depicted,and combine with the capture time and location, and you can describe the time like morning but don't mention the specific date and time, without discussing the emotions the picture may evoke. The description should be approximately 100 words."
         tier = AI_UTILS_TIER.get('image_caption', MODEL_REASONING_TIER.MEDIUM.value)
-        desc = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
+        desc = get_completion_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         return desc
 
     def image_tags(self, repo_id, obj_id, candidate_tags, context):
@@ -88,7 +88,7 @@ class ImageProcessingManager:
         
 
         tier = AI_UTILS_TIER.get('image_tags', MODEL_REASONING_TIER.LOW.value)
-        result = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context, json_mode=True)
+        result = get_completion_client_by_model_tier(self.app.data_logger, tier).run(messages, context, json_mode=True)
         return json.loads(result).get('tags', [])
 
     def face_embeddings_without_token(self, repo_id, obj_id, need_face):
