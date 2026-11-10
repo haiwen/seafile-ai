@@ -8,11 +8,12 @@ from test_llm_tier_config import load_llm_api
 class LLMTemperatureTest(unittest.TestCase):
     def setUp(self):
         self.module = load_llm_api({}, {})
+        self.litellm = self.module.completion.litellm
         self.response = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content='result'))],
             usage=SimpleNamespace(prompt_tokens=2, completion_tokens=3, total_tokens=5),
         )
-        self.module.litellm.completion = Mock(return_value=self.response)
+        self.litellm.completion = Mock(return_value=self.response)
         self.messages = [{'role': 'user', 'content': 'Describe this file.'}]
 
     def test_claude_omits_temperature_for_direct_and_gateway_requests(self):
@@ -24,12 +25,12 @@ class LLMTemperatureTest(unittest.TestCase):
                 for method in ('run', 'completion'):
                     for params in ({}, {'temperature': 0}, {'temperature': 0.1}):
                         with self.subTest(model=model, provider=provider, method=method, params=params):
-                            client = self.module.LLMAPI(
+                            client = self.module.CompletionAPI(
                                 Mock(), model, provider, base_url='https://gateway.example/v1',
                             )
                             result = getattr(client, method)(messages=self.messages, **params)
 
-                            request = self.module.litellm.completion.call_args.kwargs
+                            request = self.litellm.completion.call_args.kwargs
                             self.assertNotIn('temperature', request)
                             self.assertEqual(request['messages'], self.messages)
                             self.assertEqual(
@@ -50,10 +51,10 @@ class LLMTemperatureTest(unittest.TestCase):
                 ('gpt-5', 'openai', {}, 1),
                 ('gpt-5', 'openai', {'temperature': 0.2}, 1)):
             with self.subTest(model=model, provider=provider, params=params):
-                client = self.module.LLMAPI(
+                client = self.module.CompletionAPI(
                     Mock(), model, provider, base_url='https://gateway.example/v1',
                 )
                 client.run(self.messages, **params)
 
-                request = self.module.litellm.completion.call_args.kwargs
+                request = self.litellm.completion.call_args.kwargs
                 self.assertEqual(request['temperature'], expected)
