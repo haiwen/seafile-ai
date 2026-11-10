@@ -37,17 +37,17 @@ class BasicChat:
             MarkdownGenerator(),
         )
 
-    def _register_tools(self, tool_executor, context, model=None):
+    def _register_tools(self, tool_executor, context):
         for tool in self.directory_tools:
             tool.register(tool_executor, context=context)
         for tool in self.search_tools:
-            tool.register(tool_executor, context=context, app=self.app, model=model)
+            tool.register(tool_executor, context=context, app=self.app)
         for tool in self.content_generators:
             tool.register(tool_executor)
 
     def __call__(self, message, attachments, context, model):
         tool_executor = OpenAIToolExecutor()
-        self._register_tools(tool_executor, context, model)
+        self._register_tools(tool_executor, context)
         return self.run(model, tool_executor, message, attachments, context=context)
 
     def _prepare_chat_memory(self, system_prompts, session_uuid, repo_id):
