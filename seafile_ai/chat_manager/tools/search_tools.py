@@ -127,7 +127,7 @@ class DocumentsSearch(BasicTool):
         )
         return results
 
-    def _rerank_documents(self, query, candidates, context, count, app, tool_executor, model=None):
+    def _rerank_documents(self, query, candidates, context, count, app, tool_executor):
         if len(candidates) <= 1:
             return candidates[:count], {
                 'candidates': len(candidates), 'elapsed_seconds': 0, 'model': 'n/a',
@@ -244,7 +244,7 @@ class DocumentsSearch(BasicTool):
             'modified_time': item.get('modified_time'),
         } for item in search_results if item.get('path')]
 
-    def execute(self, query, context, app, model, tool_executor, call_back):
+    def execute(self, query, context, app, tool_executor, call_back):
         assert isinstance(query, str), 'Your search query must be a string'
         sources_results = list(tool_executor.cache.get('sources_results', []))
         existing_source_keys = {
@@ -280,7 +280,7 @@ class DocumentsSearch(BasicTool):
         )
 
         reranked_candidates, rerank_info = self._rerank_documents(
-            query, candidates, context, count, app, tool_executor, model,
+            query, candidates, context, count, app, tool_executor,
         )
 
         reranked_candidates = [
