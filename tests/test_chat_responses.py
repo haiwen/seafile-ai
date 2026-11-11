@@ -1,7 +1,11 @@
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+
+import httpx
+import litellm
+from litellm.llms.custom_httpx.http_handler import HTTPHandler
 
 from test_chat_memory import load_memory
 from test_chat_title import load_chat_utils
@@ -48,6 +52,7 @@ def load_chat():
 
 def completed(output):
     return {'type': 'response.completed', 'response': {
+        'status': 'completed',
         'output': output,
         'usage': {'input_tokens': 10, 'output_tokens': 5, 'total_tokens': 15},
     }}
@@ -266,3 +271,48 @@ class ChatResponsesTest(unittest.TestCase):
         self.assertFalse(result['reach_max_steps'])
         self.assertEqual([entry['reason'] for entry in result['retry']], ['completion_error', 'empty_visible_output'])
         self.assertEqual(self.data_logger.log_data.call_count, 2)
+
+    def test_hosted_vllm_checks_response_status_through_real_litellm(self):
+        self.api.responses.litellm = litellm
+        self.api.DEFAULT_LLM_MODEL = {
+            'type': 'other', 'model': 'gpt-4o-mini',
+            'url': 'https://gateway.example/v1', 'key': 'test-key',
+        }
+        for status, error, incomplete_details, succeeds in (
+                ('completed', None, None, True),
+                ('incomplete', None, {'reason': 'max_output_tokens'}, False),
+                ('failed', {'code': 'server_error', 'message': 'upstream failed'}, None, False),
+                ('completed', {'code': 'server_error', 'message': 'upstream failed'}, None, False),
+                ('completed', None, {'reason': 'max_output_tokens'}, False)):
+            with self.subTest(status=status, error=error, incomplete_details=incomplete_details):
+                self.executor = self.tools.OpenAIToolExecutor()
+                self.data_logger.reset_mock()
+                response = {
+                    'id': 'resp_test', 'object': 'response', 'created_at': 1, 'model': 'gpt-4o-mini',
+                    'status': status, 'error': error, 'incomplete_details': incomplete_details,
+                    'output': [{
+                        'type': 'message', 'id': 'msg_test', 'status': 'completed', 'role': 'assistant',
+                        'content': [{'type': 'output_text', 'text': 'Response text.', 'annotations': []}],
+                    }],
+                }
+                http_response = httpx.Response(
+                    200, json=response,
+                    request=httpx.Request('POST', 'https://gateway.example/v1/responses'),
+                )
+                with (
+                    patch.object(HTTPHandler, 'post', return_value=http_response) as post,
+                    patch.object(self.module.logger, 'exception') as log_error,
+                ):
+                    events = self.run_chat()
+
+                post.assert_called_once()
+                self.assertEqual(post.call_args.kwargs['url'], 'https://gateway.example/v1/responses')
+                self.assertFalse(post.call_args.kwargs['stream'])
+                self.assertTrue(any('answer' in event for event in events))
+                if succeeds:
+                    self.assertEqual(events[-1]['results']['answer'], 'Response text.')
+                    log_error.assert_not_called()
+                else:
+                    self.assertIn('LLM or internal server error', events[-1]['results']['answer'])
+                    self.data_logger.log_data.assert_not_called()
+                    log_error.assert_called()
