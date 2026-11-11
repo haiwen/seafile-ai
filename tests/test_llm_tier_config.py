@@ -13,16 +13,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def load_module(module_name, source_path, modules=None):
     spec = importlib.util.spec_from_file_location(module_name, source_path)
     module = importlib.util.module_from_spec(spec)
-    with patch.dict(sys.modules, modules or {}):
+    with patch.dict(sys.modules, {**(modules or {}), module_name: module}):
         spec.loader.exec_module(module)
     return module
 
 
-def load_llm_api(tier_models, default_model):
+def load_llm_api(tier_models, default_model, id_models=None):
     config_module = ModuleType('seafile_ai.config')
-    config_module.LLM_MODEL_ID_MODELS_MAP = {}
+    config_module.LLM_MODEL_ID_MODELS_MAP = id_models or {}
     config_module.LLM_MODEL_TIER_MODELS_MAP = tier_models
     config_module.DEFAULT_LLM_MODEL = default_model
+    config_module.EMBEDDING_DIMENSIONS = 3
 
     utils_module = ModuleType('seafile_ai.utils')
     utils_module.LLMChatCompletionException = Exception
@@ -30,19 +31,40 @@ def load_llm_api(tier_models, default_model):
     constants_module.MODEL_USAGE_STATISTIC_CHANNEL_NAME = 'model-usage'
     litellm_module = ModuleType('litellm')
 
-    return load_module(
-        'test_llm_api_module',
-        PROJECT_ROOT / 'seafile_ai/utils/llm_api.py',
-        {
-            'seafile_ai.config': config_module,
-            'seafile_ai.utils': utils_module,
-            'seafile_ai.utils.constants': constants_module,
-            'litellm': litellm_module,
-        },
-    )
+    with patch.dict(sys.modules):
+        for name in list(sys.modules):
+            if name.startswith('seafile_ai.utils.llm_api.'):
+                del sys.modules[name]
+        return load_module(
+            'seafile_ai.utils.llm_api',
+            PROJECT_ROOT / 'seafile_ai/utils/llm_api/__init__.py',
+            {
+                'seafile_ai.config': config_module,
+                'seafile_ai.utils': utils_module,
+                'seafile_ai.utils.constants': constants_module,
+                'litellm': litellm_module,
+            },
+        )
 
 
 class LLMModelTierTest(unittest.TestCase):
+    def test_loads_fresh_clients_when_submodules_are_cached(self):
+        previous = load_llm_api({}, {})
+        cached_modules = {
+            f'seafile_ai.utils.llm_api.{name}': getattr(previous, name)
+            for name in ('completion', 'embedding', 'responses')
+        }
+
+        with patch.dict(sys.modules, cached_modules):
+            current = load_llm_api({}, {})
+            for name, module in cached_modules.items():
+                self.assertIs(sys.modules[name], module)
+
+        for name in ('CompletionAPI', 'EmbeddingAPI', 'ResponsesAPI'):
+            with self.subTest(client=name):
+                self.assertTrue(issubclass(getattr(current, name), current.BasicLLMAPI))
+        self.assertIsNot(current.completion.litellm, previous.completion.litellm)
+
     def test_selects_tier_model_or_default(self):
         default_model = {'model': 'default-model', 'type': 'openai', 'key': 'default-key'}
         module = load_llm_api(
@@ -56,11 +78,11 @@ class LLMModelTierTest(unittest.TestCase):
             (None, 'default-model'),
         ):
             with self.subTest(tier=tier):
-                client = module.get_llm_client_by_model_tier(None, tier)
+                client = module.get_completion_client_by_model_tier(None, tier)
                 self.assertEqual(client.model_id, expected_model)
 
         module = load_llm_api({}, default_model)
-        client = module.get_llm_client_by_model_tier(None, 'low')
+        client = module.get_completion_client_by_model_tier(None, 'low')
         self.assertEqual(client.model_id, 'default-model')
 
 

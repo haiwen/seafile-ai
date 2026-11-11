@@ -4,21 +4,12 @@ import math
 import litellm
 
 from seafile_ai.config import EMBEDDING_DIMENSIONS
+from seafile_ai.utils.llm_api import BasicLLMAPI
 
 
 logger = logging.getLogger(__name__)
 
-class EmbeddingAPI:
-    def __init__(self, model, model_type='openai', base_url=None, api_key=None, timeout=30):
-        if model_type == 'other':
-            model_type = 'hosted_vllm'
-        self.model_id = model
-        self.model_type = model_type
-        self.model = f'{model_type}/{model}' if model_type else model
-        self.base_url = base_url
-        self.api_key = api_key
-        self.timeout = timeout
-
+class EmbeddingAPI(BasicLLMAPI):
     def _validate_embeddings(self, embeddings, expected_count):
         if not isinstance(embeddings, list) or len(embeddings) != expected_count:
             raise ValueError('Embedding response count mismatch')
@@ -46,7 +37,7 @@ class EmbeddingAPI:
                 dimensions=EMBEDDING_DIMENSIONS,
                 api_base=self.base_url,
                 api_key=self.api_key,
-                custom_llm_provider=self.model_type,
+                custom_llm_provider=self.llm_type,
                 timeout=self.timeout,
             )
             if not isinstance(response.data, list) or len(response.data) != len(contents):
