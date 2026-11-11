@@ -79,7 +79,7 @@ class ResponsesParserTest(unittest.TestCase):
             {'type': 'function_call', 'id': 'fc_1', 'call_id': 'call_1', 'name': 'list_files', 'arguments': '{}'},
             {'type': 'function_call', 'id': 'fc_2', 'call_id': 'call_2', 'name': 'read_files', 'arguments': '{"file_paths": ["/plan.md"]}'},
         ]
-        self.response = {'output': self.output, 'usage': {
+        self.response = {'status': 'completed', 'output': self.output, 'usage': {
             'input_tokens': 10, 'output_tokens': 5, 'total_tokens': 15,
             'input_tokens_details': {'cached_tokens': 2},
         }}
@@ -111,6 +111,30 @@ class ResponsesParserTest(unittest.TestCase):
         self.assertEqual(results[2][0], 'completed')
         self.assertEqual(results[2][1].output, self.output)
         self.assertEqual(len(results[2][1].tool_calls), 2)
+
+    def test_rejects_unsuccessful_responses(self):
+        for status, error, incomplete_details, detail in (
+                ('incomplete', None, {'reason': 'max_output_tokens'}, 'max_output_tokens'),
+                ('failed', {'code': 'server_error', 'message': 'upstream failed'}, None, 'server_error'),
+                ('in_progress', None, None, 'in_progress'),
+                (None, None, None, 'status=None'),
+                ('completed', {'code': 'server_error'}, None, 'server_error'),
+                ('completed', None, {'reason': 'max_output_tokens'}, 'max_output_tokens'),
+                ('completed', {}, None, 'error={}'),
+                ('completed', None, {}, 'incomplete_details={}')):
+            response = {
+                **self.response,
+                'status': status, 'error': error, 'incomplete_details': incomplete_details,
+            }
+            sdk_response = Mock()
+            sdk_response.model_dump.return_value = response
+            for payload in (response, sdk_response):
+                with self.subTest(
+                        status=status, error=error, incomplete_details=incomplete_details,
+                        payload_type=type(payload).__name__):
+                    with self.assertRaises(RuntimeError) as caught:
+                        self.parser.parse_output(payload)
+                    self.assertIn(detail, str(caught.exception))
 
     def test_failed_and_unfinished_streams_raise(self):
         for events in (

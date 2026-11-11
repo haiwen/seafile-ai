@@ -16,6 +16,14 @@ class ResponsesParser:
     def parse_output(response):
         if not isinstance(response, dict):
             response = response.model_dump(exclude_none=True)
+        status = response.get('status')
+        error = response.get('error')
+        incomplete_details = response.get('incomplete_details')
+        if status != 'completed' or error is not None or incomplete_details is not None:
+            raise RuntimeError(
+                f'Responses API response error: status={status}, error={error}, '
+                f'incomplete_details={incomplete_details}'
+            )
         output = response.get('output') or []
         content = ''.join(
             part.get('text') or ''
