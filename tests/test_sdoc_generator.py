@@ -359,6 +359,12 @@ class SdocSpecificationTest(unittest.TestCase):
         self.assertTrue({'paragraph', 'header1', 'header2', 'blockquote', 'ordered_list',
                          'unordered_list', 'check_list_item', 'code_block', 'divider', 'table'} <= covered_types)
 
+    def test_specification_is_not_bound_to_generator_arguments(self):
+        specification = resolver.get_sdoc_specification()
+        for tool_detail in ('generate_sdoc', '`content`', '`file_name`', '`description`'):
+            with self.subTest(tool_detail=tool_detail):
+                self.assertNotIn(tool_detail, specification)
+
 
 if __name__ == '__main__':
     unittest.main()

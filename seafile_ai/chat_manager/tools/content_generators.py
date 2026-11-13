@@ -78,6 +78,7 @@ The tool validates and caches the document, then returns a self-closing <seafile
                         'description': (
                             'A JSON-encoded string containing a plain-text title and simplified '
                             'Markdown-like elements, not Markdown source, a fenced code block or an object argument. '
+                            'Serialize the entire document once, not individual nodes. '
                             'Before constructing this value, call get_sdoc_specification and read its result. '
                             'Follow that specification and supply only the necessary content fields; '
                             'omit generated IDs, layout and editor metadata.'

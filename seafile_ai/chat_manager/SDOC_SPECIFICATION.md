@@ -2,15 +2,15 @@
 
 ## Introduction
 
-This reference defines the common Markdown-like content supported by `generate_sdoc`.
-Read it before constructing the tool's `content` argument.
+This reference describes the document model, node structures and common content
+fields of the simplified SeaDoc authoring format.
 
 The organization and terminology follow the official
 [SeaDoc Specification](https://haiwen.github.io/seadoc-specification/): document
 model, text leaves, block elements and inline elements. However, the examples
 here use the application's **simplified authoring format**, not the native
-`.sdoc` file format. Use this reference for tool input; do not copy native
-examples from the official manual into `content`.
+`.sdoc` file format. Native examples from the official manual are not valid
+documents in this simplified format.
 
 Only semantic content is needed. The application supplies native structural
 wrappers, node IDs, document metadata and editor layout. Fonts, colors and
@@ -39,9 +39,9 @@ the title as a body heading unless the user requests it.
 }
 ```
 
-Examples in this reference show decoded JSON. Serialize the entire document
-once and pass the resulting string as `content`. Do not serialize individual
-nodes, pass an object argument, or include Markdown code fences in the value.
+Examples in this reference show JSON objects. Nodes remain objects within the
+document, not individually serialized strings. Markdown code fences are only
+used to display examples and are not part of the document data.
 
 ### Node Hierarchy
 
@@ -260,8 +260,8 @@ similar to Markdown `#` through `######`. The document title is separate.
 
 ## Complete Document Example
 
-Serialize this entire object once to obtain `content`. The tool's `file_name`
-and short card `description` are separate arguments, not document-root fields.
+This example combines a paragraph, a section heading, a list and a task item
+under one document root.
 
 ```json
 {
@@ -287,7 +287,7 @@ and short card `description` are separate arguments, not document-root fields.
 - Supply every required field and only the fields documented for that object.
 - Do not provide `id`, `version`, `format_version`, `last_modify_user`, `cursors`,
   `style`, or other editor/collaboration metadata. These belong to native files
-  or runtime data, not tool input.
+  or runtime data, not the simplified authoring format.
 - Structural objects under `items`, `rows` and `cells` are simplified objects,
   not typed native nodes. The application also creates code lines and void
   placeholders. Do not manually reproduce native structures.
@@ -298,7 +298,7 @@ and short card `description` are separate arguments, not document-root fields.
   use descriptive text or actual HTTP/HTTPS links instead.
 - The compact JSON representation of the decoded document, preserving Unicode
   and omitting optional whitespace, must not exceed 400000 characters. The
-  input string itself must not exceed 2400002 characters.
+  serialized JSON string must not exceed 2400002 characters.
 - At most 20000 inline nodes are allowed across the document, counting both
   text leaves and links, including text leaves inside links.
 
