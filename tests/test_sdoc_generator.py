@@ -48,18 +48,21 @@ class SdocGeneratorTest(unittest.TestCase):
         self.assertIn('<seafile-ai-seadoc', sdoc.SdocGenerator().execute('计划', 'Plan', self.document(), self.executor))
 
     def document(self, block=None):
-        return json.dumps({'title': '项目计划', 'elements': [block or {
+        return json.dumps({'elements': [block or {
             'type': 'paragraph', 'children': [{'text': '阶段一', 'bold': True}]}]}, ensure_ascii=False)
 
-    def test_plain_title_and_markdown_blocks(self):
+    def test_title_subtitle_and_markdown_blocks(self):
         blocks = [
+            {'type': 'title', 'children': [{'text': 'Title'}]},
+            {'type': 'subtitle', 'children': [{'type': 'link', 'href': 'https://example.com',
+                                              'children': [{'text': 'Subtitle'}]}]},
             {'type': 'header2', 'children': [{'text': 'Heading'}]},
             {'type': 'blockquote', 'children': [{'text': 'Quote'}]},
             {'type': 'ordered_list', 'items': [{'children': [{'text': 'First'}]}]},
-            {'type': 'check_list_item', 'checked': False, 'children': [{'text': 'Task'}]},
             {'type': 'code_block', 'language': 'python', 'text': 'print(1)\nprint(2)'},
             {'type': 'divider'},
-            {'type': 'table', 'rows': [{'cells': [{'children': [{'text': ''}]}]}]},
+            {'type': 'table', 'children': [{'type': 'table_row', 'children': [
+                {'type': 'table_cell', 'children': [{'text': ''}]}]}]},
             {'type': 'paragraph', 'children': [{'type': 'link', 'href': 'https://example.com',
                                                'children': [{'text': 'Docs'}]}]},
         ]
@@ -80,8 +83,42 @@ class SdocGeneratorTest(unittest.TestCase):
             sdoc.SdocGenerator()._validate_sdoc_content(self.document({'type': 'paragraph', 'children': [
                 {'type': 'link', 'href': 'javascript:alert(1)', 'children': [{'text': 'X'}]}]}))
         with self.assertRaises(ValueError):
-            sdoc.SdocGenerator()._validate_sdoc_content(self.document({'type': 'table', 'rows': [
-                {'cells': [{'children': [{'text': 'A'}]}]}, {'cells': []}]}))
+            sdoc.SdocGenerator()._validate_sdoc_content(self.document({'type': 'table', 'children': [
+                {'type': 'table_row', 'children': [{'type': 'table_cell', 'children': [{'text': 'A'}]}]},
+                {'type': 'table_row', 'children': [
+                    {'type': 'table_cell', 'children': [{'text': 'B'}]},
+                    {'type': 'table_cell', 'children': [{'text': 'C'}]}]}]}))
+
+    def test_rejects_legacy_root_checklists_and_invalid_table_structure(self):
+        invalid_blocks = [
+            {'type': 'check_list_item', 'checked': False, 'children': [{'text': 'Task'}]},
+            {'type': 'table', 'rows': [{'cells': [{'children': [{'text': 'Old'}]}]}]},
+            {'type': 'table', 'children': []},
+            {'type': 'table', 'children': [{'type': 'paragraph', 'children': [{'text': 'Wrong row'}]}]},
+            {'type': 'table', 'children': [{'type': 'table_row', 'children': []}]},
+            {'type': 'table', 'children': [{'type': 'table_row', 'children': [
+                {'type': 'paragraph', 'children': [{'text': 'Wrong cell'}]}]}]},
+            {'type': 'table', 'children': [{'type': 'table_row', 'children': [
+                {'type': 'table_cell', 'children': [{'type': 'paragraph', 'children': [{'text': 'Nested'}]}]}]}]},
+            {'type': 'table_row', 'children': [{'type': 'table_cell', 'children': [{'text': 'A'}]}]},
+            {'type': 'table_cell', 'children': [{'text': 'A'}]},
+        ]
+        for block in invalid_blocks:
+            with self.subTest(block=block), self.assertRaises(ValueError):
+                sdoc.SdocGenerator()._validate_sdoc_content(self.document(block))
+        legacy = json.loads(self.document())
+        legacy['title'] = 'Legacy title'
+        with self.assertRaises(ValueError):
+            sdoc.SdocGenerator()._validate_sdoc_content(json.dumps(legacy))
+
+    def test_title_and_subtitle_preserve_order_without_required_position(self):
+        elements = [
+            {'type': 'paragraph', 'children': [{'text': 'Opening'}]},
+            {'type': 'subtitle', 'children': [{'text': 'Subtitle'}]},
+            {'type': 'title', 'children': [{'text': 'Title'}]},
+        ]
+        document = {'elements': elements}
+        self.assertEqual(sdoc.SdocGenerator()._validate_sdoc_content(json.dumps(document)), document)
 
     def test_tool_caches_validated_content_and_returns_only_reference(self):
         content = self.document({'type': 'paragraph', 'children': [{'text': '</seafile-ai-seadoc>'}]})
@@ -251,7 +288,7 @@ class SdocGeneratorTest(unittest.TestCase):
                              example + resolve_sdoc_results(reference, self.executor))
 
     def test_length_uses_canonical_decoded_json_not_transport_escapes(self):
-        document = {'title': 'Boundary', 'elements': [{'type': 'code_block', 'language': '', 'text': ''}]}
+        document = {'elements': [{'type': 'code_block', 'language': '', 'text': ''}]}
         base_length = len(json.dumps(document, ensure_ascii=False, separators=(',', ':')))
         document['elements'][0]['text'] = '<' * (sdoc.MAX_CONTENT_LENGTH - base_length)
         content = json.dumps(document, ensure_ascii=False)
@@ -352,12 +389,12 @@ class SdocSpecificationTest(unittest.TestCase):
         covered_types = set()
         for example in examples:
             value = json.loads(example)
-            document = value if 'elements' in value else {'title': 'Example', 'elements': [value]}
+            document = value if 'elements' in value else {'elements': [value]}
             with self.subTest(example=example):
                 sdoc.SdocGenerator()._validate_sdoc_content(json.dumps(document, ensure_ascii=False))
             covered_types.update(block['type'] for block in document['elements'])
-        self.assertTrue({'paragraph', 'header1', 'header2', 'blockquote', 'ordered_list',
-                         'unordered_list', 'check_list_item', 'code_block', 'divider', 'table'} <= covered_types)
+        self.assertTrue({'title', 'subtitle', 'paragraph', 'header1', 'header2', 'blockquote', 'ordered_list',
+                         'unordered_list', 'code_block', 'divider', 'table'} <= covered_types)
 
     def test_specification_is_not_bound_to_generator_arguments(self):
         specification = resolver.get_sdoc_specification()

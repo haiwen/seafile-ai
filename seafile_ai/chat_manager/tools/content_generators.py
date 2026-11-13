@@ -59,7 +59,7 @@ class SdocGenerator(BasicTool):
             'name': 'generate_sdoc',
             'description': '''Generate an editable SeaDoc document. SeaDoc is Seafile's rich-text document format, stored in .sdoc files; its content is represented as a tree of element nodes and text leaves.
 
-Before constructing content or calling this tool, call get_sdoc_specification in the current request and read its result. Do not call the two tools in parallel. Follow the returned specification for the supported simplified authoring format, not the native on-disk document envelope. Supply only the document title and necessary Markdown-like content fields; the application generates node IDs, structural child elements, format metadata and editor layout.
+Before constructing content or calling this tool, call get_sdoc_specification in the current request and read its result. Do not call the two tools in parallel. Follow the returned specification for the supported simplified authoring format, not the native on-disk document envelope. Supply only the necessary Markdown-like content fields; the application generates node IDs, structural child elements, format metadata and editor layout.
 
 The tool validates and caches the document, then returns a self-closing <seafile-ai-seadoc sdoc_create_uuid="..." ... /> reference. Include that reference verbatim in the final answer, outside code fences; do not repeat the JSON content. File persistence occurs after the final answer reaches Seahub, not during this tool call. Do not invent UUIDs, file paths, URLs or creation status.''',
             'parameters': {
@@ -76,8 +76,8 @@ The tool validates and caches the document, then returns a self-closing <seafile
                     'content': {
                         'type': 'string',
                         'description': (
-                            'A JSON-encoded string containing a plain-text title and simplified '
-                            'Markdown-like elements, not Markdown source, a fenced code block or an object argument. '
+                            'A JSON-encoded document string containing simplified Markdown-like elements, '
+                            'not Markdown source, a fenced code block or an object argument. '
                             'Serialize the entire document once, not individual nodes. '
                             'Before constructing this value, call get_sdoc_specification and read its result. '
                             'Follow that specification and supply only the necessary content fields; '
@@ -139,8 +139,7 @@ The tool validates and caches the document, then returns a self-closing <seafile
             raise ValueError('content must be a JSON object string') from error
         if len(json.dumps(document, ensure_ascii=False, allow_nan=False, separators=(',', ':'))) > MAX_CONTENT_LENGTH:
             raise ValueError('SDoc content is too large')
-        self._keys(document, ('title', 'elements'))
-        self._string(document['title'], 'title', True)
+        self._keys(document, ('elements',))
         if re.search(r'<reference_\d+>', json.dumps(document, ensure_ascii=False)):
             raise ValueError('SDoc content must not contain internal citation tokens')
         if not isinstance(document['elements'], list) or not 1 <= len(document['elements']) <= 200:
@@ -172,14 +171,9 @@ The tool validates and caches the document, then returns a self-closing <seafile
             if not isinstance(block, dict):
                 raise ValueError('Each element must be an object')
             kind = block.get('type')
-            if kind in ('paragraph', 'blockquote', 'header1', 'header2', 'header3', 'header4', 'header5', 'header6'):
+            if kind in ('title', 'subtitle', 'paragraph', 'blockquote', 'header1', 'header2', 'header3', 'header4', 'header5', 'header6'):
                 self._keys(block, ('type', 'children'))
-                inline(block['children'], links=kind in ('paragraph', 'blockquote'))
-            elif kind == 'check_list_item':
-                self._keys(block, ('type', 'checked', 'children'))
-                if type(block['checked']) is not bool:
-                    raise ValueError('checked must be a boolean')
-                inline(block['children'])
+                inline(block['children'], links=kind in ('title', 'subtitle', 'paragraph', 'blockquote'))
             elif kind == 'code_block':
                 self._keys(block, ('type', 'language', 'text'))
                 self._string(block['language'], 'language')
@@ -192,19 +186,23 @@ The tool validates and caches the document, then returns a self-closing <seafile
                     self._keys(item, ('children',))
                     inline(item['children'])
             elif kind == 'table':
-                self._keys(block, ('type', 'rows'))
-                if not isinstance(block['rows'], list) or not 1 <= len(block['rows']) <= 100:
-                    raise ValueError('rows must contain 1 to 100 rows')
+                self._keys(block, ('type', 'children'))
+                if not isinstance(block['children'], list) or not 1 <= len(block['children']) <= 100:
+                    raise ValueError('table children must contain 1 to 100 rows')
                 width = None
-                for row in block['rows']:
-                    self._keys(row, ('cells',))
-                    if not isinstance(row['cells'], list) or not 1 <= len(row['cells']) <= 20:
-                        raise ValueError('Each row must contain 1 to 20 cells')
-                    if width is not None and len(row['cells']) != width:
+                for row in block['children']:
+                    self._keys(row, ('type', 'children'))
+                    if row['type'] != 'table_row':
+                        raise ValueError('table children must be table_row elements')
+                    if not isinstance(row['children'], list) or not 1 <= len(row['children']) <= 20:
+                        raise ValueError('Each table_row must contain 1 to 20 cells')
+                    if width is not None and len(row['children']) != width:
                         raise ValueError('Table rows must have equal numbers of cells')
-                    width = len(row['cells'])
-                    for cell in row['cells']:
-                        self._keys(cell, ('children',))
+                    width = len(row['children'])
+                    for cell in row['children']:
+                        self._keys(cell, ('type', 'children'))
+                        if cell['type'] != 'table_cell':
+                            raise ValueError('table_row children must be table_cell elements')
                         inline(cell['children'])
             elif kind == 'divider':
                 self._keys(block, ('type',))

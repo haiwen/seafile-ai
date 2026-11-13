@@ -20,20 +20,19 @@ advanced elements are outside this authoring subset.
 
 ### Document Format
 
-The document root has exactly two required fields:
+The document root has exactly one required field:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `title` | string | Nonempty, plain-text document title. |
 | `elements` | array | Between 1 and 200 block elements, in reading order. |
 
-The application creates the native title element from `title`. Do not repeat
-the title as a body heading unless the user requests it.
+Titles and subtitles are block elements within `elements`, usually at the
+beginning of the document. Neither is required, and their positions are not fixed.
 
 ```json
 {
-  "title": "Meeting notes",
   "elements": [
+    {"type": "title", "children": [{"text": "Meeting notes"}]},
     {"type": "paragraph", "children": [{"text": "The team reviewed the release."}]}
   ]
 }
@@ -43,28 +42,22 @@ Examples in this reference show JSON objects. Nodes remain objects within the
 document, not individually serialized strings. Markdown code fences are only
 used to display examples and are not part of the document data.
 
-### Node Hierarchy
+### Node Structure
 
-- **Document root**: contains block elements in `elements`.
-- **Block elements**: paragraphs, headings, quotations, lists, task items,
-  code blocks, dividers and tables.
-- **Inline elements**: links within supported text containers.
-- **Text leaves**: text and optional marks; no `type` or `children`.
+A SeaDoc document is a tree with three node categories:
 
-An element's `type` determines its fields. Most text containers use `children`,
-but lists use `items`, code blocks use `text`, and tables use `rows` and `cells`.
-A divider needs only `type`. Every `children` array supplied in this format
-must be nonempty; use `{"text": ""}` for blank editable content.
+1. **Document root**: the document itself, containing top-level element nodes in its `elements` property.
+2. **Element nodes**: containers holding other element nodes or text nodes in their `children` property.
+3. **Text nodes**: leaf nodes containing text content and optional formatting marks.
 
-The common hierarchy is:
+Every element and text node requires a non-empty string `id` that is unique within the document. Consumers must not require a particular UUID or slug format.
 
-```text
-document -> elements -> block
-paragraph / heading / blockquote / task -> children -> text or allowed link
-list -> items -> children -> text or link
-table -> rows -> cells -> children -> text or link
-link -> children -> text
-```
+The ID requirement above applies to the final native document. In the simplified
+authoring format, omit IDs; the application generates unique IDs for all element
+and text nodes during compilation. Lists use `items` and code blocks use `text`
+as shorthand for native child structures; a divider needs only `type`.
+Every supplied `children` array must be nonempty; use `{"text": ""}` for blank
+editable content.
 
 ## Text
 
@@ -99,6 +92,24 @@ These are the only supported marks; do not supply native font or color fields.
 
 ## Block Elements
 
+### Title and Subtitle
+
+`title` represents a document title; `subtitle` represents a document subtitle.
+They are top-level elements, usually at the beginning of `elements`, rather than
+document-root fields. Their presence and position are not mandatory.
+
+- Required fields: `type: "title"` or `"subtitle"`, `children` (array).
+- Children: text leaves and supported inline links directly.
+- Following content belongs in sibling blocks, not inside the title or subtitle.
+
+```json
+{"type": "title", "children": [{"text": "Release review"}]}
+```
+
+```json
+{"type": "subtitle", "children": [{"text": "Planning notes"}]}
+```
+
 ### Paragraph
 
 `paragraph` represents ordinary editable prose.
@@ -113,7 +124,8 @@ These are the only supported marks; do not supply native font or color fields.
 ### Heading
 
 `header1` through `header6` represent section headings at levels 1 through 6,
-similar to Markdown `#` through `######`. The document title is separate.
+similar to Markdown `#` through `######`. Use `title` for a document title,
+not a section heading.
 
 - Required fields: `type` (one of those six names), `children` (array).
 - Children: text leaves only; no links or nested blocks.
@@ -166,19 +178,6 @@ similar to Markdown `#` through `######`. The document title is separate.
 }
 ```
 
-### Checklist Item
-
-`check_list_item` represents one task, similar to Markdown `- [ ]` or `- [x]`.
-
-- Required fields: `type: "check_list_item"`, `checked` (boolean), `children` (array).
-- `checked: false` means pending; `true` means completed.
-- Children: text leaves and inline links.
-- Put each task directly in `elements`, not inside a list container.
-
-```json
-{"type": "check_list_item", "checked": false, "children": [{"text": "Assign a reviewer."}]}
-```
-
 ### Code Block
 
 `code_block` represents source code or preformatted text.
@@ -208,27 +207,29 @@ similar to Markdown `#` through `######`. The document title is separate.
 
 `table` represents rectangular rows and columns.
 
-- Required fields: `type: "table"`, `rows` (array of 1–100 objects).
-- Each row has exactly one field: `cells` (array of 1–20 objects). Every row
-  must have the same number of cells.
-- Each cell has exactly one field: `children` (nonempty array of text leaves
-  and/or inline links). Blocks and nested tables are not supported in cells.
+- Required fields: `type: "table"`, `children` (array of 1–100 `table_row` elements).
+- Each row has `type: "table_row"` and `children` (array of 1–20 `table_cell`
+  elements). Every row must have the same number of cells.
+- Each cell has `type: "table_cell"` and `children` (nonempty array of text leaves
+  and/or inline links). Cells directly contain text or links, without paragraph
+  wrappers. Blocks and nested tables are not supported in cells.
+- The hierarchy is `table -> table_row -> table_cell -> text or inline link`,
+  using `children` at each level. Rows and cells cannot appear at the document root.
 - If a header is needed, put its text in the first row. Do not add a Markdown
   separator row or header flags.
-- Do not supply native `table_row` or `table_cell` types, widths, styles or
-  alignment; the application supplies structural nodes and layout defaults.
+- Do not supply widths, styles or alignment; the application supplies layout defaults.
 
 ```json
 {
   "type": "table",
-  "rows": [
-    {"cells": [
-      {"children": [{"text": "Action"}]},
-      {"children": [{"text": "Owner"}]}
+  "children": [
+    {"type": "table_row", "children": [
+      {"type": "table_cell", "children": [{"text": "Action"}]},
+      {"type": "table_cell", "children": [{"text": "Owner"}]}
     ]},
-    {"cells": [
-      {"children": [{"text": "Review scope"}]},
-      {"children": [{"text": "Team"}]}
+    {"type": "table_row", "children": [
+      {"type": "table_cell", "children": [{"text": "Review scope"}]},
+      {"type": "table_cell", "children": [{"text": "Team"}]}
     ]}
   ]
 }
@@ -243,7 +244,7 @@ similar to Markdown `#` through `######`. The document title is separate.
 - Required fields: `type: "link"`, `href` (nonempty string), `children` (array).
 - `href` must be a complete HTTP or HTTPS URL with a host and no control characters.
 - Children: text leaves only; links cannot contain other links.
-- Allowed in paragraphs, blockquotes, list items, task items and table cells,
+- Allowed in titles, subtitles, paragraphs, blockquotes, list items and table cells,
   but not headings.
 - Do not supply a `title` field; the application derives it from the displayed text.
 
@@ -260,13 +261,14 @@ similar to Markdown `#` through `######`. The document title is separate.
 
 ## Complete Document Example
 
-This example combines a paragraph, a section heading, a list and a task item
+This example combines a title, a subtitle, a paragraph, a section heading and a list
 under one document root.
 
 ```json
 {
-  "title": "Release review",
   "elements": [
+    {"type": "title", "children": [{"text": "Release review"}]},
+    {"type": "subtitle", "children": [{"text": "Planning notes"}]},
     {"type": "paragraph", "children": [
       {"text": "The release is "},
       {"text": "ready for review", "bold": true},
@@ -276,8 +278,7 @@ under one document root.
     {"type": "unordered_list", "items": [
       {"children": [{"text": "Confirm the release scope."}]},
       {"children": [{"text": "Share the test report."}]}
-    ]},
-    {"type": "check_list_item", "checked": false, "children": [{"text": "Approve publication."}]}
+    ]}
   ]
 }
 ```
@@ -288,9 +289,10 @@ under one document root.
 - Do not provide `id`, `version`, `format_version`, `last_modify_user`, `cursors`,
   `style`, or other editor/collaboration metadata. These belong to native files
   or runtime data, not the simplified authoring format.
-- Structural objects under `items`, `rows` and `cells` are simplified objects,
-  not typed native nodes. The application also creates code lines and void
-  placeholders. Do not manually reproduce native structures.
+- List objects under `items` are simplified objects, not typed native nodes.
+  Table rows and cells, in contrast, must be typed elements nested through
+  `children`. The application creates native list wrappers, code lines and void
+  placeholders.
 - Only the element types and marks listed here are supported. Express images,
   embeds, formulas, multi-column layouts and other unsupported content as
   ordinary text or HTTP/HTTPS links where appropriate.
