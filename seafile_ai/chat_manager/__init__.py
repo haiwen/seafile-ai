@@ -6,7 +6,7 @@ from seafile_ai import config
 from seafile_ai.db.models import ChatMessages
 from seafile_ai.chat_manager.memory import OpenAIMemory, build_memory_from_db
 from seafile_ai.chat_manager.system_prompts import MAX_STEPS_DISABLE_TOOL_CALLS_PROMPT
-from seafile_ai.chat_manager.tools import DocumentsSearch, ListFiles, MarkdownGenerator, ReadFiles
+from seafile_ai.chat_manager.tools import DocumentsSearch, GetSdocSpecification, ListFiles, MarkdownGenerator, ReadFiles, SdocGenerator
 from seafile_ai.chat_manager.utils import (
     build_chat_system_prompts,
     combine_attachments_to_message,
@@ -34,8 +34,12 @@ class BasicChat:
             ListFiles(),
             ReadFiles(),
         )
+        self.sdoc_tools = (
+            GetSdocSpecification(),
+        )
         self.content_generators = (
             MarkdownGenerator(),
+            SdocGenerator(),
         )
 
     def _register_tools(self, tool_executor, context, model=None):
@@ -43,6 +47,8 @@ class BasicChat:
             tool.register(tool_executor, context=context)
         for tool in self.search_tools:
             tool.register(tool_executor, context=context, app=self.app, model=model)
+        for tool in self.sdoc_tools:
+            tool.register(tool_executor)
         for tool in self.content_generators:
             tool.register(tool_executor)
 
