@@ -96,7 +96,7 @@ These are the only supported marks; do not supply native font or color fields.
 
 `title` represents a document title; `subtitle` represents a document subtitle.
 They are top-level elements, usually at the beginning of `elements`, rather than
-document-root fields. Their presence and position are not mandatory.
+document-root fields. Their presence are not mandatory.
 
 - Required fields: `type: "title"` or `"subtitle"`, `children` (array).
 - Children: text leaves and supported inline links directly.
