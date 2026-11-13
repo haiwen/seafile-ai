@@ -5,7 +5,7 @@ import sys
 import ast
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 spec = importlib.util.spec_from_file_location(
@@ -264,6 +264,97 @@ class SdocGeneratorTest(unittest.TestCase):
             sdoc.SdocGenerator()._validate_sdoc_content(json.dumps(document))
         with self.assertRaises(ValueError):
             sdoc.SdocGenerator()._validate_sdoc_content(' ' * (sdoc.MAX_CONTENT_LENGTH * 6 + 3))
+
+
+class SdocSpecificationTest(unittest.TestCase):
+    def setUp(self):
+        resolver.get_sdoc_specification.cache_clear()
+        self.addCleanup(resolver.get_sdoc_specification.cache_clear)
+        self.root = Path(__file__).resolve().parents[1] / 'seafile_ai/chat_manager'
+
+    def load_tool(self):
+        tool_spec = importlib.util.spec_from_file_location(
+            'test_sdoc_tools', self.root / 'tools/sdoc_tools.py')
+        tool_module = importlib.util.module_from_spec(tool_spec)
+        with patch.dict(sys.modules, {
+                'seafile_ai.utils.tools': basic_tools,
+                'seafile_ai.chat_manager.utils.sdoc': resolver}):
+            tool_spec.loader.exec_module(tool_module)
+        return tool_module.GetSdocSpecification
+
+    def test_reads_utf8_specification_at_module_relative_path(self):
+        expected_path = self.root / 'SDOC_SPECIFICATION.md'
+        expected = expected_path.read_text(encoding='utf-8')
+        with patch.object(Path, 'read_text', autospec=True, return_value=expected) as read_text:
+            self.assertEqual(resolver.get_sdoc_specification(), expected)
+            self.assertEqual(resolver.get_sdoc_specification(), expected)
+        read_text.assert_called_once_with(expected_path, encoding='utf-8')
+        self.assertEqual(resolver.get_sdoc_specification.cache_info().hits, 1)
+
+    def test_failed_reads_are_not_cached(self):
+        with patch.object(Path, 'read_text', side_effect=FileNotFoundError):
+            with self.assertRaises(FileNotFoundError):
+                resolver.get_sdoc_specification()
+        self.assertEqual(resolver.get_sdoc_specification.cache_info().currsize, 0)
+        self.assertTrue(resolver.get_sdoc_specification().startswith('# SeaDoc Authoring Specification'))
+
+    def test_parameterless_tool_returns_specification(self):
+        tool = self.load_tool()
+        function = tool.tool['function']
+        self.assertEqual(function['name'], 'get_sdoc_specification')
+        self.assertEqual(function['parameters'], {
+            'type': 'object', 'properties': {}, 'required': [], 'additionalProperties': False})
+        with patch.dict(tool.execute.__globals__, {'get_sdoc_specification': Mock(return_value='specification')}) as namespace:
+            self.assertEqual(tool().execute(), 'specification')
+            namespace['get_sdoc_specification'].assert_called_once_with()
+
+    def test_tool_is_exported_and_registered(self):
+        exports = ast.parse((self.root / 'tools/__init__.py').read_text())
+        exported_names = next(ast.literal_eval(node.value) for node in exports.body
+                              if isinstance(node, ast.Assign) and node.targets[0].id == '__all__')
+        self.assertIn('GetSdocSpecification', exported_names)
+        chat_source = ast.parse((self.root / '__init__.py').read_text())
+        chat_class = next(node for node in chat_source.body if isinstance(node, ast.ClassDef) and node.name == 'BasicChat')
+        methods = [node for node in chat_class.body
+                   if isinstance(node, ast.FunctionDef) and node.name in ('__init__', '_register_tools')]
+        tool_names = ('DocumentsSearch', 'ListFiles', 'ReadFiles', 'MarkdownGenerator',
+                      'SdocGenerator', 'GetSdocSpecification')
+        namespace = {name: Mock() for name in tool_names}
+        namespace['config'] = SimpleNamespace(SEASEARCH_URL='', SEASEARCH_TOKEN='')
+        exec(compile(ast.Module(body=methods, type_ignores=[]), str(self.root / '__init__.py'), 'exec'), namespace)
+        chat = SimpleNamespace()
+        namespace['__init__'](chat, None)
+        executor = object()
+        namespace['_register_tools'](chat, executor, {})
+        namespace['GetSdocSpecification'].return_value.register.assert_called_once_with(executor)
+
+    def test_prompts_require_specification_before_generation(self):
+        prompt_source = ast.parse((self.root / 'system_prompts.py').read_text())
+        rules = next(ast.literal_eval(node.value) for node in prompt_source.body
+                     if isinstance(node, ast.Assign) and node.targets[0].id == 'CHAT_CONTENT_GENERATION_RULES')
+        function = sdoc.SdocGenerator.tool['function']
+        descriptions = (rules, function['description'], function['parameters']['properties']['content']['description'])
+        for description in descriptions:
+            with self.subTest(description=description):
+                self.assertIn('get_sdoc_specification', description)
+                self.assertIn('read', description)
+        self.assertIn('stop-after-generation rule does not apply', rules)
+        self.assertIn('stop calling tools', rules)
+        self.assertLess(len(descriptions[-1]), 600)
+
+    def test_all_documentation_json_examples_validate(self):
+        specification = resolver.get_sdoc_specification()
+        examples = sdoc.re.findall(r'```json\n(.*?)\n```', specification, sdoc.re.DOTALL)
+        self.assertGreaterEqual(len(examples), 12)
+        covered_types = set()
+        for example in examples:
+            value = json.loads(example)
+            document = value if 'elements' in value else {'title': 'Example', 'elements': [value]}
+            with self.subTest(example=example):
+                sdoc.SdocGenerator()._validate_sdoc_content(json.dumps(document, ensure_ascii=False))
+            covered_types.update(block['type'] for block in document['elements'])
+        self.assertTrue({'paragraph', 'header1', 'header2', 'blockquote', 'ordered_list',
+                         'unordered_list', 'check_list_item', 'code_block', 'divider', 'table'} <= covered_types)
 
 
 if __name__ == '__main__':

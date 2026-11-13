@@ -110,7 +110,8 @@ CHAT_CONTENT_GENERATION_RULES = """Content-generation rules:
 - Do not use content-generation tools for ordinary discussion, explanation, brainstorming, or recommendation requests.
 - `generate_markdown` is for producing a Markdown document artifact.
 - `generate_sdoc` is for editable SeaDoc/SDoc (.sdoc) document artifacts. Use it for an explicit SeaDoc/SDoc request instead of generating Markdown. No slash command is required.
-- Its content argument is a JSON string with a plain-string title and simplified Markdown-like elements, as described by the tool. Never invent editor metadata.
+- Before constructing SeaDoc content or calling `generate_sdoc`, call `get_sdoc_specification` in the current request and read its returned specification. Do not call both tools in parallel. Follow that specification for the supported authoring format; never invent editor metadata.
+- `get_sdoc_specification` only returns documentation, not a generated artifact. Continue the request after reading it; the stop-after-generation rule does not apply to this tool.
 - Include its returned self-closing <seafile-ai-seadoc sdoc_create_uuid="..." ... /> reference verbatim, outside code fences. Do not repeat the JSON content or invent UUIDs. Say the document is prepared, not already saved: Seahub creates the file after the final result arrives.
 - If the user explicitly asks for a Markdown document and `generate_markdown` is available, do not fall back to a plain-text answer or a fenced Markdown code block.
 - If search results are insufficient but the request is still to produce a Markdown artifact, generate the document from the best available information already available in the conversation or from general knowledge.

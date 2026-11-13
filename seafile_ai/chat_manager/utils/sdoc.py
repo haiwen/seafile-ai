@@ -1,8 +1,16 @@
 import json
+from functools import lru_cache
 from html import escape
 from html.parser import HTMLParser
+from pathlib import Path
 
 from seafile_ai.chat_manager.utils.content_blocks import CONTENT_BLOCK_TAGS, parse_content_blocks
+
+
+@lru_cache(maxsize=1)
+def get_sdoc_specification():
+    """Read the authoring specification once per process, independent of cwd."""
+    return (Path(__file__).resolve().parents[1] / 'SDOC_SPECIFICATION.md').read_text(encoding='utf-8')
 
 
 class SdocReferenceParser(HTMLParser):
