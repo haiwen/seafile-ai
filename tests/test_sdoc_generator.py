@@ -324,6 +324,9 @@ class SdocSpecificationTest(unittest.TestCase):
         exec(compile(ast.Module(body=methods, type_ignores=[]), str(self.root / '__init__.py'), 'exec'), namespace)
         chat = SimpleNamespace()
         namespace['__init__'](chat, None)
+        self.assertEqual(chat.sdoc_tools, (namespace['GetSdocSpecification'].return_value,))
+        self.assertEqual(chat.content_generators, (
+            namespace['MarkdownGenerator'].return_value, namespace['SdocGenerator'].return_value))
         executor = object()
         namespace['_register_tools'](chat, executor, {})
         namespace['GetSdocSpecification'].return_value.register.assert_called_once_with(executor)

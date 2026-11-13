@@ -34,8 +34,10 @@ class BasicChat:
             ListFiles(),
             ReadFiles(),
         )
-        self.content_generators = (
+        self.sdoc_tools = (
             GetSdocSpecification(),
+        )
+        self.content_generators = (
             MarkdownGenerator(),
             SdocGenerator(),
         )
@@ -45,6 +47,8 @@ class BasicChat:
             tool.register(tool_executor, context=context)
         for tool in self.search_tools:
             tool.register(tool_executor, context=context, app=self.app, model=model)
+        for tool in self.sdoc_tools:
+            tool.register(tool_executor)
         for tool in self.content_generators:
             tool.register(tool_executor)
 
