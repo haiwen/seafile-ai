@@ -1,8 +1,8 @@
 Flask~=3.1.2
 waitress~=3.0.2
 html2text~=2025.4.15
-pillow~=12.1.1
-mammoth~=1.10.0
+pillow==13.0.*
+mammoth==1.13.*
 # Face recognition dependencies. The feature is disabled.
 # opencv-python~=4.13.0.92
 # scikit-learn~=1.8.0
@@ -10,12 +10,15 @@ mammoth~=1.10.0
 # onnx~=1.18.0
 # onnxruntime~=1.24.2
 python-pptx~=1.0.2
-pyjwt~=2.11.0
+pyjwt==2.15.*
 pdfminer.six==20260107
-requests~=2.32.4
-litellm~=1.83.0
-sqlalchemy~=2.0.36
-pymysql~=1.1.0
+requests==2.34.*
+litellm==1.109.*
+filelock==4.2.*
+openai==2.54.*
+jsonschema~=4.26.0
+sqlalchemy==2.0.*
+pymysql==1.1.*
 redis~=7.1.1
-pillow-heif==1.2.*
+pillow-heif==1.8.*
 pyyaml~=6.0
