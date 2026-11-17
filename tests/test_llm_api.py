@@ -41,12 +41,41 @@ class LLMTemperatureTest(unittest.TestCase):
                             else:
                                 self.assertIs(result, self.response)
 
+    def test_gemini_3_plus_omits_temperature_for_direct_and_gateway_requests(self):
+        for model in (
+                'gemini-3.8-flash', 'gemini-3-pro-preview', 'gemini-3.1-pro',
+                'gemini-4-flash', 'google/gemini-3.8-flash', 'Gemini-3.8-Flash'):
+            for provider in ('gemini', 'vertex_ai', 'other', 'hosted_vllm', 'openai'):
+                for method in ('run', 'completion'):
+                    for params in ({}, {'temperature': 0}, {'temperature': 0.1}):
+                        with self.subTest(model=model, provider=provider, method=method, params=params):
+                            client = self.module.LLMAPI(
+                                Mock(), model, provider, base_url='https://gateway.example/v1',
+                            )
+                            result = getattr(client, method)(messages=self.messages, **params)
+
+                            request = self.module.litellm.completion.call_args.kwargs
+                            self.assertNotIn('temperature', request)
+                            self.assertEqual(request['messages'], self.messages)
+                            self.assertEqual(
+                                request['custom_llm_provider'],
+                                'hosted_vllm' if provider == 'other' else provider,
+                            )
+                            if method == 'run':
+                                self.assertEqual(result, 'result')
+                            else:
+                                self.assertIs(result, self.response)
+
     def test_other_models_keep_temperature_behavior(self):
         for model, provider, params, expected in (
                 ('gpt-4o', 'openai', {}, 0),
                 ('gpt-4o', 'openai', {'temperature': 0.2}, 0.2),
                 ('qwen-3', 'other', {}, 0),
                 ('qwen-3', 'other', {'temperature': 0.2}, 0.2),
+                ('gemini-2.5-flash', 'gemini', {}, 0),
+                ('gemini-2.5-flash', 'gemini', {'temperature': 0.2}, 0.2),
+                ('gemini-2.5-pro', 'other', {}, 0),
+                ('gemini-2.5-pro', 'other', {'temperature': 0.2}, 0.2),
                 ('gpt-5', 'openai', {}, 1),
                 ('gpt-5', 'openai', {'temperature': 0.2}, 1)):
             with self.subTest(model=model, provider=provider, params=params):

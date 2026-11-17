@@ -54,6 +54,10 @@ class LLMAPI:
             if re.search(r'\bclaude\b', self.model_id, re.IGNORECASE):
                 # Newer Claude models reject temperature, including explicit values.
                 kwargs.pop('temperature', None)
+            gemini_version = re.search(r'\bgemini-(\d+)\b', self.model_id, re.IGNORECASE)
+            if gemini_version and int(gemini_version.group(1)) >= 3:
+                # Gemini 3+ gateways may reject temperature; use the model default.
+                kwargs.pop('temperature', None)
             if self.llm_type == 'openai' and 'reasoning_effort' in kwargs:
                 allowed_params = list(kwargs.get('allowed_openai_params') or [])
                 if 'reasoning_effort' not in allowed_params:
