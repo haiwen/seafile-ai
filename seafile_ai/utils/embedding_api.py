@@ -3,7 +3,7 @@ import math
 
 import litellm
 
-from seafile_ai.config import EMBEDDING_DIMENSIONS
+from seafile_ai.config import EMBEDDING_DIMENSIONS, EMBEDDING_REQUEST_DIMENSIONS
 
 
 logger = logging.getLogger(__name__)
@@ -40,14 +40,20 @@ class EmbeddingAPI:
             raise ValueError('Embedding contents are invalid')
 
         try:
+            optional_params = {}
+            if EMBEDDING_REQUEST_DIMENSIONS is not None:
+                optional_params['dimensions'] = EMBEDDING_REQUEST_DIMENSIONS
+            if self.model_type == 'openai':
+                # Avoid LiteLLM sending a null encoding_format to compatible APIs.
+                optional_params['encoding_format'] = 'float'
             response = litellm.embedding(
                 model=self.model,
                 input=contents,
-                dimensions=EMBEDDING_DIMENSIONS,
                 api_base=self.base_url,
                 api_key=self.api_key,
                 custom_llm_provider=self.model_type,
                 timeout=self.timeout,
+                **optional_params,
             )
             if not isinstance(response.data, list) or len(response.data) != len(contents):
                 raise ValueError('Embedding response count mismatch')
