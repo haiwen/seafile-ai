@@ -181,13 +181,11 @@ if EMBEDDING_MODEL and not check_llm_validated(EMBEDDING_MODEL):
     EMBEDDING_MODEL = {}
 EMBEDDING_MODEL_CONFIGURED = bool(EMBEDDING_MODEL)
 EMBEDDING_DIMENSIONS = 1024
-EMBEDDING_REQUEST_DIMENSIONS = None
 if EMBEDDING_MODEL:
     try:
-        dimensions = int(EMBEDDING_MODEL.get('dimensions'))
+        dimensions = int(EMBEDDING_MODEL.get('dimensions', EMBEDDING_DIMENSIONS))
         if dimensions > 0:
             EMBEDDING_DIMENSIONS = dimensions
-            EMBEDDING_REQUEST_DIMENSIONS = dimensions
     except (TypeError, ValueError):
         pass
 
