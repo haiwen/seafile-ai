@@ -15,6 +15,7 @@ pdfminer.six==20260107
 requests==2.34.*
 litellm==1.109.*
 filelock==4.2.*
+openai==2.54.*
 jsonschema~=4.26.0
 sqlalchemy==2.0.*
 pymysql==1.1.*
