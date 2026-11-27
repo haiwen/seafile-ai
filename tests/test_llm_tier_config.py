@@ -19,11 +19,14 @@ def load_module(module_name, source_path, modules=None):
 
 
 def load_llm_api(tier_models, default_model, id_models=None):
+    package_module = ModuleType('seafile_ai')
+    package_module.__path__ = [str(PROJECT_ROOT / 'seafile_ai')]
     config_module = ModuleType('seafile_ai.config')
     config_module.LLM_MODEL_ID_MODELS_MAP = id_models or {}
     config_module.LLM_MODEL_TIER_MODELS_MAP = tier_models
     config_module.DEFAULT_LLM_MODEL = default_model
     config_module.EMBEDDING_DIMENSIONS = 3
+    config_module.EMBEDDING_MODEL = {}
 
     utils_module = ModuleType('seafile_ai.utils')
     utils_module.LLMChatCompletionException = Exception
@@ -39,6 +42,7 @@ def load_llm_api(tier_models, default_model, id_models=None):
             'seafile_ai.utils.llm_api',
             PROJECT_ROOT / 'seafile_ai/utils/llm_api/__init__.py',
             {
+                'seafile_ai': package_module,
                 'seafile_ai.config': config_module,
                 'seafile_ai.utils': utils_module,
                 'seafile_ai.utils.constants': constants_module,

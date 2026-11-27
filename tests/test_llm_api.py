@@ -50,12 +50,12 @@ class LLMTemperatureTest(unittest.TestCase):
                 for method in ('run', 'completion'):
                     for params in ({}, {'temperature': 0}, {'temperature': 0.1}):
                         with self.subTest(model=model, provider=provider, method=method, params=params):
-                            client = self.module.LLMAPI(
+                            client = self.module.CompletionAPI(
                                 Mock(), model, provider, base_url='https://gateway.example/v1',
                             )
                             result = getattr(client, method)(messages=self.messages, **params)
 
-                            request = self.module.litellm.completion.call_args.kwargs
+                            request = self.litellm.completion.call_args.kwargs
                             self.assertNotIn('temperature', request)
                             self.assertEqual(request['messages'], self.messages)
                             self.assertEqual(

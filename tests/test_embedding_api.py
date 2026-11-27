@@ -30,6 +30,13 @@ class EmbeddingAPITest(unittest.TestCase):
             custom_llm_provider='hosted_vllm', timeout=180,
         )
 
+    def test_can_disable_sending_dimensions(self):
+        self.module.embedding.EMBEDDING_MODEL['send_dimensions'] = False
+        self.embedding.return_value = SimpleNamespace(data=[{'index': 0, 'embedding': [1, 2, 3]}])
+
+        self.assertEqual(self.client.generate('first'), [1.0, 2.0, 3.0])
+        self.assertIsNone(self.embedding.call_args.kwargs['dimensions'])
+
     def test_generate_returns_single_vector(self):
         self.embedding.return_value = SimpleNamespace(data=[{'index': 0, 'embedding': [1, 2, 3]}])
 
