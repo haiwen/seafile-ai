@@ -81,6 +81,8 @@ def get_file_content_by_seafobj(repo_id, obj_id, max_size=None):
 
 def parse_file(file_name, repo_id, obj_id, max_size=None):
     doc = get_file_content_by_seafobj(repo_id, obj_id, max_size)
+    if not doc:
+        return ''
     file_ext = Path(file_name).suffix.lower()
 
     parser_mapping = {
@@ -95,6 +97,8 @@ def parse_file(file_name, repo_id, obj_id, max_size=None):
     return parser_mapping.get(file_ext, lambda x: '')(doc)
 
 def parse_file_content(file_name, doc):
+    if not doc or not doc.strip():
+        return ''
     file_ext = Path(file_name).suffix.lower()
 
     parser_mapping = {

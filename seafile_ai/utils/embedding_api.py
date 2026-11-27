@@ -3,7 +3,7 @@ import math
 
 import litellm
 
-from seafile_ai.config import EMBEDDING_DIMENSIONS
+from seafile_ai.config import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
 
 
 logger = logging.getLogger(__name__)
@@ -40,10 +40,11 @@ class EmbeddingAPI:
             raise ValueError('Embedding contents are invalid')
 
         try:
+            dimensions = EMBEDDING_DIMENSIONS if EMBEDDING_MODEL.get('send_dimensions', True) else None
             response = litellm.embedding(
                 model=self.model,
                 input=contents,
-                dimensions=EMBEDDING_DIMENSIONS,
+                dimensions=dimensions,
                 api_base=self.base_url,
                 api_key=self.api_key,
                 custom_llm_provider=self.model_type,
