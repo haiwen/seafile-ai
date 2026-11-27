@@ -10,15 +10,14 @@ from seafile_ai.utils import InvalidWritingTypeException, get_file_content_by_se
 from seafile_ai.utils.constants import LANGUAGE, EXTRACT_TEXT_SUPPORTED_IMAGES
 from seafile_ai.utils.icon_constants import WIKI_ICON_MANIFEST
 from seafile_ai.config import AI_UTILS_TIER
-from seafile_ai.utils.llm_api import get_llm_client_by_model_tier
+from seafile_ai.utils.llm_api import get_completion_client_by_model_tier
 
 logger = logging.getLogger(__name__)
 
 
 class TextProcessingManager:
-    def __init__(self, app, llm_type):
+    def __init__(self, app):
         self.app = app
-        self.llm_type = llm_type
 
     def _generate_summary_text(self, file_name, content, context):
         file_ext = get_file_ext(file_name)
@@ -44,7 +43,7 @@ class TextProcessingManager:
         user_prompt = {"role": "user", "content": 'Summarize the following content' + content}
         messages = [system_prompt, user_prompt]
         tier = AI_UTILS_TIER.get('generate_summary', MODEL_REASONING_TIER.LOW.value)
-        llm = get_llm_client_by_model_tier(self.app.data_logger, tier)
+        llm = get_completion_client_by_model_tier(self.app.data_logger, tier)
         summary = llm.run(messages, context)
         return summary
 
@@ -74,7 +73,7 @@ class TextProcessingManager:
         messages = [system_prompt, user_prompt]
 
         tier = AI_UTILS_TIER.get('doc_tags', MODEL_REASONING_TIER.LOW.value)
-        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context, json_mode=True)
+        res = get_completion_client_by_model_tier(self.app.data_logger, tier).run(messages, context, json_mode=True)
         return json.loads(res).get('tags', [])
 
     def translate(self, text, lang, context):
@@ -93,7 +92,7 @@ class TextProcessingManager:
         messages = [system_prompt, user_prompt]
 
         tier = AI_UTILS_TIER.get('translate', MODEL_REASONING_TIER.LOW.value)
-        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
+        res = get_completion_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         return res
 
     def writing_assistant(self, text, custom_prompt, writing_type, context):
@@ -116,7 +115,7 @@ class TextProcessingManager:
         messages = [system_prompt, user_prompt]
 
         tier = AI_UTILS_TIER.get('writing_assistant', MODEL_REASONING_TIER.MEDIUM.value)
-        res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
+        res = get_completion_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
         return res
 
     def get_predefined_prompt(self, prefix, writing_type):
@@ -170,7 +169,7 @@ class TextProcessingManager:
             }
         ]
         tier = AI_UTILS_TIER.get('ocr', MODEL_REASONING_TIER.LOW.value)
-        extracted_text = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
+        extracted_text = get_completion_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
 
         if not extracted_text:
             return ''
@@ -207,7 +206,7 @@ class TextProcessingManager:
 
         try:
             tier = AI_UTILS_TIER.get('search_icons', MODEL_REASONING_TIER.LOW.value)
-            res = get_llm_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
+            res = get_completion_client_by_model_tier(self.app.data_logger, tier).run(messages, context)
             icon_names = [name.strip() for name in re.split(r'[，,]', res) if name.strip()]
 
             valid_icons = set(WIKI_ICON_MANIFEST)

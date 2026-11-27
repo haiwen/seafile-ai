@@ -37,7 +37,7 @@ def load_chat_utils(llm_client):
     constants_module = ModuleType('seafile_ai.utils.constants')
     constants_module.MODEL_REASONING_TIER = SimpleNamespace(LOW=SimpleNamespace(value='low'))
     llm_api_module = ModuleType('seafile_ai.utils.llm_api')
-    llm_api_module.get_llm_client_by_model_tier = Mock(return_value=llm_client)
+    llm_api_module.get_completion_client_by_model_tier = Mock(return_value=llm_client)
 
     spec = importlib.util.spec_from_file_location(
         'test_chat_title_utils_module',
