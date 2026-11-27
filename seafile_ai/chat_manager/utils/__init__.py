@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from seafile_ai import config
+from seafile_ai.chat_manager.utils.sdoc import resolve_sdoc_results
 from seafile_ai.chat_manager.system_prompts import (
     CHAT_CORE_PROMPT,
     CHAT_CONTENT_GENERATION_RULES,
@@ -230,4 +231,6 @@ def get_answer_and_sources(tool_executor, content):
         source_index = int(origin.split('_')[1][:-1])
         sources.append(sources_results[source_index])
 
-    return clean_markdown_references(content, sources)
+    answer, sources = clean_markdown_references(content, sources)
+    # No Markdown/reference rewrite may run after the creation-boundary check.
+    return resolve_sdoc_results(answer, tool_executor), sources
